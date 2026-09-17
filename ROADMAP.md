@@ -3621,6 +3621,379 @@ seed step.
     unopposed. No console errors at any step, and the new job renders correctly (icon + label + no
     layout break) in the live assignment menu.
 
+- **2026-09-17b — a "ready again" cue for perk cooldowns, and confirming Esc already pauses.**
+  User: "with the 'perks' they have a cooldown. Can you have a little 'burp' and sound to notify
+  the player that it's recharged and ready to reuse? Also can you make the 'esc' key also pause
+  the game."
+  - Before this, the only cooldown feedback was the `#traithud` key badge (static, no countdown)
+    and a "Xs" popup if you tried to use it too early — nothing ever told you the moment it actually
+    became available again. Added a check right at the cooldown decrement in `updatePlayer`, on the
+    exact frame `player._activeCD[id]` crosses from >0 to 0 (guarded by the same `>0` the decrement
+    already ran under, so it can only ever fire once per use, never on every later frame it just
+    sits at 0): a new comedic little `A.S.perkReady()` — a quick two-note wobble on the same
+    sawtooth palette as `screech`, on-brand for a dark-comedy game rather than a plain chime — plus
+    a "🧛 ready!"-style popup over the player using the trait's own icon.
+  - Investigated the Esc request before touching anything, since the code already looked like it
+    should pause: Esc's fallback case (when no other panel/modal has already claimed it) calls
+    `toggleSettings()`, which sets `paused = true` in the same breath as opening the settings panel
+    — and the main loop skips `step(dt)` entirely whenever `paused` is true, so nothing in the
+    world can move, attack, or tick while it's open. Verified live rather than assuming: spawned a
+    hostile in the city, dispatched a genuine `Escape` keydown (not a debug shortcut), confirmed
+    `paused` flipped true and the settings panel opened, then let 3 real seconds pass — the enemy's
+    x/y were bit-for-bit identical before and after. **No change needed** — Esc already pauses the
+    game fully; happy to add a separate lighter-weight "just pause, no menu" binding if that's
+    specifically what was wanted instead of what's already there.
+  - Verified live: spying on `A.S.perkReady`, granting a temp trait with a real active ability,
+    using it, and fast-forwarding past its cooldown via the exposed `tick()` helper showed the cue
+    fired exactly once (`burpCount: 1`) right as the cooldown hit 0, not repeatedly afterward.
+
+- **2026-09-17c — Ogre's Ground Pound: bigger, real damage, actually wrecks the place.** User: "for
+  the Ogre attack, can you please increase the AOE area and [add] a animation of a ripple of dust
+  leaving the ogre as his seismic slam ripples through the ground. I also want it to damage/destroy
+  nearby objects and NPCs" (part of a broader "improve the visuals on electricity/ice/slime" goal —
+  noted for a future pass, this entry is just the concrete Ground Pound ask).
+  - Was knockback + a brief stun only, `r:150`, no damage, nothing touched the world. Radius bumped
+    to 240 (a real, meaningfully bigger blast, not a token increase). Added genuine distance-falloff
+    damage (`12` to `42` depending how central the hit was) alongside the existing knockback — the
+    knockback stays a hand-set velocity rather than `damage()`'s own, so the two don't stack (see
+    the `knock:0` passed to `damage()`).
+  - Now actually wrecks nearby props too, via `hurtProp` — the same "an AOE gets every prop type's
+    own per-type destruction for free" trick every explosion in the game already relies on, so a
+    crate/barrel/car caught in the blast just breaks/explodes exactly like it would from any other
+    hit, with zero new per-type code.
+  - Caught and fixed a real gap while in there: the original enemy-loop had no `o.villager`
+    exclusion at all (`nearestFoe` and most other combat code do) — harmless back when this was
+    knockback-only, but with real damage now added it would have let the ability hurt or kill the
+    player's own villagers if ever used at home. Excluded villagers explicitly.
+  - New visual: two staggered expanding "shock ring" effects (reusing the exact same `fx.push({t:
+    'shock', ...})` shape `explode()` already uses for blast rings — no new rendering code needed)
+    in dusty tan/brown tones, plus a scatter of dust particles kicked up along the ring's leading
+    edge for the "ripple of dust ... slam ripples through the ground" look specifically asked for.
+  - Verified live: three enemies planted at 80/190/300px — 190px is the key case, inside the NEW
+    240 radius but outside the OLD 150 one — took 32 / 18.25 / 0 damage respectively, confirming the
+    radius increase is real and the falloff behaves; a villager planted at just 60px (point-blank)
+    took zero damage, confirming the new exclusion holds even at the worst-case distance; a nearby
+    crate was destroyed by the same trigger. A live screenshot shows both shock rings expanding
+    together with dust kicked up along the front one's edge, and the updated in-HUD perk
+    description ("a wide seismic shockwave that knocks back, damages, and wrecks…") rendering
+    correctly. Zero console errors.
+
+- **2026-09-17d — electricity visuals, and two real animal-rendering bugs.** User: "Let's do the
+  electricity effects next. Also animals suck. They don't match the existing style at all and the
+  weird perspective often has them running upside down or floating on top of things."
+  - **Electricity**: the wet-chain damage logic already existed, but every part of its VISUAL was
+    thin — the `spark` hazard fell through to the same flat translucent oval every hazard type gets
+    by default (nothing about it read as electric), and `electrocute()`'s inter-actor arc was a
+    handful of static dots jittered along a straight line, not anything that looked like lightning.
+    Added a reusable jagged `'bolt'` `fx` type (drawFx) — a zigzag re-jittered fresh on every single
+    draw call rather than fixed at creation, so it genuinely flickers/crackles instead of holding
+    one static shape — and used it in three places: `electrocute()`'s chain arc, a proper crackling
+    ground-glow + radiating mini-bolts for the `spark` hazard itself (`drawHazards`), and a burst of
+    short bolts on every direct taser/prod/zapstaff hit (`weaponFx`) so a plain zap reads as electric
+    on its own, not just a yellow burst + a light flash.
+  - Caught a real bug while wiring the last of those in: `weaponFx`'s own top line was
+    `const fx = wp.hitFx;` — a LOCAL variable named `fx` that shadowed the module-level `fx` array
+    (the visual-effects list) for the entire function, so `fx.push(...)` inside it was actually
+    calling `.push()` on a *string* like `'spark'`, not the effects list. Renamed the local to
+    `kind` throughout that one function; everything reads from the real array again.
+  - **Animals**: `drawDog` (every kennel pet — dog/cat/lion/bear) used to rotate its ENTIRE
+    silhouette by its raw movement angle (`octx.rotate(dog.ang)`). Past a quarter-turn that's a
+    creature drawn sideways or genuinely upside down — every other actor in the game (`drawActor`)
+    stays a fixed top-down silhouette and only ever flips left/right, never spins, which is exactly
+    the "existing style" mismatch reported. Its ground shadow was ALSO drawn inside that same
+    rotated space, so it swung around with the body instead of staying planted on the ground — the
+    "floating" half of the report. Rewrote to match `drawActor`'s own convention: fixed orientation,
+    mirrored left/right off the sign of the movement angle's cosine (falling back to facing right
+    when there's no `.ang` at all, which is genuinely true for a leashed dogwalker's companion — a
+    second, previously-latent bug: `drawDog` reused for that case would have rotated by `undefined`,
+    i.e. `NaN`, every single frame), shadow drawn in world space before any transform.
+  - Second, separate "floating on top of things" cause: loose kennel pets (owner-less, i.e. escaped
+    from a broken kennel prop) were drawn in their own pass placed AFTER the entire y-sorted prop/
+    actor list, so one always rendered on top of every wall and prop regardless of its actual depth
+    — walking behind a car still drew in front of it. Given a real sort slot in the same `_dl` list
+    everything else uses (new `kind` 12), and the old always-on-top pass removed. A leashed
+    dogwalker's companion was never affected by this specific bug (it's drawn from inside its
+    owner's own already-correctly-sorted `drawActor` call) — only the loose, ownerless case was.
+  - Verified live: a bear planted moving left (the exact case that used to render upside down)
+    rendered as a normal right-side-up mirrored silhouette with its shadow correctly underneath, not
+    swung off to one side; the same bear placed just behind a parked car had its lower half correctly
+    occluded by the car with only its head/back poking out above it, instead of drawing fully on top;
+    triggering a taser hit between two wet actors produced a real jagged crackling bolt (screenshot
+    confirmed) with zero console errors, where the fx-array/local-variable collision would previously
+    have thrown on every single spark-flavoured hit.
+
+- **2026-09-17e — guards get real weapon variety and actually patrol the beds.** User: "Can you
+  give the guard profession a variety of basic weapons too? Nothing that'll burn down the village.
+  Also can they patrol the base? or at least the sleeping areas where the sleeping villagers would
+  be the most vulnerable? Let me know if you can set that route yourself or if it's easier for the
+  player to designate an area for the guard to patrol?"
+  - **Weapons**: was hard-coded to `'bat'` for every guard. New `GUARD_WEAPONS` pool (`bat, pipe,
+    knife, sledge, spear, whip, springfist, katana, prod, zapstaff, trout`) — melee only, and
+    nothing with `hitFx:'fire'`, so nothing in the pool can ever ignite a building. `promoteGuard`
+    now rolls one at random per guard, so several guards visibly carry different weapons.
+  - **Patrol — went with the automatic route** rather than a player-drawn one: a new
+    `guardPatrolPoints()` reads every currently-bedded villager's `rec.bed` LIVE (not a route
+    captured once at promotion time), so a guard's beat automatically follows wherever beds actually
+    are as the village grows or gets rebuilt, with nothing for the player to draw, save, or keep in
+    sync by hand — falls back to the campfire if nobody has a bed yet. `updateSoldier`'s idle branch
+    (previously a single fixed `_guardPost`) now walks the guard between these points in sequence,
+    pausing 2.5–5s at each like an actual watch stop before moving on, only while no threat is
+    present — a threat still fully interrupts the beat and engages exactly as before. A manual
+    player-drawn patrol area would need a whole new path-drawing UI, persistence, and per-guard
+    route editing for comparatively little gain over "just follow the beds" once the beds are
+    already the thing being protected — happy to revisit if the automatic route ever falls short in
+    practice (e.g. a very spread-out village).
+  - `e._guardPost` (a single point) replaced by `e._isGuard` (the marker the promote/demote sync and
+    `updateSoldier` now key off) + live per-frame `guardPatrolPoints()` lookups; `demoteSoldier`
+    (shared with `muster()`'s ordinary stand-down) now also clears the guard-specific fields so a
+    later, unrelated raid-squad promotion can't inherit a stale patrol.
+  - Verified live: 4 villagers given beds at different points and assigned `guard` all promoted with
+    genuinely different weapons (`prod`, `sledge`, `springfist`, `pipe`) and staggered starting
+    patrol indices; simulating 30s of real movement showed guards actually walking between different
+    bed positions, not standing still at one fixed spot; a threat spawned mid-patrol was still found
+    and killed with zero damage taken, confirming combat still fully overrides patrol. Zero console
+    errors.
+
+- **2026-09-17f — mission failure now gets announced, with a road home.** User (mid-conversation):
+  "if you accidentally kill the target of the kidnap missions - can you announce that the target is
+  dead and then direct the player towards the exit. Same for all the mission types (i.e. collect
+  item)." Two real gaps, found by tracing `damage()`/`urgeMet()` rather than guessing: a kidnap
+  target's protection in `damage()` only holds while `!t.dazed` — once bonked senseless (the normal
+  way you're meant to subdue one), a follow-up hit or an explosion falls straight through to real
+  death, with nothing ever telling the player it happened; an errand item already flashed a
+  transient "destroyed!" popText on the spot but never said what to do next, and the mission's own
+  "have you got it" check (`gotObject`/`player.carrying`) just quietly kept failing forever after.
+  - New `failMissionObjective(reason)` — sets `mission._objFailed`/`_objFailReason` once (a second
+    call on the same trip is a no-op, verified) and raises a `flash()`. Hooked into `killActor()`
+    right where a target actually dies (only when it's *the* mission's `targetRef`, and not if the
+    player is mid-carry — grabbing them alive still wins normally), and into both branches of
+    `breakNearbyErrandItem()` (a carried object smashed, or a dropped one destroyed before pickup).
+  - The exit itself (`mission.exitRect`) was already always signposted from the moment a mission
+    starts — blue while in progress, green once done — it just had no failure colour. Added a third,
+    amber state to that same signposting: `drawExitStrip`'s pulse/dash/line-width, and
+    `drawObjectiveHUD`'s label + off-screen chevron, all now switch to amber and point at the exit
+    the instant `_objFailed` flips, using the exact same "which road" math the done-state already
+    had — no new pointing/visibility logic needed, just a third branch on top of it. The exit-zone
+    leave flash in `tryInteract` picks a matching amber/consolation line ("no shame in it — there's
+    always next time") instead of the normal one when leaving after a failure.
+  - Verified live: killing a dazed (not-yet-grabbed) kidnap target set `_objFailed` with the right
+    reason string exactly once, even when the kill was repeated; smashing a carried errand item
+    cleared `player.carrying` and set the same flag with an item-specific reason; drawing several
+    frames with `_objFailed` true (amber exit strip + HUD) threw no errors.
+
+- **2026-09-17g — Mole rebuilt into a steerable underground tunnel.** User (mid-conversation): "an
+  animation of the player tunneling through the ground cracking the ground above it - as well as a
+  hole where he jumped in through the ground causing AOE damage. Then the player can maneuver
+  beneath the ground damaging anything above it. I want the player to be able to steer the
+  tunneling and then once it's 5s duration is over he bursts back up through the ground doing AOE
+  damage." The old Mole active was an instant, durationless short teleport — none of that survived.
+  - `p.noclip` — the exact field Vampire's Wing Out already uses (`moveActor`'s `if (a.noclip)`
+    branch bypasses collision and clamps to zone bounds) — does the entire "steerable AND passes
+    through walls" job for free: normal WASD in `updatePlayer` is completely untouched, `noclip` just
+    stops the collision check, so the tunnel is driven by the same input the player already has.
+  - New `active.use`: sets `_moleT = 5`, flips `noclip` on, fires an entry `moleBurst` (knockback +
+    damage to nearby enemies, `hurtProp` to nearby destructible props — same "AOE gets every prop's
+    own destruction for free" trick the Ogre's Ground Pound uses). New `tick(p,dt)`: counts `_moleT`
+    down, calls `moleDamagePulse` roughly every 0.22s ("damaging anything above it" as it travels,
+    not just at the two ends), scatters dirt particles and bakes a fading cracked-earth decal trail
+    behind the burrow. At `_moleT <= 0`: clears `noclip`, nudges the player out of any solid geometry
+    it might have popped up inside (same safety loop pattern as everywhere else that reuses noclip),
+    and fires an exit `moleBurst` — the "bursts back up through the ground doing AOE damage" beat.
+    New `drawMoleForm` replaces the normal sprite the whole time: a squat mound with a lighter cap
+    and a few whisker-lines that slowly rotate, wobbling gently, shadow drawn separately so it
+    doesn't float. `TEMP_TRAIT_ACTIVE_FIELD`/`clearTempTraits()` extended (`mole: '_moleT'`) so a
+    temp Mole wiped mid-tunnel (e.g. a zone change) also resets `noclip` and unsticks the player,
+    same as the existing Vampire case.
+  - Verified live end-to-end: activating set `noclip`/`_moleT` correctly and the entry burst
+    genuinely damaged/knocked back a nearby test enemy; over the 5s window `moleDamagePulse` chipped
+    away at an enemy standing over the tunnel in several distinct hits, not one lump; at `_moleT`'s
+    natural expiry `noclip` reset to `false` and the exit burst fired its own separate damage/
+    knockback; `drawMoleForm` rendered several frames with zero console/draw errors both mid-tunnel
+    and at rest. (Tripped over an unrelated pre-existing engine quirk while testing: `updatePlayer`
+    briefly no-ops for a fixed window right after a raw debug `enterZone()` call, unrelated to Mole —
+    worked around it in the test harness, not a real gameplay bug since a normal zone entry doesn't
+    hit it the same way.)
+
+- **2026-09-17h — pausing looked complete but the weather never actually stopped.** User: "Pausing
+  seems to stop the people but things keep occuring that shake the screen - as if the environment
+  is not paused." Correct: `step()` (all actor/combat simulation) is fully skipped while `paused`,
+  but `updateAmbient()` — rain, wind, and lightning — was called unconditionally from `draw()`,
+  which runs every real frame regardless of `paused`. A lightning strike during a storm calls
+  `shake()`, can genuinely zap a wet actor or blow out a lamppost via `hurtProp`, and none of that
+  cared whether the settings menu was open. Fixed with one guard: `if (!paused) updateAmbient(_dz);`
+  — weather now freezes solid the instant the game pauses, same as everything else. Verified live:
+  with rain forced to maximum and the game paused via a real `Escape` keypress, the weather clock
+  (`weather.t`) stayed at exactly 0 across repeated render passes representing several seconds of
+  real time; unpausing let it start advancing again immediately.
+
+- **2026-09-17i — electricity now actually rides the rain.** User: "I just broke a TV in the rain
+  and it barely spread at all. Don't forget I asked for the electricity to pass through the water.
+  So if it's raining then the electricity damage should spread MUCH MUCH further." The spark
+  hazard's radius, `electrocute()`'s actor-to-actor chain distance and falloff, and the cosmetic
+  puddle-arcing were all fixed numbers with no idea the weather existed. New `rainConductMul()`
+  (`1 + weather.rain * 3`, city only) feeds all three, so a downpour makes a single zap reach up to
+  4x further across the board — one helper, so a lightning strike, a taser hit, a Tesla Grenade, and
+  a TV/arcade blowing up all get the same treatment, not just whichever one prompted the report.
+  Verified live: an identical spark hazard's radius measured 50px bone dry vs. 200px at full rain;
+  a chain test with two wet enemies 220px apart showed zero damage reaching the far one while dry
+  (outside the old fixed 100px chain range) and real chain damage reaching it while raining.
+
+- **2026-09-17j — guard patrol becomes a player-drawn circle.** Follow-up to 2026-09-17e, where
+  "went with the automatic route" (follow the beds) was the call made at the time. Once actually
+  watching it in a spread-out village, the user reported it back: "the guard is just sticking hard
+  against the beds. Could the player choose an area (circle) where the guard patrols. The circle
+  should be about as big as the circle in [a reference screenshot]. That way if the village is
+  spread out the player can decide where needs to be patrolled." Bed positions are packed tight in
+  a small hut, so several guards' offsets (a few px each) all landed in nearly the same spot — reads
+  as "stuck," not "patrolling."
+  - Reused build mode's existing input pattern wholesale rather than inventing a new one: aim with
+    the mouse while WASD keeps moving the player, click to confirm, right-click/Esc to cancel (new
+    `guardZoneMode` + `toggleGuardZoneMode`, slotting into the same `mousedown`/Escape-priority
+    chains `buildMode` already uses). Entry point is a new row in the per-villager Assign panel that
+    only appears once someone's actually a guard: "Set/Move patrol area."
+  - `village.guardZone = { x, y, r, pts }` — `pts` (a ring of 6 stops scattered through the circle,
+    `makeGuardZonePts`) is rolled ONCE, the moment the zone is dropped, and stored on the zone
+    itself. `guardPatrolPoints()` now returns that fixed set when a zone exists, falling back to the
+    old bed-based beat (then the campfire) otherwise — deliberately NOT regenerated on every call
+    (it's read every frame per guard), which would have jittered every stop's position constantly
+    instead of giving guards an actual fixed beat to walk. Dropping a new zone re-staggers every
+    existing guard onto it immediately. A faint permanent ring marks a set zone; a bright dashed one
+    follows the mouse while aiming.
+  - Verified live: a hand-placed guard, given a zone 300+ world units from its spawn, walked itself
+    into the zone and then visited 7 distinct points scattered through the circle over 60 simulated
+    seconds — not clustered on one spot — landing within the zone's actual radius the whole time.
+
+- **2026-09-17k — patrol zones go per-guard, with an adjustable radius.** Immediate follow-up to
+  2026-09-17j, before it even got used in practice: "Could you make the patrol area size adjustable
+  with the scroll wheel? Also can you bring up the dialogue to set or adjust the patrol area when
+  assigning that individual guard? Otherwise EVERY guard will be stuck patrolling the same area."
+  Correct catch — `village.guardZone` was a single village-wide field, so every guard read the exact
+  same zone; a second guard could never be given a different beat.
+  - Moved the zone onto the individual villager record instead: `rec.guardZone = { x, y, r, pts }`,
+    keyed by that guard's own `_vid`. `guardPatrolPoints(e)` now takes the guard and looks up ITS OWN
+    record's zone first, falling back to the shared bed-based beat only for a guard who hasn't been
+    given one yet — so a village can freely mix "this one covers the north gate," "that one covers
+    the sleeping huts," and "this other one just follows the old bed beat," all at once.
+  - The Assign-panel entry point already existed (2026-09-17j put it there); the fix was making it
+    open placement mode FOR that specific villager (`guardZoneTargetVid`, set from `doAssign`'s
+    `assignRec()`) rather than for the village as a whole, and having the confirm-click write onto
+    `rec.guardZone` instead of a shared field. "Move patrol area" on an existing guard now seeds the
+    radius from THEIR current zone, not a fresh default, so nudging one guard's beat doesn't reset
+    its size.
+  - Scroll wheel resizes while aiming (new `guardZoneRadius`, ±14 world units per wheel tick, clamped
+    60–480), same wheel slot `buildMode` already uses to cycle its piece carousel — the two modes are
+    mutually exclusive so there's no conflict. The dashed preview circle and the hint text
+    ("scroll to resize") both reflect the live radius as it's adjusted.
+  - The persistent-marker draw pass now walks every villager and draws a faint ring for each one's
+    own zone (skipping only whichever guard is actively being re-aimed, so its bright preview isn't
+    doubled by its own faint ring underneath) — so a village with several independently-zoned guards
+    shows all of their beats at a glance, not just one.
+  - Verified live through the real UI path, not just the underlying data: opened the Assign panel for
+    a test guard, clicked "Set patrol area," scrolled to grow the preview circle, moved the mouse and
+    clicked to confirm — the resulting `rec.guardZone` landed exactly at the clicked world position
+    with the enlarged radius, and the guard's `_patrolIdx`/`_patrolWaitT` reset cleanly. Separately,
+    two guards given zones on opposite sides of the village (800+ units apart) each settled and
+    patrolled within their OWN zone's radius, never drifting into the other's — confirming the
+    original "every guard stuck on the same area" bug is actually gone, not just hidden.
+
+- **2026-09-17l — Marksman's Called Shot becomes a real traveling round; Cannibal's Feast becomes
+  a real mess.** User: "With the marksman perk - can you make the bullet visible and make a big
+  puff of smoke appear from the player before the bullet rips through the enemies. Make blood spray
+  from any NPCs hit by the bullet and building and items take damage as the bullet passes through.
+  With the cannibal trait, when using 'feast' can you make the body being eaten explode into blood/
+  gore, leaving uneaten body parts and bones behind. Player should have blood appear around their
+  mouth and shirt while active."
+  - **Called Shot** used to be pure instant math: every enemy in a narrow cone got damaged in the
+    same frame, with one small burst() at the muzzle and nothing else — no travel, no visible round,
+    and `lineBlocked` meant a prop standing in the way silently protected whoever was behind it
+    instead of taking any damage itself.
+  - New `gunSmokePuff(x,y,dir)` — a big, slow, grey-white cloud (bigger/softer particles than the
+    sharp little `burst()` used for ordinary hit impacts) fired from the muzzle the instant the
+    ability triggers, before the round itself starts moving.
+  - New `fireCalledShot(p)` / `updateCalledShots(dt)` / `drawCalledShot(s)`, backed by a dedicated
+    `calledShots` array — deliberately NOT the shared `bullets` array, since `bullets` breaks on its
+    first hit (see `updateBullets`) and rewriting that shared behavior risked changing every other
+    gun in the game to pierce things it shouldn't. `fireCalledShot` does the same angle/range enemy
+    search as before (minus the `lineBlocked` exclusion) PLUS a walk down the ray for the first real
+    wall (an absolute stop) and every destructible prop crossing the line before that wall (pierced
+    through, not skipped past), then sorts everything by distance. `updateCalledShots` walks a point
+    down that precomputed line over time (1700 px/s) and fires each hit's damage/effects at the
+    moment the visible round actually reaches it — blood spray + a handful of flung particles for an
+    enemy, `hurtProp` for a prop, `damageCell` if it ends at a real wall — instead of all at once at
+    t=0. `drawCalledShot` renders a bright tracer with a fading tail behind the actual travel point,
+    so "the bullet visible" is genuinely a moving thing on screen, not a flash.
+  - **Feast** used to just set the eaten body's `corpseT` sky-high so the ordinary corpse-cleanup
+    sweep removed it next frame — nothing ever actually appeared where the body had been, and the
+    one `burst()` was centred on the PLAYER, not the corpse. New `goreExplode(x,y)` (called at the
+    corpse's own position): a big blood burst plus chunkier flung "meat" gib particles (bigger,
+    slower, browner — read as separate from the fine blood mist), then real PERSISTENT decals baked
+    into the ground via `bakeDecal` — several overlapping blood-pool blobs plus a few pale bone/
+    gristle fragments through it — since the corpse itself still vanishes almost immediately, these
+    decals are what's actually left behind to look at.
+  - The player's own mouth/shirt blood is drawn in `drawActor`, gated on `_feastT > 0`: a smear
+    across the mouth/chin, a drip below it, and a stain soaked into the shirt front, all fading in
+    over Feast's first ~1.2s and back out over its last ~1.2s (`_feastT` counts down from 6) rather
+    than popping on/off at full strength.
+  - Verified live: activating Called Shot queued a traveling shot with zero damage applied yet
+    (confirming it's no longer instant); 0.6s later, a near enemy (60px) and a far enemy (250px)
+    both took damage — the far one noticeably MORE, correctly preserving Marksman's own "farther hit
+    lands harder" distance scaling — and a destructible crate placed directly between them was
+    destroyed WITHOUT stopping the round from reaching the far enemy, confirming real piercing
+    through props. The `calledShots` list correctly emptied itself out again a few frames later.
+    Feast: activating on a corpse healed the player exactly 35% of max HP, set a 6s `_feastT`, and
+    marked the corpse for cleanup; rendering several frames with `_feastT` active (the new mouth/
+    shirt overlay) threw zero errors.
+
+- **2026-09-17m — Called Shot: nothing stops it, twice the reach.** Immediate follow-up. User:
+  "Nothing should stop that 'called shot' and its distance should reach twice further than it
+  currently does." Range doubled, 500 → 1000. The real-wall stop from 2026-09-17l was removed
+  outright: a solid wall cell on the line is now just another thing on the precomputed hit list
+  (deduplicated per distinct cell so a whole run of wall along the shot's path each takes its own
+  hit, not just the first one touched) — damaged via the same `damageCell` a wall already takes from
+  anything else, but no longer a hard stop that cut the shot short and hid everything behind it.
+  Enemies and props past a wall are now fully hittable, same as they already were past each other.
+  Verified live: fired straight at a real city building wall with one enemy just past it (400px) and
+  a second sitting near the new 1000px limit (950px, well outside the OLD 500px range) — the wall
+  cell itself took enough damage to break (`cellSolid` flipped from `true` to `false`), AND both
+  enemies behind/beyond it took real damage from the same shot, which the pre-follow-up version
+  would have completely blocked at the wall and never even attempted.
+
+- **2026-09-17n — found the actual cause of the persistent village lag.** User, a third time on the
+  same F8 report: "It still is laggy if I return to the village after dying in the city due to big
+  explosions or in this case from electricity." The earlier "try reloading the page" answer treated
+  this as a browser hiccup; going back to actually read what `blit` (the one segment eating nearly
+  all of `draw`'s time, both times reported) does in the code turned up a real, permanent bug
+  instead — `drawActorTranslucent` (used to render the player see-through — Ninja's Vanish, Ghost's
+  passive, hidden in/behind a van, **or driving any commandeered car**) calls `octx.getImageData()`
+  / `putImageData()` directly on the MAIN offscreen canvas to do a true per-pixel blend, since
+  `drawActor`'s hundred-plus `octx.fillRect(...)` calls can't cheaply be redirected to a scratch
+  canvas instead. Reading pixels back off a canvas like that is a well-documented way to knock a
+  Chromium canvas off the GPU-accelerated path — once it happens even ONCE, every later draw to
+  that same canvas element (including `blit`'s own single full-screen `drawImage`) gets dramatically
+  slower, and it doesn't recover on its own, since the canvas element itself isn't recreated on a
+  zone change — only a full page reload gets a fresh one. "Big explosions" and "electricity" were
+  the trigger the user happened to notice, but the actual likely culprit is far more mundane and far
+  more frequent: `playerVisualAlpha` returns exactly `0` (fully invisible) while driving a car, mid-
+  van-intro, or mid-getaway, and the OLD code ran the full getImageData/putImageData round trip for
+  those too — meaning any city visit that included so much as a few seconds behind the wheel of a
+  commandeered car (an advertised, common thing to do in this game) could have already poisoned the
+  canvas for the rest of the session, well before whatever explosion or shock actually killed the
+  player. The village slowdown afterward was just that pre-existing damage finally being reported.
+  - Fix: when computed alpha is exactly `0`, skip the draw entirely instead of calling
+    `drawActorTranslucent` — "blend nothing at full transparency" and "don't draw at all" are the
+    same visual result, so this is a free, zero-risk win that removes the getImageData call from the
+    driving/van-hidden cases completely. Ninja's Vanish (0.22) and Ghost's passive (0.55) still need
+    a real partial blend and still go through the getImageData path — much rarer in practice (a
+    handful of seconds every 15s+ cooldown, instead of the entire time spent driving) and left alone
+    for now rather than risk a deeper rewrite of `drawActorTranslucent` under time pressure.
+  - Verified live by monkey-patching `CanvasRenderingContext2D.prototype.getImageData` to count
+    calls: entering a car and rendering 5 frames while driving produced ZERO getImageData calls
+    (previously: one full pixel-readback round trip on the main canvas per frame, indefinitely, for
+    as long as the player kept driving); activating Ninja's Vanish and rendering 5 frames still
+    correctly produced 10 calls (2 per frame, the legitimate before/after snapshot), confirming the
+    real translucency effect was left intact for the cases that actually need it. Zero draw errors
+    in either case.
+
 ---
 
 ## Difficulty curve

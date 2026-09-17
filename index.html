@@ -2293,6 +2293,7 @@ addEventListener('keydown', e => {
     else if (mapOpen) toggleMap(false);
     else if (travelOpen) toggleTravel(false);
     else if (pendingPath || pathStroke) pendingPath = pathStroke = null;
+    else if (guardZoneMode) toggleGuardZoneMode(false);
     else if (buildMode) toggleBuild(false);
     else toggleSettings();
     return;
@@ -2412,6 +2413,27 @@ cv.addEventListener('mousedown', e => {
     }
     return;
   }
+  if (guardZoneMode && player){
+    const r = cv.getBoundingClientRect();
+    const mx = (e.clientX - r.left) * (W / r.width), my = (e.clientY - r.top) * (H / r.height);
+    if (e.button === 0){
+      const w = s2w(mx, my);
+      // user: "otherwise EVERY guard will be stuck patrolling the same area" — the zone belongs to
+      // the villager record being assigned (guardZoneTargetVid), not the village as a whole, so
+      // each guard can be given their own beat.
+      const rec = village.villagers.find(x => x.id === guardZoneTargetVid);
+      if (rec){
+        rec.guardZone = { x: w.x, y: w.y, r: guardZoneRadius, pts: makeGuardZonePts(w.x, w.y, guardZoneRadius) };
+        const e2 = enemies.find(en => en._vid === rec.id);
+        if (e2){ e2._patrolIdx = 0; e2._patrolWaitT = 0; }
+        popText(w.x, w.y, 'patrol area set', '#c85a4a', 1.1);
+      }
+      toggleGuardZoneMode(false);
+    } else if (e.button === 2){
+      toggleGuardZoneMode(false);
+    }
+    return;
+  }
   if (buildMode && player){
     if (e.button === 0){
       const r = cv.getBoundingClientRect();
@@ -2456,6 +2478,7 @@ addEventListener('mouseup', e => {
 cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.addEventListener('wheel', e => {
   if (buildMode && player){ e.preventDefault(); cycleBuildSel(e.deltaY > 0 ? 1 : -1); }
+  else if (guardZoneMode && player){ e.preventDefault(); guardZoneRadius = clamp(guardZoneRadius - Math.sign(e.deltaY) * 14, 60, 480); }
 }, { passive: false });
 
 // ---------- misc ----------
@@ -2473,6 +2496,18 @@ let player, wave, kills, score, money, gameOver, win, wanted, hitStop;
 let _wantedHideT = 0;   // seconds since any hostile last actually had eyes on the player
 let paused = false, godMode = false, packOpen = false, packSel = null;
 let craftOpen = false, travelOpen = false, mapOpen = false, buildMode = false, buildSel = 0, dragStart = null;
+// user: "the guard is just sticking hard against the beds... could the player choose an area
+// (circle) where the guard patrols... that way if the village is spread out the player can
+// decide where needs to be patrolled" — reuses build mode's own "aim with the mouse while WASD
+// keeps working, click to confirm" pattern (see the mousedown handler and buildMode's own entry
+// above) rather than inventing a new input scheme. Follow-up: "make the patrol area size
+// adjustable with the scroll wheel" + "bring up the dialogue ... when assigning that individual
+// guard? Otherwise EVERY guard will be stuck patrolling the same area" — guardZoneTargetVid is
+// whichever villager's Assign panel opened this placement (see doAssign's 'guardzone' case), so
+// the dropped zone is written onto THAT villager's own record, not a single village-wide one.
+let guardZoneMode = false, guardZoneTargetVid = null;
+const GUARD_ZONE_R = 180;
+let guardZoneRadius = GUARD_ZONE_R;
 let titleOpen = false, charCreateOpen = false;
 let pathStroke = null;    // [{x,y}] world points being dragged right now (freehand path brush)
 let pendingPath = null;   // { k, mat, pts } — a drawn path awaiting a click to confirm
@@ -3143,6 +3178,29 @@ function drawCraftUI(){
   }
 }
 // SCREEN layer: the build carousel, fixed in the lower part of the screen, scrollable
+// while aiming: a bright dashed circle following the mouse, same "click to drop" reticle feel
+// build mode uses. Once dropped: a faint, unobtrusive ring so the player can still see the beat's
+// boundary at a glance without it competing with everything else on screen the rest of the time.
+function drawGuardZone(){
+  ctx.save();
+  // faint permanent rings for every OTHER guard's already-set zone, so placing/moving one doesn't
+  // hide where the rest of the roster is already covering
+  ctx.globalAlpha = 0.35; ctx.setLineDash([6, 8]); ctx.lineWidth = 2; ctx.strokeStyle = '#c85a4a';
+  for (const v of village.villagers){
+    if (!v.guardZone || (guardZoneMode && v.id === guardZoneTargetVid)) continue;
+    const s = w2s(v.guardZone.x, v.guardZone.y);
+    ctx.beginPath(); ctx.arc(s.x, s.y, v.guardZone.r * ZOOM, 0, 6.283); ctx.stroke();
+  }
+  ctx.globalAlpha = 1; ctx.setLineDash([]);
+  if (guardZoneMode){
+    const w = s2w(mouse.x, mouse.y), s = w2s(w.x, w.y);
+    ctx.setLineDash([8, 6]); ctx.lineWidth = 2.5; ctx.strokeStyle = '#e8746a';
+    ctx.beginPath(); ctx.arc(s.x, s.y, guardZoneRadius * ZOOM, 0, 6.283); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e8746a'; ctx.beginPath(); ctx.arc(s.x, s.y, 4, 0, 6.283); ctx.fill();
+  }
+  ctx.restore();
+}
 function drawBuildUI(){
   buildOptRects = [];
   const _bh = $('buildhint');
@@ -4592,6 +4650,11 @@ function drawAssign(){
   rows.push(v.bed ? { act: 'unbed', label: 'Back to the fire', ico: 'idle', sub: 'give up the bed' }
     : fb ? { act: 'bed', label: 'Give a bed', ico: 'bed', sub: bedInHouse(fb) ? 'in a house' : 'no roof yet' }
     : { act: 'none', label: 'No free bed', ico: 'bed', dim: true, sub: 'build & enclose one' });
+  // user: "the guard is just sticking hard against the beds... could the player choose an area
+  // (circle) where the guard patrols" — offered right here, the moment someone's actually a guard,
+  // rather than buried in a separate menu they'd have no reason to go looking for.
+  if (v.job === 'guard') rows.push({ act: 'guardzone', label: v.guardZone ? 'Move patrol area' : 'Set patrol area', ico: 'guard',
+    sub: 'walk it, aim with the mouse, click to drop' });
   if (village.cult){
     const dev = Math.round(villagerDevotion(v) * 100), tier = devotionTier(v);
     const conv = village.conviction || 0, preached = village.sermonDay === village.day;
@@ -4638,6 +4701,12 @@ function drawAssign(){
 }
 function doAssign(rc){
   const v = assignRec(); if (!v) return;
+  if (rc.act === 'guardzone'){
+    const vid = v.id;
+    closeAssign();
+    toggleGuardZoneMode(true, vid);
+    return;
+  }
   if (rc.act === 'preach'){
     if (!canPreachTo(v)){ popText(player.x, player.y - 26, 'not now', '#ff8f8f'); return; }
     const vid = v.id; closeAssign(); openSermon(vid); return;
@@ -4821,12 +4890,20 @@ function drawObjectiveHUD(){
   }
   const carryingTgt = player.carrying && player.carrying.isTarget;
   const doneGoal = urgeMet() || carryingTgt;
+  // user: "announce that the target is dead and then direct the player towards the exit. Same for
+  // all the mission types (i.e. collect item)." See failMissionObjective — set once, on an actual
+  // kidnap-target death (killActor) or errand-item destruction (breakNearbyErrandItem), for the
+  // rest of this trip. Kept distinct from `doneGoal` (an amber "it's over, get out" reads very
+  // differently from a green "you did it") but reuses every bit of the same "point at the exit"
+  // plumbing below rather than a separate notification system.
+  const failedGoal = !!mission._objFailed && !doneGoal;
   if (carryingTgt) label = 'Carry ' + player.carrying.name + ' to the ' + EDGE_NAME[mission.edge] + ' road';
   else if (doneGoal) label = 'Done — head to the ' + EDGE_NAME[mission.edge] + ' road';
+  else if (failedGoal) label = mission._objFailReason + ' — head to the ' + EDGE_NAME[mission.edge] + ' road';
   ctx.font = 'bold 13px "Courier New",monospace';
   const w = ctx.measureText(label).width + 24;
   ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(W/2 - w/2, 6, w, 22);
-  ctx.fillStyle = doneGoal ? '#8fe0a5' : '#e6dcc4'; ctx.fillText(label, W/2, 21);
+  ctx.fillStyle = doneGoal ? '#8fe0a5' : failedGoal ? '#ffb46e' : '#e6dcc4'; ctx.fillText(label, W/2, 21);
 
   // off-screen arrow to the live target
   const tgt = mission.targetRef;
@@ -4846,12 +4923,14 @@ function drawObjectiveHUD(){
     }
   }
 
-  // goal's in the bag → guide back to the way home (green chevron + distance)
+  // goal's in the bag (or lost for good) → guide back to the way home (chevron + distance),
+  // green for an actual success, amber for "nothing left to do here but leave"
   const ex = exitCenter();
-  if (doneGoal && ex){
+  if ((doneGoal || failedGoal) && ex){
     const s = w2s(ex.x, ex.y);
     const on = s.x > 24 && s.x < W - 24 && s.y > 44 && s.y < H - 24;
     const dm = (Math.hypot(ex.x - player.x, ex.y - player.y) / 16) | 0;
+    const chCol = doneGoal ? '127,224,160' : '255,180,110', chHex = doneGoal ? '#8fe0a5' : '#ffb46e';
     ctx.save();
     if (!on){
       const ang = Math.atan2(ex.y - player.y, ex.x - player.x);
@@ -4862,15 +4941,15 @@ function drawObjectiveHUD(){
       ctx.rotate(ang);
       ctx.fillStyle = 'rgba(0,0,0,0.4)';
       ctx.beginPath(); ctx.moveTo(24, 0); ctx.lineTo(-15, -15); ctx.lineTo(-15, 15); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = `rgba(127,224,160,${pulse})`;
+      ctx.fillStyle = `rgba(${chCol},${pulse})`;
       ctx.beginPath(); ctx.moveTo(21, 0); ctx.lineTo(-13, -13); ctx.lineTo(-13, 13); ctx.closePath(); ctx.fill();
       ctx.rotate(-ang);
       ctx.textAlign = 'center';
       ctx.fillStyle = '#000'; ctx.font = 'bold 11px "Courier New",monospace';
       ctx.fillText(dm + 'm · road home', 1, 31);
-      ctx.fillStyle = '#8fe0a5'; ctx.fillText(dm + 'm · road home', 0, 30);
+      ctx.fillStyle = chHex; ctx.fillText(dm + 'm · road home', 0, 30);
     } else {
-      ctx.fillStyle = '#8fe0a5'; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'center';
+      ctx.fillStyle = chHex; ctx.font = 'bold 11px "Courier New",monospace'; ctx.textAlign = 'center';
       ctx.fillText('◈ the road home', clamp(s.x, 60, W - 60), clamp(s.y - 14, 44, H - 10));
     }
     ctx.restore();
@@ -4897,13 +4976,20 @@ function drawExitStrip(camx, camy){
   const r = mission.exitRect;
   if (r.x1 < camx-30 || r.x0 > camx+VUW+30 || r.y1 < camy-30 || r.y0 > camy+VUH+30) return;
   const done = mission.raid ? mission.raid.phase === 'won' : (urgeMet() || (player.carrying && player.carrying.isTarget));
-  const pull = 0.4 + 0.3 * Math.sin(performance.now() / (done ? 180 : 260));
-  const c = done ? '120,255,180' : '120,200,255';
-  octx.fillStyle = `rgba(${c},${(done ? 0.13 : 0.08) + pull * (done ? 0.15 : 0.09)})`;
+  // user: "announce that the target is dead and then direct the player towards the exit" — the
+  // exit rect itself was always drawn (quietly, blue) from the moment the mission starts, only
+  // ever pulsing harder/green once the objective was actually met. A failed one (see
+  // failMissionObjective) gets the same emphasis but in amber, so "go here, it's over" doesn't
+  // read as "go here, you did it."
+  const failed = !!mission._objFailed && !done;
+  const emph = done || failed;
+  const pull = 0.4 + 0.3 * Math.sin(performance.now() / (emph ? 180 : 260));
+  const c = done ? '120,255,180' : failed ? '255,180,110' : '120,200,255';
+  octx.fillStyle = `rgba(${c},${(emph ? 0.13 : 0.08) + pull * (emph ? 0.15 : 0.09)})`;
   octx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
-  octx.strokeStyle = `rgba(${done ? '150,255,190' : '170,225,255'},${(done ? 0.7 : 0.5) + pull * 0.4})`;
-  octx.lineWidth = done ? 2.4 : 1.4;
-  octx.setLineDash([7, 5]); octx.lineDashOffset = -performance.now() / (done ? 26 : 40);
+  octx.strokeStyle = `rgba(${done ? '150,255,190' : failed ? '255,195,130' : '170,225,255'},${(emph ? 0.7 : 0.5) + pull * 0.4})`;
+  octx.lineWidth = emph ? 2.4 : 1.4;
+  octx.setLineDash([7, 5]); octx.lineDashOffset = -performance.now() / (emph ? 26 : 40);
   octx.beginPath();
   if ((r.x1 - r.x0) < (r.y1 - r.y0)){ const x = mission.edge === 'W' ? r.x1 : r.x0; octx.moveTo(x, r.y0); octx.lineTo(x, r.y1); }
   else { const y = mission.edge === 'N' ? r.y1 : r.y0; octx.moveTo(r.x0, y); octx.lineTo(r.x1, y); }
@@ -5853,10 +5939,11 @@ const HAZ = {
 // Purely cosmetic (electrocute/HAZ.spark's own tick already do the actual damage); a little wobble
 // per step keeps it from reading as a ruler-straight line.
 function sparkThroughPuddles(x, y){
+  const reach = 160 * rainConductMul();
   for (const h of hazards){
     if (h.kind !== 'puddle' || h.dead) continue;
     const d = Math.hypot(h.x - x, h.y - y);
-    if (d > 160) continue;
+    if (d > reach) continue;
     const steps = Math.max(3, Math.round(d / 14));
     for (let i = 0; i <= steps; i++){
       const k = i / steps, jitter = Math.sin(k * 9 + h.x) * 4;
@@ -5864,13 +5951,22 @@ function sparkThroughPuddles(x, y){
     }
   }
 }
+// user: "I just broke a TV in the rain and it barely spread at all... if it's raining then the
+// electricity damage should spread MUCH MUCH further" — a rain-soaked street is basically one
+// continuous puddle, so a discharge riding it should reach far past what it covers on dry
+// ground. Used by every electrical reach (the spark hazard's own radius, electrocute()'s
+// actor-to-actor chain, and the cosmetic puddle-arcing) so ALL of them scale together, not just
+// whichever one happened to prompt the report.
+function rainConductMul(){ return zone === 'city' ? 1 + weather.rain * 3 : 1; }
 function addHazard(kind, x, y, opts){
   const base = HAZ[kind] || HAZ.fire;
   // `dps` was never copied onto the instance (only r/life/life0 were) — every tick(h,a) function
   // reads it off `h`, not `base`, so standing in a real fire/gas/spark hazard has been dealing
   // `undefined * dt` = NaN damage this whole time (found while testing the new spark hazard, but
   // it affects fire and gas identically — pre-existing, not something this session introduced).
-  hazards.push(Object.assign({ kind, x, y, r: base.r, life: base.life, life0: base.life, dps: base.dps, t: 0, dead: false, team: 'any' }, opts || {}));
+  const inst = Object.assign({ kind, x, y, r: base.r, life: base.life, life0: base.life, dps: base.dps, t: 0, dead: false, team: 'any' }, opts || {});
+  if (kind === 'spark') inst.r *= rainConductMul();
+  hazards.push(inst);
   if (kind === 'spark') sparkThroughPuddles(x, y);   // show the initial discharge finding the wet ground immediately, not just on the first re-tick
   if (hazards.length > 90) hazards.splice(0, hazards.length - 90);
 }
@@ -6078,6 +6174,29 @@ function drawHazards(){
       gg.addColorStop(0, 'rgba(140,190,230,0.36)'); gg.addColorStop(1, 'rgba(90,140,190,0.04)');
       octx.fillStyle = gg; octx.beginPath(); octx.ellipse(h.x, h.y, h.r, h.r * 0.5, 0, 0, 7); octx.fill();
       octx.fillStyle = 'rgba(225,242,255,0.4)'; octx.beginPath(); octx.ellipse(h.x - h.r * 0.2, h.y - h.r * 0.12, h.r * 0.32, h.r * 0.08, -0.2, 0, 7); octx.fill();
+    } else if (h.kind === 'spark'){
+      // user: "improve the visuals on electricity" — this used to fall through to the plain flat
+      // oval every hazard type gets by default (the same generic shape a slow-glue or web patch
+      // uses), nothing about it read as "electric." A soft glow plus a handful of real jagged
+      // ground-bolts, re-jittered fresh every frame (see drawFx's 'bolt' case for the same
+      // technique) so it visibly crackles instead of sitting there as a static yellow blob.
+      const gg = octx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r * 0.9);
+      gg.addColorStop(0, 'rgba(255,240,190,0.35)'); gg.addColorStop(0.6, 'rgba(255,210,100,0.16)'); gg.addColorStop(1, 'rgba(0,0,0,0)');
+      octx.fillStyle = gg; octx.beginPath(); octx.ellipse(h.x, h.y, h.r * 0.9, h.r * 0.5, 0, 0, 7); octx.fill();
+      const nb = Math.max(3, Math.round(h.r / 16));
+      octx.lineCap = 'round'; octx.lineJoin = 'round';
+      for (let i = 0; i < nb; i++){
+        const a = i * 2.4 + h.x * 0.01;
+        const rr = 0.5 + ((i * 37) % 10) / 18;
+        const ex = h.x + Math.cos(a) * h.r * rr, ey = h.y + Math.sin(a) * h.r * 0.5 * rr;
+        const segs = 4, dx = ex - h.x, dy = ey - h.y, nx = -dy, ny = dx, nl = Math.hypot(nx, ny) || 1;
+        const pts = [[h.x, h.y]];
+        for (let s = 1; s < segs; s++){ const t = s / segs, off = (Math.random() * 2 - 1) * 4; pts.push([h.x + dx * t + nx / nl * off, h.y + dy * t + ny / nl * off]); }
+        pts.push([ex, ey]);
+        octx.strokeStyle = 'rgba(255,236,160,0.5)'; octx.lineWidth = 3;
+        octx.beginPath(); octx.moveTo(pts[0][0], pts[0][1]); for (let s = 1; s < pts.length; s++) octx.lineTo(pts[s][0], pts[s][1]); octx.stroke();
+        octx.strokeStyle = '#fff8d0'; octx.lineWidth = 1.2; octx.stroke();
+      }
     } else if (h.kind === 'gas'){
       drawGoo(h, 'rgba(150,220,90,0.30)', 'rgba(212,255,172,0.32)', 'rgba(190,255,140,0.55)');
     } else if (h.kind === 'glue'){
@@ -6099,6 +6218,12 @@ function updateFx(dt){
   for (const f of fx) f.life -= dt;
   fx = fx.filter(f => f.life > 0);
 }
+// user: "I'm wanting to improve the visuals on things like electricity." A jagged lightning-bolt
+// fx, reusable anywhere two points need a real "zap," instead of the handful of scattered dot
+// particles electrocute() used to approximate one with. Re-jittered fresh every single draw call
+// (not computed once at creation) — a real bolt flickers/crackles instead of holding one static
+// zigzag for its whole life, and it's cheap: a handful of points, only ever a couple on screen at
+// once and only for a fraction of a second each.
 function drawFx(){
   for (const f of fx){
     const k = clamp(1 - f.life / (f.life0 || 1), 0, 1);
@@ -6106,6 +6231,23 @@ function drawFx(){
       const r = f.r0 + (f.r1 - f.r0) * k;
       octx.strokeStyle = f.col; octx.globalAlpha = (1 - k) * (f.a || 1); octx.lineWidth = (f.w || 3) * (1 - k * 0.6);
       octx.beginPath(); octx.arc(f.x, f.y, Math.max(1, r), 0, 7); octx.stroke();
+      octx.globalAlpha = 1;
+    } else if (f.t === 'bolt'){
+      const segs = f.segs || 5, jitter = f.jitter ?? 6;
+      const dx = f.x1 - f.x0, dy = f.y1 - f.y0, nx = -dy, ny = dx, nl = Math.hypot(nx, ny) || 1;
+      const pts = [[f.x0, f.y0]];
+      for (let i = 1; i < segs; i++){
+        const t = i / segs, off = (Math.random() * 2 - 1) * jitter;
+        pts.push([f.x0 + dx * t + nx / nl * off, f.y0 + dy * t + ny / nl * off]);
+      }
+      pts.push([f.x1, f.y1]);
+      octx.globalAlpha = 1 - k; octx.lineCap = 'round'; octx.lineJoin = 'round';
+      for (const [lw, col] of [[(f.w || 2) * 2.4, f.glowCol || 'rgba(255,226,122,0.4)'], [f.w || 1.6, f.col || '#fff8d0']]){
+        octx.strokeStyle = col; octx.lineWidth = lw;
+        octx.beginPath(); octx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length; i++) octx.lineTo(pts[i][0], pts[i][1]);
+        octx.stroke();
+      }
       octx.globalAlpha = 1;
     }
   }
@@ -6180,6 +6322,18 @@ function drawGrenade(g){
 
 const BPIC = { plank_wall:'wall', door:'door', window:'window', fence:'fence', floor:'floor', plot:'plot', bed:'bed', study:'study',
   stick_wall:'stick_wall', fieldstone_wall:'fieldstone_wall', earth_floor:'earth_floor' };
+function toggleGuardZoneMode(force, vid){
+  if (!player || !village) return;
+  guardZoneMode = force !== undefined ? force : !guardZoneMode;
+  if (guardZoneMode){
+    guardZoneTargetVid = vid;
+    const rec = village.villagers.find(v => v.id === vid);
+    guardZoneRadius = (rec && rec.guardZone) ? rec.guardZone.r : GUARD_ZONE_R;   // moving an existing zone starts from its current size
+  }
+  paused = false;
+  $('buildhint').classList.toggle('on', guardZoneMode);
+  if (guardZoneMode) $('buildhint').textContent = 'click to drop the patrol area  ·  scroll to resize  ·  right-click / Esc cancels';
+}
 function toggleBuild(force){
   if (!player) return;
   if (force === undefined && zone !== 'village' && !buildMode){ popText(player.x, player.y - 26, 'you can only build at home', '#ff8f8f'); return; }
@@ -7284,18 +7438,45 @@ const PLAYER_TRAITS = [
       popText(p.x,p.y-p.r-10, n?'*haunt*':'phased through empty air','#cfe0ff',1); burst(p.x,p.y,14,'#cfe0ff',180); A.S.wood();
     } } },
   { id:'ogre',       name:'Ogre',          icon:'👹', cost:5,
-    desc:'+30 max HP, deal 80% more knockback, resist 40% of the knockback you take. A bit slower. ACTIVE Ground Pound — a shockwave sends everyone nearby flying.',
+    desc:'+30 max HP, deal 80% more knockback, resist 40% of the knockback you take. A bit slower. ACTIVE Ground Pound — a wide seismic shockwave that knocks back, damages, and wrecks everything nearby.',
     hpBonus:30, mods:{ knockMul:1.8, speedMul:0.93 },
     active:{ cd:18, use:(p)=>{
-      let n=0;
-      for (const o of enemies){ if (o.dead||o.team!=='enemy') continue;
-        const d=Math.hypot(o.x-p.x,o.y-p.y); if (d>150) continue;
-        const kb=1-Math.min(0.9,d/150), a=Math.atan2(o.y-p.y,o.x-p.x);
+      // user: "increase the AOE area ... a ripple of dust leaving the ogre as his seismic slam
+      // ripples through the ground ... damage/destroy nearby objects and NPCs." Was knockback+stun
+      // only, r:150, nothing else. Radius bumped to 240; now does real distance-falloff damage
+      // alongside the knockback (kept as its own hand-set velocity rather than damage()'s built-in
+      // knockback, so the two don't stack — see the `knock:0` below), and reuses hurtProp — the
+      // same "an AOE gets per-type destruction for free" trick every explosion in this game already
+      // relies on — so it genuinely wrecks nearby props, not just shoves enemies around.
+      const R = 240;
+      let n = 0;
+      for (const o of enemies){
+        if (o.dead || o.team !== 'enemy' || o.villager) continue;   // never your own villagers, even if used at home
+        const d = Math.hypot(o.x-p.x, o.y-p.y); if (d > R) continue;
+        const kb = 1 - Math.min(0.9, d/R), a = Math.atan2(o.y-p.y, o.x-p.x);
         o.vx += Math.cos(a)*520*kb; o.vy += Math.sin(a)*520*kb;
         if (!o._noStagger) o.stun = Math.max(o.stun, 0.5);
+        damage(o, 12 + 30*kb, p, 0);
         n++;
       }
-      shake(6); burst(p.x,p.y,20,'#b98a4a',220); popText(p.x,p.y-p.r-10, n?'GROUND POUND':'nothing nearby','#b98a4a',1.2); A.S.thud();
+      for (const pr of props){
+        if (pr.dead || pr.hp >= 9999) continue;
+        const d = Math.hypot(pr.x-p.x, pr.y-p.y); if (d > R) continue;
+        hurtProp(pr, (1 - Math.min(0.9, d/R)) * 70 + 15, { x: p.x, y: p.y, team: 'player' });
+      }
+      shake(9);
+      burst(p.x, p.y, 26, '#b98a4a', 260);
+      // the dust ripple — two staggered expanding rings (same fx.push 'shock' shape explode() uses)
+      // plus dust actually kicked up along the ring's leading edge, not just a flat outline
+      fx.push({ t:'shock', x:p.x, y:p.y, r0:14, r1:R*1.05, life:0.55, life0:0.55, col:'rgba(150,120,74,0.6)', w:7 });
+      fx.push({ t:'shock', x:p.x, y:p.y, r0:8,  r1:R*0.75, life:0.4,  life0:0.4,  col:'rgba(200,178,130,0.45)', w:4 });
+      for (let i = 0; i < 18; i++){
+        const a = (i/18)*6.283 + rand(-0.15, 0.15);
+        parts.push({ x: p.x + Math.cos(a)*R*0.9, y: p.y + Math.sin(a)*R*0.9,
+          vx: Math.cos(a)*rand(10,30), vy: Math.sin(a)*rand(10,30) - rand(10,20),
+          life: rand(0.5,0.9), col: pick(['rgba(150,120,74,0.55)','rgba(120,96,58,0.5)']), r: rand(2.5,4.5) });
+      }
+      popText(p.x,p.y-p.r-10, n?'GROUND POUND':'nothing nearby','#b98a4a',1.2); A.S.thud();
     } } },
   { id:'stormcaller', name:'Storm Caller', icon:'⛈️', cost:5,
     desc:'A kill has a chance to zap the nearest other enemy. ACTIVE Chain Lightning — a bolt arcs through up to 5 nearby enemies.',
@@ -7347,11 +7528,22 @@ const PLAYER_TRAITS = [
       if (p._feastT>0){ p._feastT -= dt; if (p._feastT<=0) clearPerkAura(p,'cannibal'); }
     },
     onDeal:(p)=> p._feastT>0 ? 1.3 : 1,
+    // user: "when using 'feast' can you make the body being eaten explode into blood/gore, leaving
+    // uneaten body parts and bones behind. Player should have blood appear around their mouth and
+    // shirt while active." The old version just set corpseT sky-high and let the ordinary corpse
+    // cleanup sweep it away next frame — nothing ever actually appeared where the body had been.
+    // goreExplode leaves real, persistent decals (blood pool + bone fragments baked into the
+    // ground) so there's still something to look at once the corpse itself is gone; the player's
+    // own mouth/shirt blood is drawn in drawActor, gated on `_feastT` (see there).
     active:{ cd:18, use:(p)=>{
       let best=null, bd=150*150;
       for (const o of enemies){ if (!o.dead || o.corpseT>10) continue; const d=dist2(o.x,o.y,p.x,p.y); if (d<bd){ bd=d; best=o; } }
-      if (best){ best.corpseT = 999; p.hp=Math.min(p.maxhp,p.hp+p.maxhp*0.35); p._feastT=6; setPerkAura(p,'cannibal','#8a1520');
-        popText(p.x,p.y-p.r-10,'*feast*','#8a1520',1.2); burst(p.x,p.y,16,'#8a1520',180); A.S.hurt(); }
+      if (best){
+        goreExplode(best.x, best.y);
+        best.corpseT = 999;
+        p.hp=Math.min(p.maxhp,p.hp+p.maxhp*0.35); p._feastT=6; setPerkAura(p,'cannibal','#8a1520');
+        popText(p.x,p.y-p.r-10,'*feast*','#8a1520',1.2); A.S.hurt();
+      }
       else popText(p.x,p.y-p.r-10,'nothing to feast on','#8a8a8a',1);
     } } },
   { id:'gambler',    name:'Gambler',       icon:'🎲', cost:4,
@@ -7384,30 +7576,97 @@ const PLAYER_TRAITS = [
       popText(p.x,p.y-p.r-10, hit?'HAYMAKER':'swung at nothing','#e8c07a',1.1); burst(p.x,p.y,10,'#e8c07a',160); A.S.thud(); shake(4);
     } } },
   { id:'marksman',   name:'Marksman',      icon:'🎯', cost:5,
-    desc:'The farther away a hit lands, the harder it hits — up to +60%. ACTIVE Called Shot — an instant piercing shot down a line, hitting everything in it.',
+    desc:'The farther away a hit lands, the harder it hits — up to +60%. ACTIVE Called Shot — a visible piercing round that rips down a line, ripping through everything and everyone in it.',
     onDeal:(p,d,t)=>{ const dist=Math.hypot(p.x-t.x,p.y-t.y); return 1 + Math.min(0.6, dist/500); },
+    // user: "make the bullet visible and make a big puff of smoke appear from the player before
+    // the bullet rips through the enemies. Make blood spray from any NPCs hit ... and building and
+    // items take damage as the bullet passes through." See fireCalledShot/updateCalledShots/
+    // drawCalledShot above (near updateBullets) for the actual traveling-round + piercing-prop
+    // logic — this just fires the smoke, then the round.
     active:{ cd:16, use:(p)=>{
-      const range=500, a=p.dir; let hit=0;
-      for (const o of enemies){
-        if (o.dead||o.team!=='enemy') continue;
-        const dx=o.x-p.x, dy=o.y-p.y, d=Math.hypot(dx,dy); if (d>range) continue;
-        const ang=Math.atan2(dy,dx); if (Math.abs(((ang-a+Math.PI*3)%(Math.PI*2))-Math.PI) > 0.12) continue;
-        if (lineBlocked(p.x,p.y,o.x,o.y)) continue;
-        damage(o, 45+(p.dmgBonus||0), p, 200); hit++;
-      }
-      popText(p.x,p.y-p.r-10, hit?'CALLED SHOT':'no line of sight','#ffb060',1.1); burst(p.x+Math.cos(a)*40,p.y+Math.sin(a)*40,10,'#ffb060',200); A.S.gun(); shake(3);
+      gunSmokePuff(p.x, p.y, p.dir);
+      fireCalledShot(p);
+      popText(p.x,p.y-p.r-10,'CALLED SHOT','#ffb060',1.1); A.S.gun(); shake(3);
     } } },
   { id:'mole',       name:'Mole',          icon:'🕳️', cost:4,
-    desc:'A chance to duck underground and shrug off a heavy hit. ACTIVE Tunnel — burrow and pop up a short distance away instantly.',
+    desc:'A chance to duck underground and shrug off a heavy hit. ACTIVE Tunnel — burrow underground for 5s (steerable, invulnerable, cracking and damaging the ground above you as you go), then burst back up top with a shockwave.',
     onHurt:(p,d)=>{ if (d>18 && Math.random()<0.25){ p.invuln=Math.max(p.invuln,0.5); popText(p.x,p.y-p.r-10,'*duck under*','#8a6a3a',0.8); return 0.3; } return 1; },
-    active:{ cd:10, use:(p)=>{
-      const dist=180, a = Math.hypot(p.vx,p.vy)>10 ? Math.atan2(p.vy,p.vx) : p.dir;
-      let tx=p.x+Math.cos(a)*dist, ty=p.y+Math.sin(a)*dist;
-      for (let s=dist; s>20; s-=20){ const x=p.x+Math.cos(a)*s, y=p.y+Math.sin(a)*s; if (!solidBoxHit(x,y,16,16)){ tx=x; ty=y; break; } }
-      p.x=tx; p.y=ty; p.invuln=Math.max(p.invuln,0.3);
-      burst(p.x,p.y,14,'#8a6a3a',160); popText(p.x,p.y-p.r-10,'*pop*','#8a6a3a',0.9); A.S.wood();
+    // user: "an animation of the player tunneling through the ground cracking the ground above it
+    // — as well as a hole where he jumped in through the ground causing AOE damage. Then the player
+    // can maneuver beneath the ground damaging anything above it ... I want the player to be able to
+    // steer the tunneling and then once its 5s duration is over he bursts back up through the ground
+    // doing AOE damage." Was an instant short teleport with no duration at all. `p.noclip` (the
+    // exact same field Vampire's Wing Out already uses — see moveActor's `if (a.noclip)` branch) is
+    // what does the real work here: normal WASD steering keeps running completely untouched in
+    // updatePlayer, `noclip` just stops moveActor's own collision from blocking it, so "steerable
+    // AND passes through walls/props" comes for free from a mechanism already proven elsewhere.
+    tick:(p,dt)=>{
+      if (p._moleT > 0){
+        p._moleT -= dt;
+        p.invuln = Math.max(p.invuln, 0.3);   // safe from surface attacks while genuinely underground
+        p._moleTickT = (p._moleTickT ?? 0) - dt;
+        if (p._moleTickT <= 0){ p._moleTickT = 0.22; moleDamagePulse(p.x, p.y); }   // "damaging anything above it" as it travels, not just at the two ends
+        if (Math.random() < dt * 22) parts.push({ x: p.x + rand(-8,8), y: p.y + rand(-8,8), vx: rand(-6,6), vy: -rand(8,18), life: rand(0.4,0.7), col: 'rgba(138,106,58,0.55)', r: rand(1.6,3) });
+        if (Math.random() < dt * 5) bakeDecal(p.x, p.y, rand(6,10), 'rgba(58,42,22,0.32)');   // a lingering cracked-earth trail behind the burrow
+        if (p._moleT <= 0){
+          p.noclip = false;
+          let g = 0; while (solidBoxHit(p.x, p.y, 18, 18) && g++ < 40){ p.x += rand(-14,14); p.y += rand(-14,14); }   // don't pop up already embedded in whatever's here now
+          moleBurst(p.x, p.y, true);
+          clearPerkAura(p, 'mole');
+        }
+      }
+    },
+    active:{ cd:24, use:(p)=>{
+      p._moleT = 5; p._moleTickT = 0; p.noclip = true; setPerkAura(p, 'mole', '#8a6a3a');
+      moleBurst(p.x, p.y, false);
+      popText(p.x, p.y - p.r - 10, '*burrows in*', '#8a6a3a', 1);
     } } },
 ];
+// user: "damaging anything above it" while tunneling — a small, frequent AOE nibble along the
+// whole path, distinct from the two bigger one-off bursts at the actual entry/exit points below.
+function moleDamagePulse(x, y){
+  const R = 46;
+  for (const o of enemies){
+    if (o.dead || o.team !== 'enemy' || o.villager) continue;
+    if (dist2(o.x, o.y, x, y) < R * R) damage(o, 6, player, 40);
+  }
+  for (const pr of props){
+    if (pr.dead || pr.hp >= 9999) continue;
+    if (dist2(pr.x, pr.y, x, y) < R * R) hurtProp(pr, 9, { x, y, team: 'player' });
+  }
+}
+// the entry ("a hole where he jumped in ... causing AOE damage") and exit ("bursts back up ...
+// doing AOE damage") shockwaves — same shape, reused for both, with real damage/knockback for
+// actors and hurtProp for props (the same "AOE gets per-type destruction for free" trick every
+// other explosion in this game already relies on), plus a burst of ground-crack fragments radiating
+// outward for "cracking the ground" at the moment it actually happens, not just while traveling.
+function moleBurst(x, y, isExit){
+  const R = 90;
+  for (const o of enemies){
+    if (o.dead || o.team !== 'enemy' || o.villager) continue;
+    const d = Math.hypot(o.x - x, o.y - y); if (d > R) continue;
+    const kb = 1 - Math.min(0.9, d / R), a = Math.atan2(o.y - y, o.x - x);
+    o.vx += Math.cos(a) * 300 * kb; o.vy += Math.sin(a) * 300 * kb;
+    damage(o, 10 + 20 * kb, player, 0);
+  }
+  for (const pr of props){
+    if (pr.dead || pr.hp >= 9999) continue;
+    const d = Math.hypot(pr.x - x, pr.y - y); if (d > R) continue;
+    hurtProp(pr, (1 - Math.min(0.9, d / R)) * 60 + 10, { x, y, team: 'player' });
+  }
+  shake(7);
+  burst(x, y, 22, '#8a6a3a', 220);
+  fx.push({ t: 'shock', x, y, r0: 8, r1: R, life: 0.4, life0: 0.4, col: 'rgba(120,90,50,0.55)', w: 5 });
+  for (let i = 0; i < 7; i++){
+    const a = (i / 7) * 6.283 + rand(-0.2, 0.2);
+    for (let s = 0; s < 3; s++){
+      const dd = (s + 1) / 3 * R * 0.9;
+      parts.push({ x: x + Math.cos(a) * dd, y: y + Math.sin(a) * dd, vx: 0, vy: 0, life: rand(0.3, 0.5), col: 'rgba(70,52,28,0.6)', r: rand(2, 3.5) });
+    }
+  }
+  A.S.thud();
+  popText(x, y - 20, isExit ? 'BURST!' : 'TUNNEL!', '#8a6a3a', 1.1);
+}
 const PLAYER_TRAIT_BY_ID = Object.fromEntries(PLAYER_TRAITS.map(t => [t.id, t]));
 const LEGACY_SLOT_COST = [0, 0, 6, 12];   // cost to own N slots total (index = slot count); slots 1-2 are free
 function defaultLegacy(){ return { points: 0, earned: 0, unlocked: [], equipped: [], slots: 2 }; }
@@ -7525,7 +7784,8 @@ function grantRandomTempTrait(){
 // trait's own `tick` in PLAYER_TRAITS counts down and cleans up at 0.
 const TEMP_TRAIT_ACTIVE_FIELD = {
   vampire: '_batformT', ninja: '_invisibleT', berserker: '_bloodlustT', juggernaut: '_bulwarkT',
-  glasscannon: '_overchargeT', adrenaline: '_overdriveT', thickskin: '_shieldT', cannibal: '_feastT'
+  glasscannon: '_overchargeT', adrenaline: '_overdriveT', thickskin: '_shieldT', cannibal: '_feastT',
+  mole: '_moleT'   // also sets p.noclip — same unstick-from-the-wall handling as vampire below
 };
 // user: "I left the city with my stealth ability activated. So now that I'm back in the village
 // I'm ALWAYS invisible. Can you make sure abilities get turned off before you get in the car to
@@ -7542,7 +7802,7 @@ function clearTempTraits(){
     const f = TEMP_TRAIT_ACTIVE_FIELD[t.id];
     if (f && player[f] > 0){
       player[f] = 0;
-      if (t.id === 'vampire'){   // Wing Out's noclip needs the same "don't leave them stuck in a wall" unstick its own tick does
+      if (t.id === 'vampire' || t.id === 'mole'){   // Wing Out AND Tunnel both set noclip — same "don't leave them stuck in a wall" unstick their own tick does
         player.noclip = false;
         let g = 0; while (solidBoxHit(player.x, player.y, 18, 18) && g++ < 40){ player.x += rand(-14, 14); player.y += rand(-14, 14); }
       }
@@ -7875,19 +8135,20 @@ function electrocute(t, chain, sx, sy){
   if (chain.has(t) || t.dead) return;
   if (sx == null){ sx = t.x; sy = t.y; }
   chain.add(t);
-  const fall = clamp(1 - Math.hypot(t.x - sx, t.y - sy) / 260, 0.3, 1);
+  const rainMul = rainConductMul();
+  const fall = clamp(1 - Math.hypot(t.x - sx, t.y - sy) / (260 * rainMul), 0.3, 1);
   t.hp -= 18 * fall; t.stun = Math.max(t.stun || 0, 0.5);
   popText(t.x, t.y - 20, 'ZAP!', '#ffe27a', 0.9);
   burst(t.x, t.y, 12, '#ffe27a', 260);
   if (t.hp <= 0 && !t.dead) killActor(t, { x: t.x, y: t.y, team: 'enemy' });
   if (chain.size > 6) return;   // cap so a whole soaked street doesn't chain into one infinite zap
+  const chainR = 100 * rainMul;
   for (const o of [player, ...enemies]){
     if (o === t || o.dead || chain.has(o) || !(o._wetT > 0)) continue;
-    if (dist2(o.x, o.y, t.x, t.y) < 100 * 100){
-      for (let i = 0; i <= 6; i++){                       // a visible arc of sparks between the two
-        parts.push({ x: t.x + (o.x - t.x) * i / 6 + rand(-3, 3), y: t.y + (o.y - t.y) * i / 6 + rand(-3, 3),
-          vx: 0, vy: 0, life: 0.15, col: 'rgba(255,226,122,0.9)', r: 2 });
-      }
+    if (dist2(o.x, o.y, t.x, t.y) < chainR * chainR){
+      // user: "improve the visuals on electricity" — a real jagged, flickering bolt (see drawFx's
+      // 'bolt' case) instead of a handful of static dots scattered along the line between the two
+      fx.push({ t: 'bolt', x0: t.x, y0: t.y, x1: o.x, y1: o.y, life: 0.18, life0: 0.18, w: 2.2, segs: 6, jitter: 6 });
       electrocute(o, chain, sx, sy);
     }
   }
@@ -7916,8 +8177,8 @@ function lightningStrike(){
 // shared between melee (attack()) and guns (updateBullets) so every element looks + behaves
 // the same regardless of which mechanic delivered it
 function weaponFx(t, wp, team){
-  const fx = wp.hitFx;
-  if (fx === 'fire'){
+  const kind = wp.hitFx;   // named `kind`, not `fx` — the module-level `fx` array (visual effects list) is used directly in this function now, and a local `const fx` would shadow it
+  if (kind === 'fire'){
     burst(t.x, t.y, 8, '#fff0b0', 200); burst(t.x, t.y, 14, '#ffcf5a', 260); burst(t.x, t.y, 10, '#ff8030', 220);
     lights.push({ x: t.x, y: t.y, r: 48, col: [255, 150, 60], life: 0.28, t: 0.28 });
     if (t._iceFrozenT > 0){          // thermal shock — fire cracks a frozen target loose early instead of igniting them
@@ -7929,13 +8190,20 @@ function weaponFx(t, wp, team){
     else if (t._wetT > 0){ t._wetT = Math.max(0, t._wetT - 2); burst(t.x, t.y, 8, '#cfe8ff', 100); }
     else t._burnT = Math.max(t._burnT || 0, rand(3, 5));
   }
-  else if (fx === 'water'){
+  else if (kind === 'water'){
     burst(t.x, t.y, 16, '#7ab8e0', 220); burst(t.x, t.y, 8, '#cfe8ff', 140);
     t._wetT = Math.max(t._wetT || 0, 6);
     spawnPuddle(t.x, t.y, 20);        // a real, lingering wet patch under whatever just got hosed down
   }
-  else if (fx === 'spark'){
+  else if (kind === 'spark'){
     burst(t.x, t.y, 10, '#ffe27a', 300); lights.push({ x: t.x, y: t.y, r: 34, col: [255, 226, 122], life: 0.15, t: 0.15 });
+    // user: "improve the visuals on electricity" — a few short crackling bolts radiating out from
+    // the hit point (same 'bolt' fx electrocute's chain uses), so a plain taser/prod/zapstaff zap
+    // actually reads as electric on its own, not just a generic yellow burst + a light flash
+    for (let i = 0; i < 4; i++){
+      const a = rand(0, 6.283), d = rand(10, 24);
+      fx.push({ t: 'bolt', x0: t.x, y0: t.y, x1: t.x + Math.cos(a) * d, y1: t.y + Math.sin(a) * d, life: 0.12, life0: 0.12, w: 1.6, segs: 3, jitter: 3 });
+    }
     // the cool interaction: a wet target chain-electrocutes to every other wet actor nearby —
     // water conducts, so soaking a crowd first turns a zap staff into a real crowd-control weapon
     if (t._wetT > 0) electrocute(t);
@@ -7948,19 +8216,19 @@ function weaponFx(t, wp, team){
     // target wasn't wet at all.
     addHazard('spark', t.x, t.y, { r: 36, life: 1.1, team: team || 'any' });
   }
-  else if (fx === 'ice'){
+  else if (kind === 'ice'){
     burst(t.x, t.y, 10, '#bfe8ff', 190);
     // ice puts a fire out same as water would, but freezes a WET target solid instead of just
     // slowing them — the water clinging to them is what actually freezes (see freezeActor)
     if (t._burnT > 0){ t._burnT = 0; burst(t.x, t.y, 10, '#cfe8ff', 130); popText(t.x, t.y - 20, 'hiss!', '#bfe0ff', 0.8); }
     else if (t._wetT > 0) freezeActor(t);
   }
-  else if (fx === 'slime'){                                    // a real glob rather than a flat particle spray
+  else if (kind === 'slime'){                                    // a real glob rather than a flat particle spray
     burst(t.x, t.y, 6, '#c8f08a', 130); burst(t.x, t.y, 10, '#8fdc4a', 170);
     for (let i = 0; i < 3; i++) parts.push({ x: t.x + rand(-4,4), y: t.y + rand(-2,2), vx: rand(-14,14), vy: -rand(6,18), life: rand(0.5,0.9), col: 'rgba(120,190,60,0.7)', r: rand(2,3.4) });
   }
-  else if (fx === 'acid'){ burst(t.x, t.y, 8, '#e6ff9a', 180); burst(t.x, t.y, 10, '#c8e84a', 230); }
-  else if (fx === 'oil') burst(t.x, t.y, 8, '#2a2a2a', 160);
+  else if (kind === 'acid'){ burst(t.x, t.y, 8, '#e6ff9a', 180); burst(t.x, t.y, 10, '#c8e84a', 230); }
+  else if (kind === 'oil') burst(t.x, t.y, 8, '#2a2a2a', 160);
   if (wp.slow && t && !t.dead) t.slowT = Math.max(t.slowT || 0, 1.3);   // a real (if brief) speed sap, not just a visual
 }
 
@@ -8695,6 +8963,10 @@ const A = (() => {
     splash(){ if (!ac || !gate('spl', 90)) return; noise(0.14, 'bandpass', 900, 2600, 0.05); noise(0.07, 'highpass', 3200, 4200, 0.03); },
     door(){ if (!ac || !gate('door', 200)) return; tone(300, 190, 0.17, 'sawtooth', 0.03); noise(0.09, 'bandpass', 620, 380, 0.025); },
     screech(){ if (!ac) return; noise(0.55, 'bandpass', 2400, 1300, 0.11); tone(85, 50, 0.5, 'sawtooth', 0.06); },
+    // user: "perks have a cooldown, can you have a little 'burp' sound to notify the player that
+    // it's recharged" — a comedic little double-wobble, on brand for a "dark comedy" game rather
+    // than a plain chime.
+    perkReady(){ if (!ac) return; tone(180, 70, 0.09, 'sawtooth', 0.10); setTimeout(() => ac && tone(140, 55, 0.13, 'sawtooth', 0.09), 55); },
   };
 
   // ================= MUSIC — evolving 8-bar loop, themed per zone =================
@@ -9306,7 +9578,7 @@ function enterZone(name){
   chunks.clear(); _cck = null;
   buildings = []; cellBuildingId.clear();   // a "building" is tied to one specific city generation — see carveRoom/damageCell/collapseBuilding
   props = []; pickups = []; lights = []; quests = []; updateQuestHUD();
-  enemies = []; bullets = []; parts = []; texts = [];
+  enemies = []; bullets = []; calledShots = []; parts = []; texts = [];
   pendingCiv = []; visited = new Set(); blocks = 0;
   wave = 0; wanted = 0; hitStop = 0;
   gameOver = false; win = false;
@@ -11236,25 +11508,63 @@ function promoteSoldier(e, rec){
 function demoteSoldier(e){
   e.soldier = false; e.team = 'enemy'; e.routed = false;
   e.speed = rand(55, 95); e.weapon = 'fists'; e._anch = null; e.wanderT = 0;
+  e._isGuard = false; e._patrolIdx = 0; e._patrolOff = null;   // don't let a stale guard patrol survive into an unrelated later muster() promotion
 }
-// the campfire — a guard's default post when nothing more specific exists yet (a future watchtower/
-// gate prop could replace this without changing anything else about how guards work)
+// the campfire — a guard's fallback post when there's nothing else to patrol yet (a future
+// watchtower/gate prop could replace this without changing anything else about how guards work)
 function guardPost(){
   const fire = props.find(p => !p.dead && p.t === 'campfire');
   return fire ? { x: fire.x, y: fire.y } : { x: 0, y: 0 };
 }
+// user (first pass): "can they patrol the base? or at least the sleeping areas" — read live off
+// every currently-bedded villager. Follow-up, once actually watching it in a spread-out village:
+// "the guard is just sticking hard against the beds... could the player choose an area (circle)
+// where the guard patrols... that way if the village is spread out the player can decide where
+// needs to be patrolled." Second follow-up: "bring up the dialogue to set or adjust the patrol
+// area when assigning that individual guard? Otherwise EVERY guard will be stuck patrolling the
+// same area" — so the zone lives on the individual villager record (`rec.guardZone`, keyed off
+// this guard's own `_vid`), not one shared `village.guardZone`; each guard can have their own beat,
+// or none, independently. Its patrol stops are rolled ONCE, when the zone is dropped (see
+// makeGuardZonePts), and stored right on the zone — NOT recomputed here every call, which runs
+// every frame per guard and would otherwise jitter every stop's position constantly instead of
+// giving them a fixed beat to actually walk. Falls back to the old bed-based beat (then the
+// campfire) for any guard who hasn't been given one yet.
+function guardPatrolPoints(e){
+  const rec = village && e && e._vid ? village.villagers.find(v => v.id === e._vid) : null;
+  if (rec && rec.guardZone && rec.guardZone.pts && rec.guardZone.pts.length) return rec.guardZone.pts;
+  const pts = (village && village.villagers || []).filter(v => v.bed).map(v => v.bed);
+  return pts.length ? pts : [guardPost()];
+}
+// a ring of stops scattered around the circle (not the centre, not the rim) so a guard's beat
+// actually walks the whole area instead of standing in the middle of it — same "few points, dwell,
+// move on" beat updateSoldier's idle branch already gives the bed-based version.
+function makeGuardZonePts(cx, cy, r){
+  const N = 6, pts = [];
+  for (let i = 0; i < N; i++){
+    const a = (i / N) * 6.283 + rand(-0.2, 0.2), rr = r * rand(0.4, 0.95);
+    pts.push({ x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr });
+  }
+  return pts;
+}
+// user: "give the guard profession a variety of basic weapons too? Nothing that'll burn down the
+// village." Melee only (no thrown grenades, no guns) and nothing with hitFx:'fire' (rules out
+// torch/flamethrower/flaregun/molotov by construction) — a village guard breaking up trouble with
+// whatever's on hand, never the one thing that could actually burn the place down.
+const GUARD_WEAPONS = ['bat', 'pipe', 'knife', 'sledge', 'spear', 'whip', 'springfist', 'katana', 'prod', 'zapstaff', 'trout'];
 // user: "a villager who can guard the village from wild beasts ... race away and defeat any
 // zombies, wolves or homeless men." Same promotion `updateSoldier` already runs for a mustered
-// raid squad — just permanent, not for one raid, and holding a real post near the campfire instead
-// of orbiting the player (see updateSoldier's idle branch, which checks `e._guardPost` first).
+// raid squad — just permanent, not for one raid, and patrolling the sleeping areas instead of
+// orbiting the player (see updateSoldier's idle branch, which checks `e._isGuard` first).
 function promoteGuard(e, rec){
   e.soldier = true; e.team = 'player'; e.routed = false; e.mad = false;
   e.speed = 150; e.invuln = e.invuln || 0;
   e.maxhp = 80; e.hp = 80;   // sturdier than an ordinary villager — this is who signed up to fight
-  e.weapon = WEAPONS.bat ? 'bat' : 'fists';
+  e.weapon = pick(GUARD_WEAPONS);
   e.ammo = 0;
-  const post = guardPost(), a = Math.random() * 6.283;
-  e._guardPost = { x: post.x + Math.cos(a) * rand(20, 46), y: post.y + Math.sin(a) * rand(16, 36) };
+  e._isGuard = true;
+  e._patrolIdx = Math.floor(Math.random() * guardPatrolPoints(e).length);   // stagger several guards across different stops instead of all starting at bed #1
+  const a = Math.random() * 6.283;
+  e._patrolOff = { x: Math.cos(a) * rand(6, 16), y: Math.sin(a) * rand(6, 16) };   // so two guards visiting the same bed don't stand in exactly the same spot
   e._act = null; e._routineDest = null; e._anch = null;
 }
 function muster(){
@@ -11597,6 +11907,23 @@ function burst(x, y, n, col, spd = 240){
     parts.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: rand(0.3, 0.85), col, r: rand(1, 3.4) });
   }
 }
+// Cannibal's Feast: a body coming apart at the seams, not just a corpse quietly vanishing. Blood
+// mist + chunkier flung "meat" gibs (bigger, slower, and browner than the fine blood mist so they
+// read as separate from it) for the initial burst; the actual "left behind" part is the baked
+// decals underneath, since the corpse itself is swept away almost immediately (see the cannibal
+// active's `corpseT = 999`) — a blood pool built from several overlapping blobs (bakeDecal already
+// fans each call out into its own little cluster) plus a few pale bone/gristle fragments through it.
+function goreExplode(x, y){
+  burst(x, y, 30, '#8a1520', 380);
+  burst(x, y, 12, '#5a0c12', 200);
+  for (let i = 0; i < 10; i++){
+    const a = rand(0, 6.283), s = rand(40, 140);
+    parts.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s - rand(20, 50), life: rand(0.4, 0.7), col: pick(['#6a2018', '#8a1520', '#4a1010']), r: rand(2, 3.6) });
+  }
+  for (let i = 0; i < 3; i++) bakeDecal(x + rand(-14, 14), y + rand(-10, 10), rand(11, 18), 'rgba(110,8,16,0.5)');
+  for (let i = 0; i < 4; i++) bakeDecal(x + rand(-18, 18), y + rand(-14, 14), rand(2.5, 4.5), 'rgba(224,214,190,0.8)');
+  shake(3); A.S.thud();
+}
 // chips flung out of a struck tree / boulder along the swing direction + a bright contact spark
 function toolImpact(x, y, dir, stone){
   for (let i = 0; i < 8; i++){
@@ -11836,6 +12163,21 @@ function collapseBuilding(b){
   bakeDecal(cx, cy, Math.max(b.wx1 - b.wx0, b.wy1 - b.wy0) * 0.6, 'rgba(90,85,78,0.55)');
   popText(cx, cy - 24, 'the building collapses!', '#c9b98a', 1.6);
 }
+// user: "if you accidentally kill the target of the kidnap missions - can you announce that the
+// target is dead and then direct the player towards the exit. Same for all the mission types (i.e.
+// collect item)." A kidnap target's death (once dazed, damage()'s "bonk don't kill" guard no longer
+// applies — a follow-up hit or a nearby explosion can genuinely finish them off) and an errand
+// item's destruction already made urgeMet() permanently false for the rest of THIS trip (the
+// underlying village-level urge survives untouched for next visit) — the only thing missing was
+// ever telling the player, or pointing them anywhere. One shared flag + message for both mission
+// kinds, read by drawObjectiveHUD/drawExitStrip to point at the exit in amber instead of the usual
+// blue, and by tryInteract's exit-leave flash for a fitting sign-off line instead of the generic one.
+function failMissionObjective(reason){
+  if (!mission || mission._objFailed) return;   // only announce once per trip
+  mission._objFailed = true;
+  mission._objFailReason = reason;
+  flash(reason, '#ff8f5a', 'head to the exit');
+}
 // user: "make the item breakable (only whilst it's in the city) - leading to a fail condition."
 // Rather than a bespoke new "mission failed" flag: urgeMet()'s errand check is a live re-evaluated
 // "do you currently have it" test (mission.gotObject / player.carrying.obj), not a one-way flag —
@@ -11850,6 +12192,7 @@ function breakNearbyErrandItem(x, y, r){
   if (player.carrying && player.carrying.obj && dist2(player.x, player.y, x, y) < r * r){
     const obj = player.carrying.obj; player.carrying = null;
     burst(player.x, player.y, 14, '#c9c2b0', 190); popText(player.x, player.y - 22, 'the ' + obj + ' is destroyed!', '#ff6a4a', 1.4);
+    failMissionObjective('The ' + obj + ' is destroyed');
     return;
   }
   for (const pk of pickups){
@@ -11861,6 +12204,7 @@ function breakNearbyErrandItem(x, y, r){
     if (dist2(pk.x, pk.y, x, y) < r * r){
       pk.taken = true;
       burst(pk.x, pk.y, 14, '#c9c2b0', 190); popText(pk.x, pk.y - 16, 'the ' + pk._obj + ' is destroyed!', '#ff6a4a', 1.4);
+      failMissionObjective('The ' + pk._obj + ' is destroyed');
       return;
     }
   }
@@ -12376,6 +12720,12 @@ function spawnIceStatue(t, loot){
 function killActor(t, from, noHeat){
   if (t.dead) return;
   t.dead = true; t.corpseT = 0;
+  // user: "if you accidentally kill the target of the kidnap missions - can you announce that the
+  // target is dead and then direct the player towards the exit." Only the actual live mission
+  // target, and only if they were never successfully grabbed first (grabTarget resolves the target
+  // a completely different way — through player.carrying — and never runs through here at all, so
+  // this can't misfire on a normal successful capture).
+  if (t.isTarget && mission && mission.targetRef === t && !(player.carrying && player.carrying.isTarget)) failMissionObjective('The target didn’t make it');
   // user: "make the city dweller with that [errand-quest] item drop it if they die, so the quest
   // can still be completed" — then, after still seeing it vanish 3 times: the FIRST fix here had
   // an `&& !t.dazed` guard that was actively wrong, not just insufficient. damage()'s "bonk, don't
@@ -12657,7 +13007,12 @@ function tryInteract(){
       _raidWon = mission.node;
       if (R){ _raidSpoils = { town: mission.town, fname: R.fname, boss: R.bossOutcome, losses: R.losses.slice(), capture: village && village._raidCapture || null }; beginSpoilsGen(R); }
     }
-    flash('Heading home', done || R ? '#7fdc7f' : '#e8d08a', R ? mission.town + ' is yours' : done ? urgeSummary(mission.urge) : 'the urge will keep');
+    // user: "direct the player towards the exit" — the sign-off line here used to say "the urge
+    // will keep" any time you left without completing it, which reads oddly once you actually know
+    // WHY (see failMissionObjective): the target/item for THIS trip is specifically gone, not just
+    // "not found yet."
+    flash('Heading home', done || R ? '#7fdc7f' : mission._objFailed ? '#ff8f5a' : '#e8d08a',
+      R ? mission.town + ' is yours' : done ? urgeSummary(mission.urge) : mission._objFailed ? 'no shame in it — there’s always next time' : 'the urge will keep');
     savePlayer();
     beginGetaway();
     return;
@@ -13250,11 +13605,20 @@ function updateSoldier(e, dt){
     }
   } else {
     // no threat — hold a loose slot around the player, or (a permanent village guard — see
-    // promoteGuard) a fixed post near the campfire instead, so they stand watch there rather than
-    // tailing the player around like a raid-mustered squad does
+    // promoteGuard) walk a beat between the sleeping areas instead of tailing the player around
+    // like a raid-mustered squad does
     let fx, fy;
-    if (e._guardPost){ fx = e._guardPost.x; fy = e._guardPost.y; }
-    else {
+    if (e._isGuard){
+      const pts = guardPatrolPoints(e);
+      const idx = ((e._patrolIdx || 0) % pts.length + pts.length) % pts.length;
+      const wp2 = pts[idx];
+      fx = wp2.x + (e._patrolOff ? e._patrolOff.x : 0);
+      fy = wp2.y + (e._patrolOff ? e._patrolOff.y : 0);
+      if (Math.hypot(fx - e.x, fy - e.y) < 26){          // arrived — pause a moment like an actual watch stop, then move on
+        e._patrolWaitT = (e._patrolWaitT || 0) + dt;
+        if (e._patrolWaitT > rand(2.5, 5)){ e._patrolWaitT = 0; e._patrolIdx = idx + 1; }
+      } else e._patrolWaitT = 0;
+    } else {
       fx = player.x + (e._fx || 0); fy = player.y + (e._fy || 0);
       if (cellSolid(Math.floor(fx / CELL), Math.floor(fy / CELL))){ fx = player.x; fy = player.y; }   // slot fell inside a wall — just come to the player
     }
@@ -13403,7 +13767,7 @@ function updateEnemy(e, dt){
     const grec = village.villagers.find(v => v.id === e._vid);
     if (grec){
       if (grec.job === 'guard' && !e.soldier) promoteGuard(e, grec);
-      else if (grec.job !== 'guard' && e.soldier && e._guardPost) demoteSoldier(e);
+      else if (grec.job !== 'guard' && e.soldier && e._isGuard) demoteSoldier(e);
     }
   }
   if (e.soldier){ updateSoldier(e, dt); return; }
@@ -14268,7 +14632,20 @@ function updatePlayer(dt){
   tickBurning(p, dt);   // damage + visual only — the player keeps full control while on fire, unlike enemies' forced scramble
   if (tickFrozen(p, dt)){ p.vx = p.vy = 0; return; }   // wet + an ice hit — frozen solid, no input, until it thaws
   if (p._traits) for (const tr of p._traits) if (tr.tick) tr.tick(p, dt);   // player perks — see PLAYER_TRAITS
-  if (p._activeCD) for (const id in p._activeCD) if (p._activeCD[id] > 0) p._activeCD[id] = Math.max(0, p._activeCD[id] - dt);
+  // user: "perks have a cooldown, can you have a little 'burp' and sound to notify the player
+  // that it's recharged and ready to reuse" — the only readout before this was the HUD's key
+  // badge (#traithud) and a "Xs" popup if you tried to use it too early; nothing ever told you the
+  // MOMENT it actually became available again. Checked right here, the one frame the cooldown
+  // actually crosses to 0 (guarded by the `> 0` on the outer if, so it never re-fires every frame
+  // it just sits at 0 waiting for the next use).
+  if (p._activeCD) for (const id in p._activeCD) if (p._activeCD[id] > 0){
+    p._activeCD[id] = Math.max(0, p._activeCD[id] - dt);
+    if (p._activeCD[id] <= 0){
+      const rt = PLAYER_TRAIT_BY_ID[id];
+      A.S.perkReady();
+      popText(p.x, p.y - p.r - 20, (rt ? rt.icon + ' ' : '') + 'ready!', '#ffe27a', 1);
+    }
+  }
 
   p.weapon = p.quick[p.slot] || 'fists';
 
@@ -14403,6 +14780,107 @@ function updateBullets(dt){
     b.x = nx; b.y = ny;
   }
   bullets = bullets.filter(b => b.life > 0);
+}
+// Marksman's Called Shot — user: "can you make the bullet visible and make a big puff of smoke
+// appear from the player before the bullet rips through the enemies. Make blood spray from any
+// NPCs hit by the bullet and building and items take damage as the bullet passes through." Used to
+// be pure math: every enemy in a narrow cone was found and damaged in the same instant, with a
+// single small burst() at the muzzle and nothing else — no travel, no visible round, and
+// `lineBlocked` meant a prop standing in the way just silently protected whoever was behind it
+// instead of taking any damage itself. A real piercing shot should tear through what's in its way,
+// not be stopped by it.
+// A separate list (not the shared `bullets` array) on purpose: `bullets` breaks on its FIRST hit
+// (see updateBullets above) and rewriting that shared behavior risks changing every other gun in
+// the game to punch through things it shouldn't. `fireCalledShot` below front-loads all the "what
+// does this line actually cross" math once at the moment of firing (same angle/range test as
+// before, minus the lineBlocked exclusion); updateCalledShots just walks a point down that
+// precomputed line over time and fires each hit's damage/effects at the moment the visible round
+// actually reaches it, instead of all at once at t=0.
+let calledShots = [];
+// user: "Nothing should stop that 'called shot' and its distance should reach twice further than
+// it currently does" — range doubled (500 -> 1000), and the real-wall stop is gone entirely: a
+// solid cell on the line is now just another thing the round pierces through and damages (like a
+// prop already did), not a hard stop that cuts the shot short and hides everything behind it.
+function fireCalledShot(p){
+  const range = 1000, a = p.dir, dx = Math.cos(a), dy = Math.sin(a);
+  const hits = [];
+  for (const o of enemies){
+    if (o.dead || o.team !== 'enemy') continue;
+    const ddx = o.x - p.x, ddy = o.y - p.y, d = Math.hypot(ddx, ddy);
+    if (d > range) continue;
+    const ang = Math.atan2(ddy, ddx);
+    if (Math.abs(((ang - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI) > 0.12) continue;
+    hits.push({ type: 'enemy', ref: o, d });
+  }
+  // destructible props ON the line take damage and get pierced through, not skipped past
+  for (const pr of props){
+    if (pr.dead || !pr.solid || pr.hp >= 9999) continue;
+    const px = pr.x - p.x, py = pr.y - p.y, along = px * dx + py * dy;
+    if (along < 0 || along > range) continue;
+    const perp = Math.abs(px * dy - py * dx);
+    if (perp < Math.max(pr.w, pr.h) / 2 + 6) hits.push({ type: 'prop', ref: pr, d: along });
+  }
+  // solid wall cells on the line take damage too, but — unlike a normal bullet — never stop the
+  // round; every distinct cell it crosses gets its own hit so a whole run of wall takes damage
+  // along the way, not just the first one
+  const seenCells = new Set(), wallSteps = Math.ceil(range / 8);
+  for (let i = 1; i <= wallSteps; i++){
+    const d = i * 8; if (d > range) break;
+    const cx = Math.floor((p.x + dx * d) / CELL), cy = Math.floor((p.y + dy * d) / CELL), key = cx + ',' + cy;
+    if (seenCells.has(key)) continue;
+    if (cellSolid(cx, cy)){ seenCells.add(key); hits.push({ type: 'wall', cx, cy, d }); }
+  }
+  hits.sort((h1, h2) => h1.d - h2.d);
+  calledShots.push({
+    x0: p.x, y0: p.y, x: p.x, y: p.y, dx, dy, ang: a,
+    dmg: 45 + (p.dmgBonus || 0), from: p, hits, hitIdx: 0,
+    dist: 0, maxDist: range, speed: 1700, done: false, fadeT: 0.15,
+  });
+}
+function updateCalledShots(dt){
+  for (const s of calledShots){
+    if (s.done){ s.fadeT -= dt; continue; }
+    s.dist = Math.min(s.maxDist, s.dist + s.speed * dt);
+    s.x = s.x0 + s.dx * s.dist; s.y = s.y0 + s.dy * s.dist;
+    while (s.hitIdx < s.hits.length && s.hits[s.hitIdx].d <= s.dist){
+      const h = s.hits[s.hitIdx++];
+      if (h.type === 'enemy'){
+        const o = h.ref;
+        if (o.dead) continue;
+        damage(o, s.dmg, s.from, 200);
+        burst(o.x, o.y, 18, '#c0202a', 340);                      // blood spray at the exact moment the round passes through
+        for (let i = 0; i < 6; i++) parts.push({ x: o.x, y: o.y, vx: s.dx * rand(70, 170) + rand(-30, 30), vy: s.dy * rand(70, 170) + rand(-30, 30), life: rand(0.3, 0.55), col: '#8a1520', r: rand(1.4, 2.6) });
+      } else if (h.type === 'prop'){
+        hurtProp(h.ref, s.dmg, { x: s.x, y: s.y, team: 'player' });
+      } else {
+        damageCell(h.cx, h.cy, s.dmg * 0.8);
+      }
+    }
+    if (s.dist >= s.maxDist) s.done = true;
+  }
+  calledShots = calledShots.filter(s => !s.done || s.fadeT > 0);
+}
+function drawCalledShot(s){
+  const tail = 90, tx = Math.max(0, s.dist - tail), x1 = s.x0 + s.dx * tx, y1 = s.y0 + s.dy * tx;
+  octx.save();
+  octx.globalAlpha = s.done ? clamp(s.fadeT / 0.15, 0, 1) : 1;
+  octx.lineCap = 'round';
+  octx.strokeStyle = 'rgba(255,196,90,0.45)'; octx.lineWidth = 7;
+  octx.beginPath(); octx.moveTo(x1, y1); octx.lineTo(s.x, s.y); octx.stroke();
+  octx.strokeStyle = 'rgba(255,246,210,0.95)'; octx.lineWidth = 2.6;
+  octx.beginPath(); octx.moveTo(x1, y1); octx.lineTo(s.x, s.y); octx.stroke();
+  octx.fillStyle = '#fff6d8'; octx.beginPath(); octx.arc(s.x, s.y, 3, 0, 7); octx.fill();
+  octx.restore();
+}
+// a big muzzle cloud — bigger, greyer, and slower than the sharp little burst() used for ordinary
+// hit impacts, so it actually reads as gun smoke rather than a spark
+function gunSmokePuff(x, y, dir){
+  const mx = x + Math.cos(dir) * 10, my = y + Math.sin(dir) * 10 - 4;
+  for (let i = 0; i < 16; i++){
+    const a = dir + rand(-1.0, 1.0), s = rand(20, 75);
+    parts.push({ x: mx, y: my, vx: Math.cos(a) * s, vy: Math.sin(a) * s - rand(10, 22), life: rand(0.55, 0.95), col: 'rgba(' + (200 + Math.random() * 30 | 0) + ',' + (196 + Math.random() * 26 | 0) + ',' + (188 + Math.random() * 24 | 0) + ',' + rand(0.32, 0.55).toFixed(2) + ')', r: rand(4, 8) });
+  }
+  burst(mx, my, 8, '#fff6d8', 220);
 }
 
 // ================= FLOW =================
@@ -15332,6 +15810,7 @@ function step(dt){
   } else { fireflies.length = 0; moonbeams.length = 0; }
   for (const e of enemies) updateEnemy(e, dt);
   updateBullets(dt);
+  updateCalledShots(dt);
   updateThrown(dt);
   updateGrenades(dt);
   updateHazards(dt);
@@ -15508,7 +15987,13 @@ function draw(){
   viewZoom += (viewZoomT - viewZoom) * Math.min(1, _dz * 16);
   if (Math.abs(viewZoom - viewZoomT) < 0.01) viewZoom = viewZoomT;
   if (!craftOpen && !musingOpen && !assignOpen && !giftPickOpen && !cultMenuOpen && !researchOpen && viewZoom <= 1.001 && paused && !packOpen && !travelOpen && !mapOpen && !cityOpen && !sermonOpen && !dossierOpen && !spoilsOpen && !winOpen && !legacyOpen && !$('settings').classList.contains('open')) paused = false;
-  updateAmbient(_dz);
+  // user: "pausing seems to stop the people but things keep occuring that shake the screen - as
+  // if the environment is not paused". This call used to run unconditionally every real frame
+  // (draw() itself isn't gated on `paused`, only step() is) — so weather kept advancing, and a
+  // lightning strike could fire, shake the screen, blow out a lamppost or even zap a wet actor,
+  // all while the sim looked frozen. Ambient (weather/wind/leaves) is otherwise harmless to skip
+  // for the handful of frames a menu is open.
+  if (!paused) updateAmbient(_dz);
 
   octx.setTransform(1, 0, 0, 1, 0, 0);
   octx.fillStyle = VOID_GROUND;
@@ -15605,6 +16090,10 @@ function draw(){
   for (const g of grenades) if (inView(g.x, g.y, camx, camy)) _dl.push(g.y - (g.z > 4 ? 26 : 2), 9, _dl.length, g);
   for (const e of enemies) if (!e.dead && !e._inBed && inView(e.x, e.y, camx, camy)) _dl.push(e.y, 2, _dl.length, e);   // lying-in-bed villagers are drawn by the bed prop itself (see bedSleeper) — not as a standing actor too
   for (const e of enemies) if (e.dead && inView(e.x, e.y, camx, camy)) _dl.push(e.y - 40, 2, _dl.length, e);
+  // user: "floating on top of things" — a loose kennel pet used to be drawn in its own pass AFTER
+  // this whole y-sorted list, so it rendered on top of every prop and wall no matter its actual
+  // depth (walking behind a tree still drew in front of it). Given a real sort slot instead.
+  for (const kp of kennelPets) if (inView(kp.x, kp.y, camx, camy)) _dl.push(kp.y, 12, _dl.length, kp);
   _dl.push(player.dead ? player.y - 40 : player.y, 2, _dl.length, player);
   // wall cells — sorted on their south (ground) edge so buildings occlude / are walked in front of
   {
@@ -15634,25 +16123,34 @@ function draw(){
     else if (kind === 8) drawDisplay(_dl[i + 3]);
     else if (kind === 10) drawGiftPileProp(_dl[i + 3]);
     else if (kind === 11) drawDisplaySpot(_dl[i + 3]);
+    else if (kind === 12) drawDog(_dl[i + 3], null);
     else if (kind === 3){ const pk = _dl[i + 2], cy = (pk % 131072) - 60000; drawWallBlock((pk - (pk % 131072)) / 131072 - 60000, cy, _dl[i + 3]); }
     else {
       const _a = _dl[i + 3], _pa = playerVisualAlpha(_a);
-      if (_pa < 1) drawActorTranslucent(_a, _pa, _camx, _camy); else drawActor(_a);
+      // user: "It still is laggy if I return to the village after dying in the city due to big
+      // explosions ... or from electricity" — traced to `drawActorTranslucent`'s `getImageData`/
+      // `putImageData` on the MAIN offscreen canvas (`octx`), a few lines below. Reading pixels back
+      // off a canvas like that is a well-known way to knock a canvas off the GPU-accelerated path
+      // in Chromium — once it happens, EVERY later draw to that same canvas (including the single
+      // full-screen `drawImage` the perf overlay calls "blit") gets dramatically slower, and it
+      // doesn't recover until the page reloads, since the canvas element itself isn't recreated on
+      // a zone change. `_pa === 0` (driving a commandeered car, the raid-exit van, its intro) was
+      // the single biggest source of this: alpha 0 means fully invisible, so "blend nothing at
+      // full transparency" and "don't draw at all" are the exact same visual result — the old code
+      // paid for a full pixel readback every single frame of driving for zero visible difference.
+      // Skipping the draw outright at alpha 0 removes that read entirely; Ninja's Vanish (0.22) and
+      // Ghost's passive (0.55) still need a real partial blend, so they still go through
+      // drawActorTranslucent below — much rarer in practice than "any time you're in a car."
+      if (_pa <= 0){ /* fully invisible — nothing to draw, and nothing to read back either */ }
+      else if (_pa < 1) drawActorTranslucent(_a, _pa, _camx, _camy);
+      else drawActor(_a);
     }
   }
 
-  // whatever got loose from a busted kennel (see hurtProp / KENNEL_SPECIES) — this used to be called
-  // way down past the lighting pass's `octx.setTransform(1,0,0,1,0,0)` reset (line ~14492 below),
-  // long after the world→screen matrix set up at the top of draw() (`octx.setTransform(VS,...)`)
-  // had been torn back down to identity. drawDog uses raw world x/y with no per-call vw()/camx
-  // conversion of its own (same as drawActor — it's built to run only while that matrix is still
-  // active), so every kennel pet was being drawn at its literal world coordinate as if it were a
-  // screen pixel — normally hundreds or thousands of pixels off the visible canvas. Every part of
-  // the mechanism (spawning, movement, contact damage) was correct and testable in isolation the
-  // whole time, which is exactly why it kept re-verifying as "working" while staying completely
-  // invisible in actual play — the bug was purely in WHERE it was drawn, not whether it ran. Moved
-  // here, still inside the same world-space matrix as the y-sorted actors above.
-  if (kennelPets.length) for (const kp of kennelPets) drawDog(kp, null);
+  // loose kennel pets are now drawn as part of the y-sorted list above (kind 12 — see "floating on
+  // top of things" fix), still inside the same world-space matrix drawActor et al. rely on; they
+  // used to be drawn here, in their own always-on-top pass, which is what put them over everything
+  // regardless of actual depth in the first place.
   if (rollingBarrels.length) for (const b of rollingBarrels) drawRollingBarrel(b);
 
   // want-bubbles over villagers who've asked for a possession — only while you're carrying
@@ -15688,6 +16186,7 @@ function draw(){
     }
   }
   for (const b of bullets) drawBullet(b);
+  for (const s of calledShots) drawCalledShot(s);
   for (const p of parts){
     octx.globalAlpha = clamp(p.life * 1.6, 0, 1);
     octx.fillStyle = p.col;
@@ -15981,6 +16480,7 @@ function draw(){
   // ---- full-res overlays ----
   if (craftOpen) drawCraftUI();
   if (buildMode) drawBuildUI();
+  if (zone === 'village' && village && (guardZoneMode || village.villagers.some(v => v.guardZone))) drawGuardZone();
 
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.font = 'bold 16px "Courier New",monospace';
@@ -16692,8 +17192,23 @@ function drawBatForm(a){
   octx.restore();
 }
 
+// Mole's Tunnel — a bulging, cracked patch of earth in place of the normal sprite while burrowed,
+// so it actually reads as "underground" rather than just an invisible player still standing there
+function drawMoleForm(a){
+  const t = performance.now() / 1000, R = a.r, wob = Math.sin(t * 9) * 1.4;
+  octx.fillStyle = 'rgba(0,0,0,0.28)';
+  octx.beginPath(); octx.ellipse(a.x, a.y + 4, R * 1.15, R * 0.5, 0, 0, 7); octx.fill();
+  octx.save(); octx.translate(Math.round(a.x), Math.round(a.y + wob * 0.3));
+  octx.fillStyle = '#5a4326'; octx.beginPath(); octx.ellipse(0, 0, R * 0.95, R * 0.55, 0, 0, 7); octx.fill();
+  octx.fillStyle = '#7a5c34'; octx.beginPath(); octx.ellipse(0, -1, R * 0.68, R * 0.4, 0, 0, 7); octx.fill();
+  octx.strokeStyle = 'rgba(0,0,0,0.32)'; octx.lineWidth = 1.2;
+  for (let i = 0; i < 3; i++){ const ang = i * 2.1 + t * 0.6; octx.beginPath(); octx.moveTo(0, 0); octx.lineTo(Math.cos(ang) * R * 0.85, Math.sin(ang) * R * 0.4); octx.stroke(); }
+  octx.restore();
+}
+
 function drawActor(a){
   if (a === player && a._batformT > 0){ drawBatForm(a); return; }
+  if (a === player && a._moleT > 0){ drawMoleForm(a); return; }
   const cxp = a.x, fy = a.y + a.r * 0.9;
   const look = mutatorLook(a);
   // user: "when enemies are frozen they should turn light blue and transparent like ice" — frozen
@@ -17076,6 +17591,21 @@ function drawActor(a){
     octx.fillRect(R * 0.12, -R * 2.15, 1.6, 1.6);
     octx.fillRect(-R * 0.05, -R * 1.2, 2, 2);
   }
+  // user: "Player should have blood appear around their mouth and shirt while active" (Cannibal's
+  // Feast) — a wet smear across the mouth/chin, a drip running down it, and a stain soaked into
+  // the shirt front, all fading in and out with `_feastT` rather than popping on/off at full
+  // strength the instant it starts or ends.
+  if (a === player && a._feastT > 0){
+    const bloodA = Math.min(1, a._feastT / 1.2, (6 - a._feastT) / 1.2);   // 6 is Feast's own duration — see PLAYER_TRAITS' cannibal entry; fades in, then back out
+    octx.globalAlpha = clamp(bloodA, 0, 1);
+    octx.fillStyle = 'rgba(120,10,20,0.9)';
+    octx.fillRect(-R * 0.28 + s * R * 0.12, -R * 1.85, R * 0.56, R * 0.22);   // mouth/chin smear
+    octx.fillStyle = 'rgba(90,6,14,0.85)';
+    octx.fillRect(-R * 0.08 + s * R * 0.12, -R * 1.64, R * 0.16, R * 0.16);   // a drip below it
+    octx.fillStyle = 'rgba(120,10,20,0.55)';
+    octx.fillRect(-R * 0.5 * tw, -R * 1.55, R * 1.0 * tw, R * 0.5 * th);      // soaked into the shirt front
+    octx.globalAlpha = 1;
+  }
   octx.restore();
 
   // dazed target — orbiting stars
@@ -17190,10 +17720,22 @@ function drawDog(dog, owner){
   // red eyes for anything hostile so danger reads before it's close enough to bite.
   const sp = KENNEL_SPECIES[dog.species || 'dog'];
   const s = sp.scale;
+  // user: "animals ... don't match the existing style ... weird perspective often has them running
+  // upside down or floating on top of things." Two real bugs, both from the same cause: the whole
+  // silhouette used to be rotated by its raw movement angle (`octx.rotate(dog.ang)`) — past a
+  // quarter-turn that's a creature drawn sideways or genuinely upside down, where every other actor
+  // in the game (see drawActor's `face`/`flip`) stays a fixed top-down silhouette and only ever
+  // flips left/right, never actually spins. And the ground shadow used to be drawn AFTER that same
+  // rotate, inside the rotated space — it swung around with the body instead of staying planted
+  // under it, which is the "floating" half of the report. Fixed to match drawActor's own convention:
+  // fixed orientation, mirrored left/right off the sign of the movement angle's cosine (falls back
+  // to facing right when there's no `.ang` at all — a leashed dogwalker's companion has no angle of
+  // its own, just an {x,y} trailing its owner), shadow drawn in world space before any transform.
+  const flip = Math.cos(dog.ang || 0) < 0 ? -1 : 1;
   const wag = Math.sin(performance.now() / 130) * 2 * s;
   const run = Math.sin(performance.now() / 90) * 3 * s;
-  octx.save(); octx.translate(Math.round(dog.x), Math.round(dog.y)); octx.rotate(dog.ang);
-  octx.fillStyle = 'rgba(0,0,0,0.35)'; octx.beginPath(); octx.ellipse(0, 5 * s, 8 * s, 3 * s, 0, 0, 7); octx.fill();
+  octx.fillStyle = 'rgba(0,0,0,0.35)'; octx.beginPath(); octx.ellipse(dog.x, dog.y + 5 * s, 8 * s, 3 * s, 0, 0, 7); octx.fill();
+  octx.save(); octx.translate(Math.round(dog.x), Math.round(dog.y)); octx.scale(flip, 1);
   if (sp.mane){
     octx.fillStyle = sp.mane;
     octx.beginPath(); octx.ellipse(7 * s, -1 * s, 7.5 * s, 7 * s, 0, 0, 7); octx.fill();
@@ -18374,7 +18916,7 @@ $('glab-npc').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preve
 
 openTitle();
 requestAnimationFrame(loop);
-window.__G = () => ({ player, enemies, props, pickups, bullets, parts, lights, wave, kills, money,
+window.__G = () => ({ player, enemies, props, pickups, bullets, calledShots, parts, lights, wave, kills, money,
   wanted, chunks, chunkCount: chunks.size, blocks, worldSeed, CELL, CHUNK, ROSTER, MIX_RATIO,
   cam, VUW, VUH, zone, village, buildMode, mouse, ZOOM, titleOpen, charCreateOpen, get charDraft(){ return charDraft; },
   setBuildSel: (i) => { buildSel = i; }, setMouseWorld: (wx, wy) => { mouse.x = (wx - cam.x) * ZOOM; mouse.y = (wy - cam.y) * ZOOM; },
