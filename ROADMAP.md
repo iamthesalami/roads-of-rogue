@@ -3994,6 +3994,329 @@ seed step.
     real translucency effect was left intact for the cases that actually need it. Zero draw errors
     in either case.
 
+- **2026-09-18 — a broader improvement pass: visuals, onboarding, (enemy/mission variety and perf
+  still to come).** User, asked for open-ended suggestions: "Please do all of them except for the
+  trait/perk balance pass. I'm hoping to work on each of those individually and then balance them
+  once they look more like what I envisioned."
+  - **Finishing the elemental visual pass** (started 2026-09-17d with electricity): ice and slime
+    hits were still using a plain round `burst()`, the flattest-looking impacts left in an otherwise
+    flashy combat system. New `'shard'` fx type (`drawFx`) — a handful of jagged crystal spikes
+    radiating from the hit point, growing fast then fading, same "few cheap re-jittered shapes"
+    approach as electricity's `'bolt'` fx — used on every ice hit. Slime hits now fling 6 chunkier
+    globs (up from 3 tiny particles) AND bake a real lingering splash decal into the ground via
+    `bakeDecal`, since a "real glob" that vanished without a trace never actually looked like it had
+    landed. Acid got the same decal-and-bigger-splash treatment for consistency (it's visually the
+    same "goo" family as slime). Verified live: triggering `weaponFx` with each of `ice`/`slime`/
+    `acid` and rendering several frames produced zero draw errors.
+  - **Onboarding**: the game already has a persistent on-screen control legend (WASD/E/craft/build
+    keys), so the actual gap was WHY and WHEN, not WHICH button. New `tip(id, title, col, text)` —
+    reuses the existing `flash()` banner (no new UI) and `store` (so, like every other save, it's
+    per profile and never repeats once seen) — fired at four natural first-encounters: heading into
+    the city for the first time (objective/exit/Wanted), first opening the craft menu, first
+    entering build mode, and first assigning someone as a guard (which also plugs the brand new
+    patrol-area feature — "open their Assign panel again to draw a custom patrol area"). Verified
+    live: opening craft and build twice each only recorded (and only would have shown) the tip once;
+    `sb_tips` correctly accumulated `["craft1","build1"]` in storage.
+  - **Mission variety**: every existing urge (`URGES`) was a fetch quest — bring home a person, an
+    object, cash, or groceries. New `grudge` urge is the odd one out on purpose: find someone in the
+    city and beat them down, nothing to carry home. Reuses the exact same `isTarget`/`dazeHp` "bonk
+    them senseless" mechanic kidnap already has end to end (`missionSpawnObjective`, `damage()`'s
+    isTarget branch) rather than inventing a new one — completion is just `mission.targetRef.dazed`
+    (`urgeMet`), no bodyguards spawned (a private grudge, not a guarded kidnap target), and
+    `grabTarget` short-circuits with a flavour line instead of accidentally starting to carry them
+    when the player presses E nearby. The dazed-target "E carry them" HUD prompt and the "keep
+    bonking"/"out cold" flash lines are all worded appropriately for a grudge instead of a real
+    kidnap. Verified live end-to-end: fixated a grudge urge, entered the city, confirmed the target
+    spawned with `isTarget`/`dazeHp` and no bodyguards, damaged it to `dazed`, and confirmed a real
+    `tryInteract()` E-press beside it left `player.carrying` untouched (no accidental grab) — the
+    exact bug this needed to avoid.
+  - **Enemy variety**: `freezeray`/`slimegun`/`acidspray` existed as real weapons (craftable, and in
+    the AI-generated roster's own gun pool) but a base `gunner` enemy could never actually roll one
+    — meaning a normal street fight almost never triggered the ice/slime/acid hit visuals just
+    finished above. Gave `gunner` a dedicated ~18% slice of its weapon roll for exactly those three,
+    so the new visuals actually see regular play instead of sitting mostly unused. (A deeper new
+    enemy archetype was more integration surface — faction weapon pools, elite-alt lists, ambient
+    population weighting — than felt safe to take on blind in the same pass; flagged as a possible
+    follow-up rather than rushed.) Verified live: 400 sampled `gunner` spawns produced freezeray/
+    slimegun/acidspray at ~6% each, matching the intended slice.
+  - **Perf pass**: `pruneDeadProps` (added earlier this project) already fixed exactly this problem
+    for `props` — a corpse past its own fade window was still being swept with a full
+    `enemies = enemies.filter(...)` EVERY SINGLE FRAME, unconditionally, the identical
+    "filter+reallocate every tick" cost already identified and fixed for props, just never carried
+    over to `enemies`. New `pruneDeadEnemies`, throttled the same way (a dead entry is already
+    nearly free to leave sitting in the array a few extra seconds — `updateEnemy`'s very first line
+    is `if (e.dead){ e.corpseT += dt; return; }` — so throttling costs nothing visible). Verified
+    live: a corpse past its fade window stayed in the `enemies` array through 2 simulated seconds
+    (below the throttle window) and was gone by 5 (past it). Full chunk unloading (chunks stream in
+    as the city is explored but never unload during a visit — flagged in an existing code comment as
+    "a real gap") was deliberately NOT attempted here: chunks are regenerated from a seeded RNG with
+    no memory of what was destroyed/looted, so unloading one for real needs a per-chunk persistence
+    layer to avoid a "leave and come back to reset everything" exploit — a bigger, riskier feature
+    than fit safely alongside everything else in this pass.
+
+- **2026-09-18b — animals actually redrawn this time, and grudge missions pay out.** User: "Did you
+  ever redraw the animals to better match the style of the humans? (less round - more pixeled)
+  Please do that." Honest answer at the time: no — 2026-09-17d only fixed the rotation/shadow/
+  z-order bugs while keeping the exact same shape language. `drawDog` was still two smooth ellipses
+  (body, head) plus an ellipse eye and a curved tail, where every human (`drawActor`) is built
+  entirely out of flat-shaded `fillRect` blocks — round next to blocky, the actual complaint. Now
+  rebuilt out of the same rect/straight-line vocabulary: the body and head are outlined rects
+  (`fillRect`+`strokeRect`) instead of ellipses, the eye is a small filled square instead of a
+  circle, and the tail is a straight 2-segment bent line instead of a smooth `quadraticCurveTo`
+  swoop. Ear triangles and the mane were already angular/kept a chunky rect treatment respectively
+  — those weren't the problem. Verified live: spawning a dog and a bear kennel pet and rendering
+  several frames produced zero draw errors (a full DOM-overlay screenshot proved awkward in the
+  debug harness, same title-panel artifact as earlier in the session, but the render path itself is
+  confirmed exception-free).
+  - Separately, user: "what is the benefit of doing those grudge missions? The player needs a reward
+    otherwise they'll always just choose the kidnap missions." Fair catch — `completeUrge` had no
+    `grudge` branch at all, so it fell through to the generic 35 XP default while kidnap grows the
+    village and errand/money/groceries hand back a keepsake or real resources. A grudge doesn't
+    bring anything material home BY DESIGN (that's the point of it), so the payoff is real cash
+    instead — "shook them down while they were still down," scaled with village prestige the same
+    way the money urge's own demand already is — plus a higher XP payout (55) than the other fetch
+    quests (25–30), since it's a straight fight with no bodyguards to lean on for cover. Verified
+    live: completing a grudge urge with `village.prestige = 3` paid out $50 (within the intended
+    15 + prestige*8 + 0-14 range) and incremented prestige as normal.
+
+- **2026-09-18c — guards actually patrol properly, and a villager's death finally sticks.** User:
+  "The patrol system still doesn't work well for the guard job. Could you make them move at a
+  normal walk while passively patrolling and only run when they spot something." A guard's "no
+  threat" branch shared the same catch-up-speed logic a raid-mustered squad member uses to keep
+  from falling behind the player (`if (d > 320) spd = 250; else if (d > 190) spd = 205`) — since a
+  patrol point can easily be that far away, a guard on its own beat was almost always "jogging,"
+  never actually strolling. Guards now skip that catch-up entirely (their own base speed, ~150, IS
+  the calm patrol pace) and instead get a real speed BURST (235) the instant `nearestFoe` actually
+  finds something — a clean, visible walk-then-run distinction that didn't exist before (even
+  combat approach was previously at the same speed as everything else). Verified live: an idle
+  guard covered ~131 world units in 1 simulated second (matches its own ~150 base speed, not the
+  old 205-250 catch-up); the same guard with a hostile in sight covered ~228 in 1 second, matching
+  the new 235 run speed.
+  - Mid-conversation follow-up: "he seems to just bash off any walls and get trapped inside
+    buildings - Could I instead draw a path that he walks along? Or make him walk the circumference
+    of the circle you draw? Whatever you think will work best." Root cause: a patrol point was
+    steered toward in a dead straight line, with only `squadAvoid`'s short 30px look-ahead deflection
+    as a safety net — fine for swerving around a single obstacle directly ahead, hopeless for
+    actually navigating out of a room. Went with a combination rather than a whole new freehand-path
+    UI to build and maintain (there's already one of those for build-mode paving, which would have
+    meant a second, parallel drawing system): `makeGuardZonePts` now places its stops evenly on the
+    drawn circle's own CIRCUMFERENCE instead of scattered through the interior (reuses the shape the
+    player already drew, reads as patrolling a boundary), and guard movement toward its current stop
+    now runs through the exact same bounded A* (`findPath`) the "lost sight, route to last-seen
+    position" chase logic already relies on — own dedicated fields (`_patrolPath`/`_patrolPathIdx`/
+    `_patrolPathT`) so the two pathfinding consumers never collide, recomputed only every ~0.6-1.0s
+    or when the destination itself changes, falling back to the old straight line only when a route
+    genuinely can't be found (out of the 512×512px search box, or truly enclosed). Verified live,
+    the hard way: found a real building with two open points on either side of it (a straight line
+    between them provably crosses a solid cell), confirmed `findPath` returns a real 34-waypoint
+    route around it, dropped an actual guard actor there, and watched it consume that exact route
+    and close 40% of the distance to the far side over 20 simulated seconds — genuinely routing
+    around the obstacle instead of grinding against it. (Chased a red herring for a while first: an
+    early version of this same test kept snapping the guard 80px toward the player out of nowhere —
+    turned out to be `zoneBounds()`'s hard position clamp, because the test's own patrol target
+    happened to sit right at the edge of the currently-generated city, nothing to do with the guard
+    code itself. A second false alarm right after — a live re-test that stubbornly showed no
+    pathfinding activity at all — was the debug tab simply still running the page from before this
+    edit landed; a reload fixed it, not a code change.)
+  - Separately, user (mid-conversation): "if the guard fails and something attacks and kills a
+    villager - it should be a permadeath for them." A fallen soldier/guard already gets this — see
+    2026-09-18b's note on `completeUrge`, or rather the pre-existing `t.soldier` branch in
+    `killActor` — but an ordinary villager never did: their `enemies` actor just faded like any
+    corpse while the `village.villagers` record sat untouched, and `spawnVillagers` walks that whole
+    list unconditionally on every village load — so they'd simply reappear next visit as if nothing
+    had happened. Struck from the roster in `killActor` now too, the same way a fallen follower
+    already is, with a matching "[name] didn't make it — gone for good" flash. Verified live: killing
+    a villager-flagged actor removed their record from `village.villagers` immediately (confirmed
+    `false` on an `.some()` roster check right after), which by itself rules out `spawnVillagers`
+    ever bringing them back — there's no record left for it to iterate.
+
+- **2026-09-18d — the actual reason a guard kept "dashing/running everywhere."** User: "He still
+  dashes/runs everywhere - the guard. Can you make him walk unless he's actively chasing
+  something." 2026-09-18c's walk/run speed fix was real but not the whole story — village threats
+  are rare (a 22% roll, once a night, one at a time), so a guard shouldn't have been in "spotted
+  something, run" mode nearly often enough to look like a constant problem. The actual culprit was
+  one level down: "stuck recovery" (the shuffle-then-teleport safety net for when a wall eats an
+  actor's whole intended move for too long — see `_stuckT` in `updateSoldier`) always aimed itself
+  at the PLAYER, unconditionally, regardless of what the actor was actually trying to reach. That's
+  the right target for a raid-mustered squad member trailing the player around; for a guard walking
+  its own patrol beat, it meant every stall — and real village geometry stalls a pathfinding actor
+  sometimes even when the route is basically fine — yanked it toward wherever the player currently
+  was, anywhere from across the village to a different zone entirely. At the 2.5s escalation that's
+  a hard position SNAP up to 220px in one frame, not a walk, which is exactly what reads as
+  "dashing/running everywhere": not a speed problem at all, a wrong-target teleport dressed up as
+  one. Fixed with a single `recX,recY` "what should recovery aim at" reference — the chased foe's
+  position while fighting, the player while trailing them (mustered squad, unchanged), and now the
+  guard's OWN current patrol point while on its beat — used by both the 0.8s shuffle and the 2.5s
+  teleport instead of hardcoded `player.x/y`. The 2.5s teleport also now drops any in-flight
+  `_patrolPath` (`e._patrolPath = null`), since a route computed from the pre-teleport position is
+  meaningless from the new one. Verified live: forced a guard into the "badly stuck" state
+  (`_stuckT = 3`) with the player placed 7000+ units away in an unrelated direction and a patrol
+  target in a third, distinct direction — the recovery teleport moved the guard measurably CLOSER
+  to its own patrol point and dramatically farther from the player, confirming it no longer
+  chases the player's position at all.
+
+- **2026-09-18e — New Game+ (skeleton).** User, brainstorming depth/replayability: "we could make
+  it a NEW country each time... carry over the perks you've unlocked... unlock new research items
+  too." Correctly called out as much bigger than a single feature — agreed on a phased build,
+  starting with the bare loop everything else plugs into: win, get offered a fresh (harder) country,
+  keep everything about the player. Tileset variety, new city objects, new gameplay elements, and
+  per-cycle research unlocks are deliberate follow-ups, not attempted here.
+  - **The trigger**: "what happens after you win" was, honestly, nothing — closing the mandatory
+    post-conquest Legacy stop (`toggleLegacy`'s `legacyForced` case, set by `closeWinScreen`) just
+    resumed play on the same, now fully-conquered map with nowhere left to go. That exact moment —
+    dismissing that specific stop — is now the New Game+ trigger (`startNewGamePlus`): increments a
+    new `village.ngPlus` counter, clears `conquered`/`_winSeen`/`defections`, and regenerates
+    `village.country` from scratch.
+  - **What carries over vs. resets**: deliberately, only the country map resets. The player's
+    village, buildings, villagers, weapon/material codices, and Legacy-unlocked perks all live in
+    separate storage/state `startNewGamePlus` never touches — carrying over "for free" was the
+    point, not something that needed new plumbing.
+  - **Genuine variation, not a reshuffle of the same thing**: `genCountry`'s own seed now folds in
+    `ngPlus` (`village.seed ^ 0x9e3779b9 ^ imul(ngPlus+1, 0x2545f491)`) — deliberately NOT touching
+    `village.seed` itself, which also drives the player's own home village terrain/chunk generation
+    and villager IDs; reseeding that would risk reshuffling the village out from under them on their
+    next load. The result: region/tier assignment, node names, and the country's own name genuinely
+    differ each cycle, from the exact same save.
+  - **"Tougher factions, better loot"**: a flat `ngMul = 1 + ngPlus*0.18` on top of the existing
+    tier-based scaling, applied to both the raid boss and every grunt's HP in `spawnRaidFaction`,
+    plus the same multiplier on the Legacy Point payout for actually taking a city (capital,
+    revolt-retaken, or ordinary) — a harder second campaign pays out more, not just costs more.
+  - Verified live end-to-end through the REAL trigger path (not just calling the function directly):
+    forced a win state, opened the win screen, clicked the real "Continue" button, then closed the
+    resulting Legacy panel through `toggleLegacy(false)` exactly as a player would — `ngPlus`
+    incremented, the country name and node layout changed, `conquered` reset to `false`. Separately
+    confirmed `spawnRaidFaction`'s boss HP scaled by exactly the intended ratio (1.36x at
+    `ngPlus=2`) with a like-for-like same-type comparison.
+
+- **2026-09-19 — New Game+ becomes a genuinely new village, with a flee cutscene.** User, pushing
+  the skeleton further: "new village each time. Maybe show a cutscene of you fleeing your capital
+  city after being overthrown... you'll get to start your village again but building on your
+  learnings and using your unlocks from the previous run and you'll have to build larger and more
+  populated villages each time to be able to beat the harder country." Flagged the real tradeoff
+  before building it: village relationships/buildings are the most personally-invested layer of
+  the game, so a full wipe every cycle risks feeling like punishment unless the carryover is
+  generous. User picked (of three offered options) perks + full discovery codex + a resource
+  stipend that grows every cycle.
+  - **The reset**: `startNewGamePlus` now builds a genuinely fresh `freshVillage()` — population,
+    buildings, cult status, day count, every relationship gone — rather than reusing the old
+    village object. Carried forward onto it: `codex`/`weaponCodex`/`npcCodex` (the full weapon and
+    material discovery knowledge — "you remember how to make things even if you're rebuilding from
+    nothing") and a stipend (`20 + ngPlus*15` wood, `10 + ngPlus*10` stone) that grows every cycle,
+    so cycle 3 doesn't start from the exact same zero as cycle 1 — a concrete, visible answer to
+    "why is this easier to start than the first one." Legacy perks needed no new plumbing at all —
+    they already live in entirely separate storage untouched by any of this.
+  - **The cutscene**: a new `#ngplusflee` panel (same structural pattern as `#winscreen`) with its
+    own small dedicated canvas (`drawFleeArt`), reusing the exact same lightweight "plain 2D draw
+    calls, no new animation pipeline" approach the title screen's own little diorama already uses
+    (`drawTitleArt`) — including its `drawRunner` silhouette helper for the player figure. A
+    burning capital skyline, rising embers, and a line of flavour text naming the country that was
+    just lost, with its own "Found a new village" button (and Escape support, matching the
+    win-screen's own "Escape also just proceeds" convention) that actually triggers the reset —
+    dismissing the mandatory post-win Legacy stop now shows this FIRST, and `startNewGamePlus`
+    itself only runs once it's dismissed.
+  - Player position needs no special handling — `enterZone('village')`, called at the end of the
+    reset, already unconditionally plants the player on the new village's own canonical spawn
+    point; an earlier draft that manually forced `player.x/y` to `0,0` first was dead code once
+    that was noticed, and got removed. `carrying`/`holding` are cleared — you fled with your own
+    two hands, not a kidnapped target or a bulky object from a village that (from the new one's
+    perspective) no longer exists.
+  - Verified live end-to-end through the real UI path (win screen → real "Continue" click → real
+    Legacy-panel close → real "Found a new village" click) with realistically-shaped carryover
+    fixtures (a full villager record via the game's own `randPerson()`, a properly-shaped codex
+    material AND weapon entry, complete with the `.name`/`.spec` fields `registerCodexMaterial`/
+    `registerCodexWeapon` actually need): the new village generated all 25 chunks cleanly, the old
+    village's population and buildings were gone, both discovery codices survived intact, the
+    resource stipend matched the formula exactly, and the player landed on the correct spawn point.
+    (Chased three self-inflicted false alarms getting there — hand-rolled codex/weapon test
+    fixtures missing fields like `.name` or `.spec` that real discovered entries always have threw
+    deep inside pre-existing, unmodified codex-registration code, aborting the village reset
+    partway through and briefly looking like a real bug in the new feature. It wasn't — every
+    failure traced back to invalid test data, not the shipped code.)
+
+- **DESIGN (agreed, NOT built yet) — town progression, Favor, shrines, blacksmith, research tree.**
+  Worked out in conversation with the user before any code; each decision below was theirs.
+  - **Direction:** each conquered country permanently unlocks new gameplay (buildings, research,
+    an opposition cult) so replays offer something new (tourists) and something to collect
+    (completionists). Unlocks persist through the NG+ village reset, stored alongside Legacy perks;
+    the Legacy screen gets an "unlocked features" list as the completionist tracker. Per-raid
+    mutators (optional gambles with a real cost AND upside) are a separate, later layer.
+  - **Village tiers (3):** Hamlet (cap 24, today's) → Village (cap 40) → Town (cap 60). Cap of 60
+    chosen from measurement: AI cost ~0.05ms/villager (24→2.9ms, 60→4.5ms, 120→8.2ms per frame,
+    idle villagers, empty village — unproven beyond 60), and UI clutter (Assign panel is one row per
+    villager) is the tighter limit than CPU. A tier requires BOTH population AND buildings, so
+    kidnapping alone can't reach Town: e.g. Village = ~20 pop, ~12 housed, a few shrines + a
+    blacksmith; Town = ~36 pop, ~24 housed, many shrines + temple + barracks + market (exact
+    numbers to be tuned when built). Visuals should change per tier (paving, footprints, gate).
+  - **Favor:** its own resource, separate from conviction (which stays the brainwashing rate-gate).
+    Earned per day from shrines, scaled by nearby devoted villagers; spent on blacksmith work,
+    faith/war research, cult powers.
+  - **Shrines:** many small ones (supports the town-sprawl look), each a modest passive Favor source.
+  - **Blacksmith:** upgrades weapons on the armory rack (tiers) AND applies elemental infusions
+    (ice/slime/acid/spark blades and so on, reusing the elemental hit effects), with appearance
+    customisation (colour/head style, via the existing weapon-spec appearance data). Costs Favor +
+    materials. Cosmetic customisation is a wanted feature, not an afterthought.
+  - **Other buildings (unlocked by research):** Temple (upgrades altar/HQ, raises conviction cap
+    above 12), Barracks (more guard/squad slots), Market/Granary (trade + food buffer for a bigger
+    population), Watchtower/Gate (patrols reach it, earlier threat spotting), Scriptorium
+    (research speed, advanced tree). Buildings carry daily upkeep so expanding is a trade-off.
+  - **Research:** split from one flat economy list (plough, sawmill, quarry, smokehouse, carts,
+    comforts, paving) into Economy / Faith / War / Civic branches, ~3 tiers each, higher tiers
+    gated by village tier + an earlier building. New branches/tiers arrive with new countries.
+  - **Country pacing (proposed):** Country 1 = base + shrines/blacksmith intro; Country 2 =
+    opposition cult + Temple + Barracks + Faith counter-research; Country 3 = Town tier +
+    Market/Watchtower/Scriptorium + top research tiers.
+  - **Suggested build order:** tiers + Favor → shrines → blacksmith (tiers, then infusions, then
+    cosmetics) → research tree → opposition cult last (needs the rest in place).
+  - **BUILT — step 1 (tiers + Favor), 2026-09-19.** `TOWN_TIERS` (Hamlet 24 / Village 40 / Town 60)
+    with a data-driven `need: { pop, housed, build: {prop: count} }`; later steps just add entries
+    to `build` (shrine, blacksmith, temple...). Tier is a ratchet (`village.tier`, never drops).
+    `villagerCap()` replaces the old fixed `VILLAGER_CAP`. `checkTownTier()` runs on village entry
+    and every day tick, flashing "You are now a Village". Current requirements are placeholders
+    using buildings that already exist (Village: 20 pop, 12 housed, altar; Town: 36 pop, 24 housed,
+    altar + weapon rack) — tune after testing. Favor is `village.stores.favor`, shown in the HUD
+    once the cult exists; stopgap income is `1 + 0.5 × devoted villagers` per day until shrines
+    replace it. The HUD panel title now shows the tier and what the next tier still needs; people
+    shows `n/cap`. Verified live: population alone did NOT advance the tier; population + 12 housed
+    + an altar did (cap 24 → 40); removing the altar afterwards did not demote; a day tick
+    granted Favor. Existing over-cap villages aren't culled (only new arrivals are refused).
+  - **BUILT — step 2 (shrines), 2026-09-19.** A one-tile `shrine` prop (stone plinth, cairn, flickering
+    candle; icon + in-world draw in the same flat-rect style as the altar), recipe 2 wood + 3 stone,
+    unlocked with the cult alongside the altar/rack (`registerCultBuild`), wired into every prop table
+    the altar uses (material, indestructible HP, size, non-solid, fixed, sort bias, removal, save
+    reload, wipe-save regex). Favor income is now: 1/day from the cult + per shrine `min(3, 1 + 0.5 ×
+    devoted villagers whose home is within 260px)`. Per-shrine cap (`SHRINE_CAP`) stops stacking many
+    shrines around the same few believers from multiplying them — more Favor needs more shrines near
+    MORE devoted people. Tier requirements now include shrines (Village: 2, Town: 6 — placeholders).
+    Verified live: 4 devoted villagers with 2 nearby shrines + 1 far shrine paid exactly the
+    predicted 8 Favor; the piece registers in the build menu and places/persists through the real
+    `placeBuildAt`; no draw errors. Not yet done for shrines: gating behind research (currently
+    unlocks with the cult), a click-to-pray interaction, and any visual variety between shrines.
+  - **BUILT — step 3 (blacksmith), 2026-09-19.** A 2×1 `blacksmith` prop (anvil + glowing forge;
+    recipe 4 wood + 10 stone; unlocks with the cult; wired into the same prop tables as the altar).
+    Press E beside it to open **The Smithy** (HTML panel, Escape closes it), which works on weapons
+    in the armory rack plus your own quick slots/pack (tools and fists excluded):
+    - **Tiers:** +1..+3, each +20% damage; tier n→n+1 costs `8(n+1)` Favor + `3(n+1)` stone.
+    - **Infusions:** ice / slime / acid / spark / fire, 12 Favor + 2 stone; sets the weapon's
+      `hitFx`, so it reuses every existing elemental hit effect (ice/slime also apply `slow`).
+      "Remove infusion" is free.
+    - **Appearance:** 8 colour swatches (1 Favor); draws a coloured trim along the weapon plus a
+      pulsing element-coloured glow at the tip.
+    - **How it's stored:** a forged weapon is a self-describing id, `base|tier|fx|hex` (e.g.
+      `bat|2|ice|d05a4a`). `WEAPONS` is now a Proxy over `WEAPONS_RAW` that builds the stat block the
+      first time such an id is looked up, so the armory, quick slots, pack and a villager's `armed`
+      already save it with no new save data, it survives reloads, and the hundred-plus existing
+      `WEAPONS[id]` reads needed no changes. `drawActor` draws a forged weapon as its base
+      (`wkey`) plus the trim.
+    - Tier requirements now also need a blacksmith (Village and Town — placeholders).
+    - Verified live: costs charged exactly (100 → 79 Favor for +1, slime, colour); the id rebuilt
+      after deleting the built entry (Proxy path == reload path); stats scaled (Bat 22 → 31 at +2);
+      a real `attack()` with a forged bat ran without error and dealt damage; four forged weapon
+      variants (melee/gun/each element) drew with zero draw errors; the panel rows/buttons/swatches
+      worked through real DOM clicks; Escape closes it. NOT eyeballed: how the trim/glow actually
+      looks on the character (test village was too crowded to see) — worth checking in play.
+    - Not done: research gating, a forge animation/sound, spark-fire safety for villagers armed with
+      fire weapons, and per-weapon (not per-base) appearance for guns beyond the trim.
+
 ---
 
 ## Difficulty curve
@@ -4050,3 +4373,277 @@ seed step.
   routes to the capital?
 - Should conquered cities be **defensible** — can a rival faction / rebellion try to take one
   back, forcing you to garrison?
+
+### 2026-09-19e — Town progression step 4 BUILT: research tree
+Research is now 4 tabbed branches (Economy / Faith / War / Civic), 16 items, with `req` prerequisites, `tier` (village rank) gating and optional Favor cost (`favor`). Old item ids unchanged so saves stay valid.
+- Economy: plow, sawmill, quarry, smokehouse, carts + NEW Crop Rotation (needs plow; plough 1.5x->1.75x), The Ledger (Village rank; +floor(pop*0.6) cash/day).
+- Faith (NEW): Vespers (+1 Favor/shrine/day), Sacred Fire (needs Vespers; unlocks smithy infusions), Tithing (needs Vespers; +25% city tribute), Reliquary (needs Vespers, Village rank; conviction cap 12->16 via convictionCap()).
+- War (NEW): Tempering (smithy tiers past +1), Drill (guards 80->100 HP, soldiers 64->80).
+- Civic: comfort, paving (moved) + Wells (needs comfort; +0.1 mood).
+Verified live: prereq/tier/favor gating, Favor deducted, cap 12->16, smithy fx/tier quotes gated. Tab-click via real mousedown not confirmed to switch tab. Suggested-later (need unbuilt buildings): Temple, Barracks, Market/Granary, Watchtower, Scriptorium research.
+
+### 2026-09-19f — Visual tells for research (step 1 of the agreed build order) BUILT
+hasRes(id) helper. Tells: Plough -> 20% of farmers carry a plough instead of a hoe (40% with Crop Rotation; `_plowRoll`/`_plow`, drawn in the hoe branch of drawActor); Drill -> iron cap on guards/mustered soldiers in the village, plume on guards; Shrine: Vespers candles, Sacred Fire hotter flame + sparks, Tithing coin bowl, Reliquary halo + relic (altar gets the same + second banner); Tempering -> white-hot forge + anvil sparks; Ledger -> coin glint over the study; Comforts -> rug + flower box at beds.
+Verified: no draw errors with all research on; 7 plough carriers and 10 helmeted soldiers flagged in a 93-person test village. NOT eyeballed (too crowded) — ask user to look.
+NOT DONE (need new world props): Sawmill log pile, Quarry stone pile, Smokehouse smoke/rack, Carts, Wells prop, Crop Rotation field colours, Paving already visible.
+Agreed next: walls (palisade->stone->gate) + HAND-DRAWN guard patrol routes (user chose waypoint option 1; NOTE a guard patrol *circle* already exists — see guardPatrolPoints ~line 5016/11985 — the waypoint route should extend/replace it), then Temple/Barracks/Market/Watchtower/Scriptorium + research, then opposition cult.
+
+### 2026-09-19g — Hand-drawn guard routes + 4 town buildings BUILT
+- Guard patrol ROUTES: Assign panel on a guard now has "Draw a patrol route" beside the circle. Click waypoints (Enter / right-click finishes, Backspace undoes, Esc cancels); stored in rec.guardZone as {route:true, r:0, pts}. Guards walk the drawn loop exactly (no random offset, 0.1-0.5s pauses instead of 2.5-5s). Routes drawn as dashed polylines. Verified with real mousedown/Enter events: a guard looped all 4 points repeatedly, no errors. (Walls already exist as build pieces: fence, plank, stick, fieldstone, doors — no new wall piece was added; a Gate/Watchtower is still open.)
+- Town buildings (TOWN_BUILDINGS, cap TOWN_BUILD_CAP=3 per kind counts for yield): Market Stall (+8 cash/day), Scriptorium (+4 research/day), Temple (+3 favor/day, needs cult), Granary (+5 food/day). Registered with the cult (registerCultBuild) — NOT yet gated per-country. Town tier now also needs temple:1 + market:1. Verified: all 4 register, place, yield, draw with 0 errors, and look right in a screenshot.
+STILL TO DO: Barracks, Watchtower/Gate, world props for Sawmill/Quarry/Smokehouse/Carts/Wells/Crop-Rotation fields, per-country unlock gating, Legacy "unlocked features" list, opposition cult (last).
+
+### 2026-09-19h — Barracks, Watchtower, yard decor, per-country unlock table + Legacy feature list BUILT
+- Barracks (+2 muster squad each, via squadCap(), cap 3 counted) and Watchtower (guards within 420px of one get dmgMul 1.25, refreshed each second in the villager tick). Both in TOWN_BUILDINGS; sprites/icons added; placed+registered+rendered with 0 errors.
+- drawYardDecor() (called from the campfire prop draw): Sawmill log pile+sawhorse, Quarry stone heap, Smokehouse curing rack + smoke, Carts hand-cart, Wells stone well, Crop Rotation sheaves. Visible in a screenshot (well, cart, sheaves seen).
+- FEATURES table (near TOWN_BUILD_IDS): each feature has a `country` (1-based; countryNumber() = ngPlus+1). ALL SET TO 1 while testing — proposed pacing Temple/Barracks/cult=2, Watchtower/Town tier=3. registerTownBuilds() (idempotent, called from checkTownTier) only registers unlocked buildings; townMissing skips locked reqs and says 'a later country' if Town tier itself is locked. Legacy screen shows a "Village features unlocked" list (✓ / 🔒 country N) — verified 10 entries. (Note toggleLegacy only opens from the title screen or forced end-of-campaign.)
+- Walls: no new piece; guards' hand-drawn routes (2026-09-19g) are the wall-following mechanism. Gate not built (doors exist).
+STILL TO DO: opposition cult (needs a design chat first — no mechanics agreed yet), per-raid mutators, unique weapons, village events, rival faction. User to test everything.
+
+### 2026-09-19i — Opposition (rival) cult BUILT (step 5)
+Three faces, all gated by FEATURES 'cult' (country 1 while testing; proposed 2) and village.cult:
+1. DARK SHRINES (prop 'darkshrine', hp 70, spawn on the village fringe 420-560px from the fire, max 2, 30%/day from day 2; persisted in placedProps). Daily darkShrineDrain(): villagers whose home is within 340px un-flip one belief (50%; 25% with Warding) UNLESS one of your shrine/altar (260px) or temple (420px) stands near their home. Raze it (hurtProp -> razeDarkShrine) for +4 favor +6 research. Day report says "The rival cult turned N villagers".
+2. VILLAGE RAIDS: maybeCultRaid() at nightfall (14% + 7%/dark shrine, halved by Warding, from day 3): 3 + day/8 (max +3) + ngPlus robed cultists reuse the _villageThreat hunt-a-villager AI (70-100s life), guards fight them.
+3. CITY AMBUSHES: cultCityTick(dt): casual runs every 70-120s a squad of 2 (+ngPlus/2); during a takeover (mission.raid) every 35-60s a squad of 3+ (tier-scaled) incl. a zapstaff caster; max 4 alive; hunt the player for their first 30s (_huntT overrides the 5s lose-sight rule) and fight anyone (incl. the raid squad) on the way. Robed hooded cultists with glowing eyes (drawActor `a.cultist`).
+New research: Warding (Faith, needs Vespers, 60rp+10 favor). Verified live: shrine spawns/persists, drain protected=0 vs unprotected=5, raze +4 favor & unpersists, village raid spawns 3 raiders, city ambush spawns and one closed to melee range; cultists render hooded. NOT verified: cultists vs the mustered raid squad in a real takeover; balance of any numbers.
+Unique-weapon drop from razing a shrine was pitched but NOT built (unique weapons don't exist yet).
+
+### 2026-09-19j — Wagers (per-run mutators) BUILT
+Before any city trip (campaign-map takeover OR signpost casual run, only when leaving the village) a Wagers panel (reuses #travel overlay; Esc/Cancel aborts the trip) lets you take up to 2 optional wagers: Ironclad (+40% enemy HP, +50% pay), Glass Cannon (you take +75%, deal +50%, +25% pay), Reinforcements (gang of 3 every ~40s that hunts you, +60%), Bounty on Your Head (start with heat 40, +40%), Hunted (needs cult; cult ambushes 2x as often, +50% and +6 favor). Payout: takeover Legacy Points x wagerPayMul() (folded into ngLootMul); casual/any return: bonus cash = run gain x (mul-1), plus wager favor. State: pendingWagers -> runWagers (set when the city is entered, cleared on return). wagerTick() in the city loop applies Ironclad HP once per enemy and runs Reinforcements.
+Verified live: panel opens, max-2 enforced, live multiplier (x1.75 for Ironclad+Glass), Go/Cancel, enterZone with wagers, Ironclad scaled 10 enemies (e.g. 77 hp), Reinforcements spawns 3 hunters, no errors. NOT verified: cash bonus on return (game money var not reachable from the test harness), Glass Cannon damage numbers, Bounty heat value, Hunted cadence.
+
+### 2026-09-19k — CALAMITY wagers BUILT (crazy set-pieces)
+Seven new wagers (flag `calamity`, engine = calamityTick/drawCalamities, state in `CAL`, called from wagerTick; draw hook next to drawGuardZone): The Terminator (+80%; indestructible robot via `_indestructible` guard in damage(), speed 142, hunts the whole run, spawns after 6s), Air Raid (+60%; red warning rings then explode(), hurts enemies too, ramps up), Meteor Shower (+60%; big slow meteors + fire hazard), Zombie Outbreak (+60%; waves of 4+ every 6.5s, cap 26, some runners), Twister (+70%; wandering tornado drags actors/props in, damages at the core), Alien Invasion (+90%; 2 UFOs beam telegraphed circles + green zapstaff squads every ~34s), Sandworms (+80%; 2 worms tunnel to you, warn ring, then erupt: 38 dmg you / 70 enemies + knockback, rest 4.5s). Max 2 wagers still applies. Spawn points use solidBoxHit-checked open ground (first robot spawned inside a wall and never moved).
+Verified live: all 7 run with 0 errors; robot moves/chases and hp stays 99999; zombies 12 in 20s; 9 worm eruptions in 40s; screenshot shows worm maw, bomb rings, UFO, beam ring, tornado. NOT eyeballed: robot/zombie/alien character looks; balance of every number.
+IDEAS NOT BUILT: Stampede, Giant's Footsteps (huge telegraphed stomp), Earthquake, Rising Flood, Kaiju, Blackout/fog.
+
+### 2026-09-19l — 5 more calamities + 13 UNIQUE WEAPONS + VILLAGE EVENTS BUILT
+- Calamity wagers added: Stampede (+60%, telegraphed lane then 8 cattle sweep through), Giant's Footsteps (+70%, huge purple footprint ring, stomp r105), Earthquake (+50%, 4 fissures telegraph then damage + shake), Flash Flood (+60%, water wall sweeps, pushes/wets/damages), Blackout (+40%, radial darkness + glowing enemy eyes). (Sweeps use CAL.sweeps, quake uses CAL.cracks/quakeT.)
+- UNIQUE WEAPONS (UNIQUES table, in WEAPONS_RAW with unique:true; draw as their _base; buildForged now keeps b._base so uniques can be forged): one per calamity earned by SURVIVING+returning from a run with that wager (grantUnique -> village.armory, once each, persists through NG+): Chrome Servo-Fist (robot), Stormcaller (tornado), Ka-Boom Bat (airraid), Meteorite Blade (meteor), Grave Digger (zombies, lifesteal), Ray Staff (aliens, chain zaps), Wormtooth Spear (worms, pulls), Bullhorn Lance (stampede), Titan's Club (giant), Faultline Pick (quake), Tidebreaker (flood), Nightblade (blackout, assassinates unaware), + Heretic's Kris (25% when razing a dark shrine, lifesteal).
+- VILLAGE EVENTS: rollVillageEvent each morning from day 2 (38%): Harvest festival, Bountiful harvest, Drought, Sickness (villagers laid up 2 days, Wells halves the chance), Meteorite (+stone/research), and two choice events via the #travel overlay: Travelling Merchant (buy wood/stone/mystery weapon $90, 20% a unique) and Bandits (pay $40 or fight — spawns bandits using the village-threat AI).
+Verified live: all 13 uniques resolve; grant once only; events distribution; stampede/flood sweep the full lane, quake makes 4 cracks, giant stomps, blackout runs; screenshot of stampede + flood lane + crack; merchant buy (+20 wood) and bandits fight (3 spawned). Weakly verified: unique on-hit effects in combat (chrome, boombat, ray showed effects; kris healing and stormcaller not confirmed — test swings were unreliable). NOT verified: sickness in real play, merchant unique roll.
+
+### 2026-09-19m — Rival warband (rival faction) BUILT
+No mechanics had been agreed, so I designed it (user said "Go for it. Rival faction"). village.rival = {name, boss, color, power 1-5, next}. Appears once you hold a city (feature 'rival', country 1). rivalTick() (from countryTick, every 4-6 days): either SEIZES an open non-capital city (n.rival=true; capped at 2 + power/2 = 2-4 strongholds so the map never goes solid) or MARCHES on your weakest held city (order -22; if order<40 or a 20% chance and no governor it FALLS to them: raided=false, rival=true, tribute stops). Rival strongholds show orange ⚑ on the map + legend with power; still raidable but the faction is renamed/recoloured to the rival's, boss "the Marshal" etc., tier +1 (tougher). Breaking one (rivalBroken): +6 favor, +3 legacy (x ngLootMul x wager mul), rival power -1, 30% a random unowned unique weapon. At power>=3 the rival also raids the village at night (maybeRivalRaid, 8% x power, bat-armed rival-coloured fighters, village-threat AI). News lines shown via reportCountryTick. Never touches the capital.
+Verified live: rise/seizure/attack cadence over 60 days, cap held at 4, map shows ⚑ and legend, clicking a rival node -> wager screen -> city with rival boss ('the Marshal', hp 376, rival shirt colour, tier+1), night raid triggered, rivalBroken pays 6 favor and lowers power. NOT verified: the actual win block clearing n.rival on a real conquest, city falling to rival in real play, balance.
+Ideas left: rival envoys/diplomacy, rival appears in casual city runs, alliance with the rival.
+
+### 2026-09-19n — HELP screen BUILT
+Tabbed, searchable Help overlay (#help, z-index 30): opens from the title screen ("Help" button), the pause menu ("help (F1)" button), or F1 anywhere; Esc/F1/close button closes (capturing keydown listener stops game hotkeys while open). 12 sections: Getting started (controls, game loop), Village life (jobs, day, live rank table), Buildings (live TOWN_BUILDINGS), Research (live RESEARCH by branch with costs/prereqs), Faith & the cult, Guards & defence (patrol circle/route), Weapons & the smithy (live UNIQUES list), City runs & takeovers, Wagers (live WAGERS split standard/calamity), Rivals (cult + warband), Village events, Legacy & unlocks (live FEATURES with country). "replay tips" button clears sb_tips. Lists are generated from the game's own tables so they stay current — when adding a new wager/building/research/unique/feature it appears automatically; prose sections (helpSections in index.html) need hand edits for new systems.
+Verified: 12 sections render with no undefined/NaN, search works, Esc/F1 work, screenshot checked (fixed inherited right-alignment).
+
+### 2026-09-19o — Perk FX: Storm Caller strike, Hypnotist trance, Executioner beheading
+- Storm Caller active: charge-up (gathering sparks) then a huge forked sky bolt (fx 'skybolt', thick glow/core + forks + ground flash) slams the player (untouched); stormStrike(): white flash, shake, 2 shockwave rings, 8 crawling ground arcs, splash 24 dmg + stun to enemies within 150, then the old chain (up to 5, 26 dmg) drawn as real bolt fx between targets. Kill-zap (passive) also draws an arc.
+- Hypnotist: Mesmerize casts a spinning spiral fx + converging rings at the target; while the trance lasts (_hypno && _thrall): spiral eyes, a spinning halo of 4 orbs with ☯, and a shimmering purple tether (drawHypnoLinks) from player to each thrall. Passive terror (_fearT) gets spiral eyes + a smaller halo + 'terrified!'.
+- Executioner active: now beheads the STRONGEST (highest maxhp) non-boss enemy within 240: beheadActor() — slash fx, blood burst, body drops headless (drawActor hides head via globalAlpha 0 + draws a stump; hat parts skipped), blood fountain from the neck ~1.5s, head thrown along the ground (bounces twice, rolls, friction, wall bounce) leaving a blood trail (heads[]/spurts[]; updateHeads/drawHeads; cleared on zone change). Bosses/mission targets/robot excluded.
+Verified live: skybolt renders (screenshot), hypnosis rings/halo render, strongest died & weaker survived, head flew ~180px and stopped, blood trail visible; 0 errors. Not seen mid-roll at close range.
+
+### 2026-09-19p — Wagers are now RANDOM (no choice screen)
+rollWagers() runs when leaving the village for any city (map takeover or signpost run); WAGER_ODDS by country (ngPlus+1, capped at 3): C1 30% one; C2 50% one, then 20% a second; C3+ 70% one, then 50% a second (the "additional" chance is conditional on the first landing). WAGER_TIER gates the pool: tier1 = the 5 standard wagers (country 1), tier2 adds zombies/airraid/meteor/quake/blackout/stampede/flood, tier3 adds robot/tornado/aliens/worms/giant. Hunted only if the cult is on. Arrival flash: "Fate strikes" / "Fate strikes twice" + names + the first curse. Payouts and unique-weapon rewards unchanged. openWagers() (the old picker) is kept in the file but no longer called. Help > Wagers rewritten. Verified: 6000-roll distributions match (C1 29.8% one; C2 40.1% one + 10.1% two; C3 35.8% + 34.0%), tier pools correct, a real trip carried the wager into the city, no errors.
+- **2026-09-19p (correction)**: user clarified the two-wager odds are OVERALL, not conditional: C2 = 50% any wager (30% one, 20% two); C3+ = 70% any (20% one, 50% two); C1 = 30% one. rollWagers uses one shared roll (x<two -> two, x<one -> one). Help text updated.
+
+### 2026-09-19q — Wager outcome report + no reward for failed raids
+Wagers now only PAY when the run succeeds: not dead (runDied set in the death handler) AND, for a takeover (runTakeover = mission.node), the raid was actually won (_lastWonTakeover). Otherwise no cash bonus, no favor, no unique weapon (and a takeover Legacy payout only ever happens on a win). Casual runs: paid on returning alive. Each return builds _wagerReport {ok, why, items[], bonusPts, bonusCash, favor, unique}; wagerReportRows() turns it into lines: per wager "survived — +N% payout (+favor)" or "no reward — the raid failed / you went down", plus a "wager rewards" total (Legacy Points share via payLegacy(), cash, favor, UNIQUE weapon). Shown on the takeover SPOILS screen (won) or the run RECAP (casual / failed / died). Verified: failed takeover -> 'no reward — the raid failed'; won takeover spoils screen lists "wager · Ironclad survived — +50% payout" and "+2 Legacy Points"; casual run reports ok. NOT verified: the died path live (same code branch), a wager with a unique/favor reward in the panel.
+
+### 2026-09-20 — Cosmetics pass 2, END-GAME TEST PANEL, staging, unfinished items
+- COSMETICS: ~75 new ITEMS recipes (ITEM_SLOT + Object.assign(ITEMS) block above the ROSTER-SCHEMA marker): 20 hats (cowboy, wizard, pirate, fez, chef, viking, halo, horns, flower crown, headphones, kabuto, santa, propeller, bucket, bowler, turban, straw, cat ears, hood-up, nurse), 10 hair styles (afro, ponytail, mullet, side part, pigtails, dreads, bob, faux-hawk, braids, big bun), 18 faces (moustache, handlebar, goatee, stubble, sideburns, eye patch, monocle, round glasses, scar, freckles, fangs, bandage, tattoo, cyber eye, surgical/ninja mask, tears, clown paint), 11 tops (hoodie, trench, overalls, robe, armour, lab coat, poncho, tux, stripes, kimono, leather), 6 necks, 5 backs (quiver, sword, guitar, satchel, jetpack), 4 waists (kilt, skirt, holster, fanny pack), 4 shoes. Character creator now has 14 rows (added Hair style, Top, Neck, Back, Waist, Shoes; Hat/Face lists expanded; CHAR_OPTIONS.* pushes after the base table). Villagers (_look) got afro/sidepart/mullet/dreads hair, cowboy/fez/chef/wizard/pirate hats, moustaches and marks (scar, freckles, eye patch, monocle). AI roster can use the new items too (RS.items = Object.keys(ITEM_SLOT)). Verified: all 113 creator options draw with no errors on a contact sheet; creator opens with 14 rows; START puts the outfit on the in-world player.
+- ADMIN / TEST PANEL: roster panel (\ or the lab button) now starts with END-GAME TESTING: country selector (sets ngPlus, so feature gates + wager odds follow), new map, start NG+, cult on, HQ+map, village rank buttons, take next city / all but capital / capital (win screen), +resources (food/wood/stone/favor/research/cash), all research, +5 villagers, skip 1/5 days, trigger any village event, dark shrine, cult raid, rival +1/spawn, rival move, rival raid, wager checkboxes with 'use on next trip' (dbgWagers overrides rollWagers) / 'apply to this run' / 'back to random', grant all uniques. Force args added: rollVillageEvent(V,id), maybeCultRaid(force), maybeSpawnDarkShrine(force), maybeRivalRaid(force). Verified live (buttons, forced wagers carried into the city, raids spawn, events fire). NB: skipping days with no food makes villagers walk out.
+- STAGING: FEATURES now gated: Temple/Barracks/rival cult/rival warband = country 2; Watchtower/Town rank = country 3. Use the admin country dropdown to jump ahead.
+- ASSIGN PANEL: two columns once >8 rows (it overflowed the screen for a guard in a cult village). LEGACY: 'Unique weapons n/13' collection grid (? until earned, shows the source). Gate piece NOT built (doors already do the job); rival diplomacy NOT built.
+
+### 2026-09-20b — Sandworm + Twister finesse, and honest death summary
+- SANDWORM: while tunnelling it now tears up the ground (wormTear): a fading ridge of churned earth trails behind it (drawn + baked decals), dirt sprays up, screen rumbles near you, and every 0.18s it damages + shoves PROPS and rips at BUILDING cells within 42px (never actors). The launch (wormBurst) is an explosion of earth: 60 flying earth chunks with gravity (CAL.debris), 3 brown shockwaves, dust cloud, crater decals, prop + building damage in a 90-100px radius, the usual 38/70 damage + knockback to actors. Drawn as a segmented worm body launching out of the hole in an arc with a toothed head, over a crater.
+- TWISTER: now bigger (pull radius 240 on actors, 340 on objects), damages EVERYONE incl. civilians (11 you / 22 others per 0.4s at the core) and rips buildings (damageCell r66 every 0.16s + rubble chunks + scuff decals). ~190 wind particles spiral in and up around it (streaks, leaves, paper, grit) + dust whipped off the ground + lightning inside the cloud; 14-ring funnel. Throwable props (non-fixed, <=42px, not cars/trees/rocks...) are dragged in by the wind and, on reaching the centre, are flung into the air at random (pr._fly, lifted via pr._z in drawProp), landing with damage. Verified: 10 worm eruptions/40s with 124 debris + 30-point trails; 4 props airborne at once; screenshot shows worm launch, funnel, wind, debris, torn walls.
+- DEATH SUMMARY FIX (user: "when I die... that little summary makes it seem like I still kept the cash"): dying now genuinely loses the run's cash and score (money/score reset to the run-start snapshot — matching the existing 'you lost this run's haul' message; XP/levels/kills kept) and the recap shows a red "YOU WENT DOWN — lost: $X cash, N wood, N stone, N items / you keep your XP and levels" instead of "+$X cash". Verified wood/stone/items path; cash path shares the same code (couldn't set money from the harness).
+
+### 2026-09-20c — Yard buildings are now placeable (no more campfire clutter)
+The research-driven decor that used to be auto-drawn round the campfire (drawYardDecor, now unused and its call removed) is now six real, player-placed pieces (YARD_BUILDINGS): Well (Wells research), Log Pile (Sawmill), Stone Heap (Quarry), Smoke Rack (Smokehouse), Hand-cart (Carts), Sheaves (Crop Rotation). registerYardBuilds() (called from checkTownTier on village entry/day tick and from doResearch) adds each one's craft recipe + build-menu entry as soon as its research is owned; the research flash says "you can now build a X (C to craft, B to place)". Cheap (2-10 wood / stone), cosmetic, non-solid, persisted like other placed props (placedProps), included in TOWN_BUILD_IDS so all the existing prop plumbing applies. Help > Buildings lists them. Verified: 0 -> 6 build items after real doResearch calls, all six placed far from the fire and saved, sprites visible. Existing saves keep their research but must build the pieces.
+Also: dying now truly loses the run's cash (user confirmed 'Lose cash').
+
+### 2026-09-20d — Build menu rows wrap
+drawBuildUI: a category with more pieces than fit across the screen (Home had ~24) used to be clipped ("Market…" cut off). Rows now wrap onto extra rows (continuation rows are labelled "·"), boxes shrink to fit, and the block is re-centred on where the old block sat, kept between the HUD (y>=124) and the hotbar. Click rects are per-piece so wrapped rows work the same.
+
+### 2026-09-20e — CRAFT menu rows wrap (the one in the user's screenshot)
+(The 2026-09-20d change was to the BUILD carousel; the user meant the CRAFT carousel drawn by drawCraftUI.) craftSlots (stable per-recipe slots) now wrap: slots 0..cap-1 stay on the original row, overflow stacks in extra rows ABOVE it (rowPitch = box+34), boxes shrink (down to 34px) so the top row stays under the HUD (y>=106). drawOptScreen labels now shrink (to 8px) then truncate with … to fit under their box. Verified with all materials on the ground: 39 recipes in 3 rows, readable, clear of the HUD (tested in a small 800x450 window; roomier at full size).
+
+### 2026-09-20f — Admin panel wood/stone fix
+"+50 wood"/"+50 stone" were adding to village.stores (a store nothing you craft with reads). Wood, stone and (new) sticks now go into player.res — your pack, the amounts shown in the HUD and used by crafting. Food/favor/research still go to the village stores. Verified: +50 each in player.res.
+
+### 2026-09-20g — Admin: "▶ NEXT COUNTRY" button
+The existing 'start NG+' button (startNewGamePlus: fresh village, brand-new country map, keeps unique weapons/codex, bumps ngPlus) is now labelled "▶ NEXT COUNTRY". The dropdown is relabelled "features as country N" (it only changes which features/wager odds apply to the CURRENT village; it does not start a new one). Verified: click -> ngPlus +1, new country name, uniques kept; clickable repeatedly.
+
+### 2026-09-20h — Hover text in the craft + build menus
+pieceInfo(id,name) + drawPieceTip(): a word-wrapped card by the mouse showing name, plain-English description and extras. Descriptions: hand-written PIECE_DESC for walls/doors/floors/furniture/tools/altar/shrine/smithy/rack; generated from the game's tables for town + yard buildings (their `blurb`) and weapons (kind/damage/reach); generic fallback for path materials and anything new. Craft cards add "Needs: …  Makes: ×n" and click hints; build cards add "You have N ready / craft some first". Hit-tested against craftOpts / buildOptRects. Verified with real mouse hovers on Barracks, Bed (craft) and Bed (build). NB: unknown new pieces get a generic line — add to PIECE_DESC when adding pieces.
+
+### 2026-09-20i — PLANNED (not built): per-country visual style
+User: "change the appearance of the new countries, slightly randomised so the villages and cities look different — we should work on that eventually." Proposal: each country gets a seeded `style` object in genCountry (persist on village.country): terrain/grass tint, tree + flower palette, river colour/width, building wall/roof/stone palettes, weather + light bias, people palettes (clothing/hair/hats/face items from cosmetics pass 2), faction colour bias. Build order: (1) terrain/tree/building tints + weather bias, (2) people styling, (3) city layout variants (block size, road width, density). Open questions for the user: subtle vs dramatic; should the home village change per country or stay recognisable.
+
+### 2026-09-20j — Country style, step 1 BUILT (village + cities)
+User: "subtle but noticeable, and the village should change too". countryStyle() (COUNTRY_STYLES: Verdant Hills, Golden Autumn, Dry Plains, Cool Highlands, Misty Moors, Warm Dusk, Lush Wetlands, Faded Frontier) is derived deterministically from country name + New Game+ cycle (ngPlus>0; country 1 stays the neutral 'Home Country'), nudged ±6° hue / ±0.05 sat so no two match. It is applied as a canvas colour GRADE (ctx.filter hue-rotate/saturate/brightness/contrast/sepia) at the single world blit in draw() — so grass, trees, water, roads, buildings and people all shift, in the village AND the cities — and villagers' shirt colours come from the style's own palette (randPerson). Style name shows under the country name on the campaign map and in the NEXT COUNTRY flash. Debug: window.__noGrade=true disables it. Verified: 6 countries give 6 distinct grades; screenshots of Faded Frontier / Dry Plains (olive) / Lush Wetlands (blue-green). Not measured: filter cost at large window sizes (only applies for countries 2+; if it hurts frame rate, bake the tint into the ground/tree palettes instead). NEXT (planned): people cosmetics per country, terrain/tree/building palette variants baked at source, weather bias, city layout variants.
+
+### 2026-09-20k — Country style, steps 2-5 BUILT
+COUNTRY_STYLES entries now also carry: pine (conifer share of trees, mkTree), heat + clear (weather bias in updateWeather: chance a dry spell is a heatwave / fair-spell length multiplier), lot + size (city density: share of lots with a building, and a building-size bump, genCityChunk), wall [colour, amount] (applyMatStyle blends brick/timber/stone MAT_COL toward the country's material tint and recomputes WALL_TOP/FACE(_D); neutral restores MAT_COL_BASE), and look (people: hats list + chance, extra hair styles, beard/mark/glasses chances, used by rollLook — villagers only). Neutral values reproduce the original game, so country 1 is unchanged. Examples: Dry Plains = sandy walls, sparse conifers, more heatwaves, larger sparser cities, cowboy hats/fezes; Cool Highlands = slate walls, 50% conifers, dense small cities, beanies/hoods/beards; Lush Wetlands = long rains, big-leaf trees. Verified: brick colour differs per country and resets on country 1; city loads in Dry Plains style with no errors; screenshot of sandy-brick city. NOT done: city (civilian/enemy) cosmetics per country (only villagers use rollLook), baking the grade into ground/tree palettes (filter still used), road layout variants.
+
+### 2026-09-20l — Country style: city civilians + street enemies
+(civilians/thugs/bruisers/gunners already got a `_look` via applyLook -> rollLook, so the country's hat list and beard/mark/glasses odds already reached them.) makeActor now also: civilians wear the country's shirt palette outright; thugs/bruisers/gunners ~50% (slightly darkened; faction enemies keep faction colours via tintFaction; cops keep uniforms; roster/AI spec enemies untouched); STYLE_HAIR biases hair colour for ~half of civs/thugs and for villagers (randPerson). Verified with 400 generated actors per style: hat + hair mixes differ per country (e.g. Dry Plains sun/band/fez hats + dark hair; Misty Moors hoods/beanies + grey hair). Skin tones deliberately NOT tied to countries. Still not done: baking the grade into ground/tree palettes, road layout variants.
+
+### 2026-09-20m — Country style: road layouts; grade perf measured
+- STYLE_ROAD: road width in cells (Cool Highlands / Misty Moors 2 = narrow lanes; Dry Plains / Faded Frontier 4 = wide roads; others 3 = the classic 48px) and centre-line paint (colour / faint / none) per country; used by bakeCityGround, genCityChunk (RD) and sidewalkSpot (street furniture lane scales with road width). Country 1 unchanged. Verified: cities generate and play in Dry Plains (wide, faint lines) and Misty Moors (narrow, unmarked) with no errors.
+- PERF: the colour grade costs ~0.7ms/frame at 1280x720 (software-rendered test browser, worst case), so baking it into the ground/tree palettes is NOT needed; window.__noGrade=true disables it if ever wanted.
+- Country style is now COMPLETE for the agreed plan (grade, people, weather, density, materials, roads). Remaining ideas: rival diplomacy, a Gate wall piece.
+
+### 2026-09-20n — PLANNED (brainstorm, not built): country BIOME KITS
+User: "I don't see the tree or rock mix in the newer countries... just different colours of the same trees. Change how rivers and paths are generated (wider rivers with rocks/rapids/waterfalls), lakes (swamps), different flowers, shrubs, insects/animals instead of butterflies, different campfire styles, the travel sign in different places/looks. Brainstorm first." Honest note: the 'pine' share only changes the dark-conifer tint of the SAME tree drawing (_tint); rocks/flowers/water/fauna don't vary. Proposal: each style gets a biome kit — (1) tree species (acacia, dead, birch/maple, palm/mangrove/willow, tall pine), rock types (sandstone, mossy, standing stones, boulders), flower sets, shrubs (heather, cactus, fern, scrub); (2) ambient fauna replacing butterflies (dragonflies, fireflies, crows, lizards, rabbits, frogs, deer, vultures) that flee; (3) campfire styles + travel-marker styles/locations; (4) river variants (wide/rocky/rapids/dry bed/slow) + lake variants (swamp, oasis, tarn, hot spring, pond); (5) waterfalls/cliffs (hardest, top-down). Style->kit: Dry Plains=acacia/cacti/sandstone/dry riverbed/oasis/tumbleweed; Wetlands=swamp/willow/frogs/fireflies; Highlands=pines/boulders/rapids/hares; Autumn=birch+maple/falling leaves/deer; Moors=heather/standing stones/bog/crows; Frontier=bare trees/ruins/vultures; Dusk=hot springs; Verdant=meadows+butterflies. Open questions: gameplay effects (swamp slows, rapids block)? huntable wildlife? realistic vs fantasy? one step at a time (1->2->3) or a bigger first pass? Recommended start: step 1 + campfire + travel sign.
+
+### 2026-09-20o — BIOME KITS BUILT (later countries only; country 1 untouched)
+User approved the brainstorm: rocks/logs/waterfalls treated like walls (top + one face, solid); YES to gameplay effects (deep river needs a bridge); wildlife ambient + killable-but-unrewarded; fantasy touches welcome; my lead on scope.
+- KITS (BIOME_KITS + KIT_EXTRA, keyed by country style name; biomeKit() is null for ngPlus 0): tree SPECIES via mkTree (_sp: birch, maple(colours), acacia, dead, willow, palm, giant glowing mushroom; oak/pine remain), drawTreeSp; ROCK kinds via mkRock (_rk: slab (sandstone, box3D top+face), menhir (tall standing stone, glowing rune, indestructible), crystal (glowing), mossy; drawRockKind); fallen LOGS (prop 'log', solid); FLOWER kinds (_fk: daisy, tulip, aster, sunflower, poppy, bluebell, heather, lavender, lily, orchid); SHRUB kinds (_bk: fern, heather, gorse, cactus (thorny — prickles you, updateThorns), scrub, cattail); glowing props (_glow) light up at night.
+- WILDLIFE (critters[], updateCritters/drawCritters; replaces butterflies unless the kit lists them): rabbit, hare, deer, squirrel, lizard, frog, crow (flies off), vulture (circling + shadow), bee, moth, dragonfly, bat, tumbleweed (rolls with the wind), wisp (glowing marsh light). They wander/graze and flee. hitCritters(): the player can kill them but there is NO reward (no food/loot/XP); after 3 kills a quiet "the wild goes quiet" message.
+- CAMPFIRE styles (_fs): ring, pyre, brazier, hearth, pot (cauldron w/ steam), lantern, spirit (teal witch-fire in a toadstool ring), barrel. TRAVEL SIGN styles (_ss): post, cairn, totem, arch, milestone, banner, hitch, lantern — AND its location moves (SIGN_POS chosen per country from 7 spots clear of water; the campfire->sign trail follows).
+- WATER: river kinds (RIVER_KIND: normal, wide 1.7x muddy, rocky 1.25x w/ white water + boulders in the stream + a downstream current, peat, dry (cracked bed w/ the odd pool), shallow), lake types (pond, oasis w/ palms, tarn, hotspring (heals, steams), swamp (murky, slows, dead trees + toadstools), bog, salt) with per-type palettes and sizes. DEEP WATER BLOCKS movement in kit countries (waterAt > 0.6, DEEP_BLOCK; all actors) unless a BRIDGE: new craftable "Bridge Deck" floor piece (texture 'bridge', drag-lay in build mode; BRIDGES set makes waterAt 0 under it; persisted via village.floors). Hint popup + tip when blocked. WATERFALL (highland rivers): a solid rock ledge across the river with animated falling water + mist (prop 'waterfall').
+- Help gains "The world & biomes". Verified in the browser: every biome loads with 0 errors, ~4ms step; Dry Plains/Wetlands/Highlands screenshots (acacias, cacti, slabs, totem sign + brazier; willows, palms, glowing mushrooms, logs; rapids w/ boulders, menhir, waterfall, milestone); deep river blocked then crossed after laying 36 bridge decks; waterfall blocks; critters spawn per kit and killing gives nothing; country 1 unchanged (0 critters, no species, normal river).
+- NOT done / ideas: fauna that can be foraged, swamp mist particles, ford stones, cliffs/ravines as real terrain, glowing ruins (Frontier), cold/snow effects, drowning?, villager pathing around deep water (they just bump), house/wall material kits per country.
+
+### 2026-09-20p — Stump matching, Snowfields + Endless Desert, showpiece trees
+- STUMPS match their tree: felling stores species+colour per tile (village.treeSp[key]='sp|colour'); stumps restore `_sp/_mc` on reload; fell bursts use species colours (mushroom stumps are no longer brown).
+- SNOWFIELDS biome: white ground bake, snowpines/dead/birch, snowy/ice/menhir rocks, snowdrop/frostbloom, snowbush + snowmen, frozen river & lake (walkable, slippery), hot spring, snowring campfire, snowman sign, penguins/foxes/hares, snowfall, night aurora.
+- ENDLESS DESERT biome: sand ground, sparse saguaro/joshua/dead/acacia, slabs/pillars, bones, agave/cactus/scrub, dry river + oasis, dune campfire, obelisk sign, camels/scorpions/lizards/vultures/tumbleweeds, blowing sand.
+- Snowpine, willow and dead swamp tree redrawn larger (1.2-1.4x) and richer (tiers/icicles/drifts, mossy fronds, gnarled roots/branches).
+
+### 2026-09-20q — Three more biomes + snow pine redesign + critter sorting
+- STEAMING JUNGLE: deep-green ground, tall `jungle` giants (buttress roots, layered crown, hanging vines, blooms) + palms + toadstools, hibiscus/orchid/lily, ferns, wide river, swamp lakes; parrots, frogs, dragonflies, moths; pot campfire, totem sign.
+- ASHLANDS: charcoal ground with ember flecks, burnt `charred` trees (glowing cracks), obsidian/slab/pillar rocks, emberbloom flowers, LAVA river + lava lakes (deep = blocked, needs bridges; smoke/sparks), rising embers + falling ash; bats, crows, salamanders, vultures; brazier + obelisk.
+- BLOSSOM GROVE: `sakura` trees (pink clouds, falling petals), maple/birch/willow, azalea shrubs, blossom/lavender/tulip; deer, rabbits, butterflies, bees; lantern campfire, arch sign; drifting petals.
+- Fixed: willow, palm and joshua branches in drawTreeSp were empty (duplicate headers) — they draw again. Snow pines redrawn (stacked snow-capped tiers, per-tree variation, no ground ring). Ground critters are y-sorted so they walk behind trees.
+- Ideas left: cliffs/ravines, swamp mist, lava damage/burning, wall-material kits, foraged fauna.
+
+### 2026-09-20r — Bamboo Vale + mist
+- BAMBOO VALE (14th country style): segmented swaying `bamboo` clumps with leaf tufts, willow/sakura mix, shallow river, pond + swamp lakes, lantern campfire, arch sign; pandas, cranes, frogs, dragonflies.
+- MIST: soft radial mist puffs (`soft` particles, no drag) drift low over Bamboo Vale, Lush Wetlands and Misty Moors.
+
+### 2026-09-20s — Cliffs, chasms, scorching lava
+- `cliff` prop (solid like the waterfall/walls: top + one face, strata, cracks): ridges of 3-5 segments with a pass through, per-biome palette (snow-capped, sandstone, ash w/ lava seams, grey w/ grass tufts). `_cv:1` = chasm (dark pit, near lip + rim stones, ash chasms glow). Odds per kit in `KIT_TERRAIN` (Highlands, Frontier, Ashlands, Desert, Snowfields, Bamboo, Moors, Dry Plains). Kept 340px clear of the start.
+- LAVA now scorches the player wading in (6 hp / 0.7s, bounces you back, never below 1 hp in the village); deep lava still needs bridges. Tip + Help entry added.
+
+### 2026-09-20t — Ashlands glow at night
+- (cracks are thin, angular and forking — `crackData`/`strokeCrack`.) Lava rivers/pools cast orange light at night (soft blobs + a bright molten core down the river); charred trees glow red further (r 84); glowing lava cracks (hash-cell fissures, `ashCracks`/`drawAshCracks`) are decals on the ash soil by day and light up (plus a soft orange pool each) at night.
+- 2026-09-20u: crack decals now draw under worn paths/holes/actors (skipped on trails, buildings, water); at night they glow as soft orange light along the fractures instead of lines drawn over everything.
+- 2026-09-20v: lava glow no longer fades near the player — their silhouette is punched out of the glow (clip) instead. Ashlands particles: sparks + ash puffs spit from soil cracks, charred trees breathe embers, lava bubbles rise and pop into sparks (`nd` no-drag particles, `pop` bursts; kept bright in the night pass). Fireflies now only in Verdant Hills / Golden Autumn / Warm Dusk / Lush Wetlands / Steaming Jungle / Blossom Grove / Bamboo Vale (`FIREFLY_BIOMES`) — not snow, desert, ash, highlands, moors, plains, frontier.
+
+### 2026-09-20w — Biome-themed cities (city work, part 1)
+- Cities in later countries take on the country's biome (`CITY_GROUNDS`/`cityGroundFor`, `cityGroundDress`): snow-covered blocks with kerb drifts + slush tracks (Snowfields), dune-rippled sand with sand blown across the streets (Desert), charcoal ground with glowing lava cracks (Ashlands), moss/creepers (Jungle), petals (Blossom), leaf litter (Autumn), dust (Plains/Frontier), moss (Bamboo/Hills/Wetlands/Moors), bare stone (Highlands). Road surface colour per country.
+- Empty lots + pavements get the country's own trees, shrubs, rocks and snowmen (`cityKitItem`); roofs are snow-capped with icicles / sand-drifted / soot-black / mossy / petal-strewn (`drawRoofBiome`); the country's weather now falls in cities too (`kitAtmosphere`: snow, petals, blown sand, ash, sparks, mist).
+- Plan for the rest (user picked all four): districts & layout, building/interior variety, city life & atmosphere.
+
+### 2026-09-20x — City districts (city work, part 2)
+- Six seeded districts per city (`cityDistrictAt`, Voronoi over the 7x7 chunk grid; centre is always Downtown): Downtown (dense big buildings, offices/diners/bars/gyms, extra lamps, benches), Market Square (paved cobble plaza, fountain or statue, rows of striped-awning stalls, crowd), The Slums (small cramped buildings, litter, fire barrels + dumpsters, few lamps), Industrial Yards (big warehouses/hideouts, shipping containers, crates/barrels, oil + hazard chevrons), City Park (lawn, gravel paths, fountain, benches, trees, flowers), Old Town (cobbles, statues, benches, terracotta roofs).
+- New solid `landmark` prop (`_lm`: fountain [animated water; ice/dry/lava variants per biome], statue, stall, bench, container). District place preferences in `pickCityPlace`, district roof tints, per-district ground dressing (`districtGroundDress`), and a district name banner under the city name when you cross a border (`updateDistrictTag`). Works in every country and stacks with the biome city dressing.
+
+### 2026-09-20y — More districts + unique landmark buildings (city work, part 3)
+- 10 districts per city now: + Civic Quarter, Fairground, City Zoo, The Suburbs (`_distBuild`: 10 seeds, every chunk ranked by distance from its district's heart; rank 0/1/2 host the unique buildings via `UNIQUE_BY`/`uniqueAt`).
+- Unique buildings (`UNIQUE_PLACES`, always get their lot; bigger footprints, rooftop emblems via `drawRoofUnique`): Police Station (Beat Cops + Patrol Officers, flashing red/blue lights, pistol loot), Fire Station (Fire Marshals + a parked fire engine landmark), City Hospital (beds, healing loot), The Big Top (striped tent roof, clowns + a Ringmaster), St. Marrow's Church, City Museum, First City Bank (guards, safes, cash).
+- Fairground plazas: ferris wheel or carousel (animated landmarks), stalls, crowds. City Zoo: fenced habitat pens (savanna / arctic / forest / desert ground) with wandering zoo animals (lion, elephant, giraffe, zebra + existing critters) that can be hit but give nothing (`updateZooCritters`, `hitCritters` now works in cities). Suburbs: small houses, lawns, trees, cars.
+- New enemy specs: beatcop, copgunner, ringmaster. New kinds added to HOSTILE_KINDS (police/firestation/circus/bank).
+
+### 2026-09-20z — Drivable themed vehicles
+- `mkVehicle(x,y,vk)`: police cruiser, ambulance, fire engine are real `car` props (`_vk`) — commandeer + drive like any car, with their own colours/markings/flashing lights (`VEH_COLORS`, `drawVehicleDeco`). The fire engine is parked inside the Fire Station (80px, 220 hp); police stations get 2 cruisers at the kerb, hospitals an ambulance, civic-district streets the odd one.
+- Driving the fire engine: hold attack (mouse / J) to blast the hose (`WEAPONS.watergun` bullets, 2 per 0.035s, forward — or out the back while reversing).
+- Districts/unique buildings/zoo are not gated on NG+, so the starting country's city gets them too (only the biome ground/roof dressing needs a later country).
+
+### 2026-09-21 — Bigger, destructible carnival rides
+- Ferris wheel ~9 player-heights across (radius 112, 12 swinging gondolas, rim lights); carousel a full-size merry-go-round (124x64 footprint, 8 bobbing horses, striped canopy). Only ONE ferris wheel and ONE carousel per city (fairground ranks 1 and 2); other fairground blocks are stall rows.
+- Rides are destructible (320 / 240 hp): the carousel detonates in a big blast + a ring of secondary explosions + fire; the ferris wheel's base explodes and the wheel breaks loose and ROLLS (`rollingWheels`) — tearing through walls, props and people for ~4s — before exploding itself. `destroyRide`, `updateRollingWheels`, `drawRollingWheel`.
+- Defensive guards on two HUD weapon-name lookups (WEAPONS[id] undefined would throw).
+
+### 2026-09-21b — Building + interior variety (city work, part 4)
+- 16 new hand-authored places (`EXTRA_PLACES`, mixed into `pickCityPlace` and favoured by the matching districts): bakery, public library, nightclub, pharmacy, laundromat, arcade hall, pawn shop, jazz bar, hotel lobby, school, cinema, aquarium shop, barber, restaurant, garage (with a car inside), gallery.
+- New furniture prop `furn` (`FURN`/`mkFurn`, placeable via the same fixture lists): bookcase, piano, stage (walkable, red curtain), display case, washing machine, stove, jukebox (animated), desk, fish tank (animated fish), pew, cell bars. Generic buildings draw from the wider pool too.
+- Rugs on some interior floors (spec `rug`, random for plain buildings).
+- Rooftops: shops tint + name their roofs (`drawRoofKind`, `KIND_ROOF`), and every roof gets a few AC units (spinning fan), skylights, antennas or satellite dishes (`drawRoofDetails`).
+
+### 2026-09-21c — City life & atmosphere (city work, part 5)
+- District folk (`DIST_JOBS`/`jobFor`): suits (fast commuters), tourists (snap photos: flash + *click*), buskers (drifting ♪ notes), parkgoers, plus homeless in the slums, joggers/dog-walkers in parks & suburbs, workers in industrial yards; market stalls get their own vendors.
+- Street vendors: a food cart with an umbrella (landmark `cart`) + vendor in downtown/old town/civic/suburbs; walk up and press E to buy a hot meal — $5 heals 30 hp (works on stall vendors too). They bark their wares.
+- Pigeons peck about plazas and pavements and burst into the air (`coo!`) when you get close.
+- Neon-sign shops spill coloured light onto the street at night.
+- Fireworks every ~16-34s over the fairground / park / downtown / market when you're there (rocket trail, coloured burst, flash).
+- Beat cops walk the Civic Quarter's streets (calm until you're wanted).
+
+### 2026-09-21d — Country-gated districts, buildings and places
+Cities grow new neighbourhoods as you progress (`DISTRICT_TIER`, `cityCountryNo`; districts are seeded from the worldSeed + country number, so every country's city is laid out fresh):
+- Country 1: Downtown, Market, Slums, Industrial, Park, Suburbs — landmarks: First City Bank, City Hall, Marrow Foundry.
+- Country 2: + Civic Quarter (Police, Fire Station, Hospital), Old Town (Church, Museum).
+- Country 3: + Fairground (Big Top, ferris wheel, carousel), City Zoo.
+- Country 4: + The Docks (Lighthouse, Customs House, cranes, containers), University Campus (University, Observatory).
+- Country 5: + The Strip (Lucky Seven Casino, Wedding Chapel, neon everywhere), Sports Quarter (Marrow Arena with a boxing ring, car parks).
+- Country 6+: + Old Cemetery (graves, the Old Crypt), Science Quarter (Research Lab, radio dishes).
+- Ordinary shops are tiered too (`PLACE_MIN`): e.g. cinema/nightclub/arcade/gallery from country 3, sushi bar/tattoo parlour from 4, pinball hall 5, day spa 6.
+- New pieces: boxing-ring furniture, crane / grave / radio-dish landmarks, new rooftop emblems (lighthouse beam, casino 777, stadium pitch, observatory dome, crypt, lab atom, city hall columns, foundry flame).
+
+### 2026-09-21e — Two more districts per country (tiers 1-6), up to 20 neighbourhoods
+New districts (each with its own ground, props, plaza content, jobs, roof emblem and a unique building):
+- C1: Central Station Yards (Central Station, rails + locomotives), The Shopping Centre (Marrow Mall, car parks).
+- C2: Night Bazaar (Jade Pagoda, ring of lantern-lit stalls), Financial District (Stock Exchange, tower helipads, +4 building size).
+- C3: The Boardwalk (Sea Life Aquarium, beach umbrellas + ice-cream cart), Film Studios (Marrow Pictures Soundstage, searchlights).
+- C4: The Aerodrome (Hangar with a plane, apron + runway), Army Barracks (Marrow Garrison — Garrison Guards + Drill Sergeant, new enemies).
+- C5: Botanical Gardens (Crystal Greenhouse, hedges, fountain), Temple Hill (Hilltop Monastery, pagoda + lanterns).
+- C6: Ancient Ruins (Dig Site Camp, columns), The Spaceport (Mission Control, launch pad + rocket).
+- District seeding now uses up to 20 seeds; the newest two tiers get priority, the rest fill in at random (so some older districts drop out at higher countries, and small districts may lose their unique building).
+- New landmarks: train, plane, rocket, pagoda, hedge, column, umbrella.
+
+### 2026-09-21f — Launchable spaceport rockets
+- Every ~55-110s a spaceport rocket lifts off (`updateRockets`, `startRocketFlight`): rises on a flame + smoke trail, disappears for 6-10s, then a warning ("INCOMING", pulsing red 300px impact zone, screech) and a 1.3s descent. Target: random spot on the map, or 25% straight at the player.
+- Impact (`rocketImpact`): 300-radius blast, walls/props/people wrecked, crater decals, ring of secondary explosions, ~9 lingering fires, then ~110 pieces of burning debris raining down for ~7s over a 460px area (each a small blast + damage + fire). The pad shows a scorched, empty circle and a fresh rocket rolls out ~100s later.
+- Admin panel → "city events": 🚀 rocket → random spot / 🚀 rocket → ME.
+
+### 2026-09-21g — Rocket: double size, board it, hit-to-launch; trains
+- Rocket is 2x (344px tall, launch-pad rings 2x) with a visible boarding hatch. Press E beside it to CLIMB ABOARD (5s countdown): you're hidden + invulnerable for the whole flight, the camera follows you up, then across the map to the landing spot, and you walk out of the crater unhurt (12s of invulnerability) while everything around is flattened (`boardRocket`, `rocketRideStep`).
+- Any attack (or a nearby explosion) on a waiting rocket now ignites it: 2.6s countdown ("3-2-1", flame + shake) then liftoff (`ignite` phase).
+- Rail yards have two tracks now (parked locomotives on one) and a train thunders through on the other every ~22-45s: horn, screen shake, flattens props and hits anyone on the tracks (`updateCityTrains`, `trainRuns`).
+
+### 2026-09-21h — Light flicker fix + runaway trains
+- Light flicker no longer has per-frame random blackouts/surges (they read as the screen shaking); it's now a slow soft sag (`flicker` lights and lamppost heads).
+- Hit a parked locomotive and it takes off — randomly forwards or backwards, accelerating to ~700px/s, tearing through walls, props and people (heavy damage + knockback) for ~3s, then explodes into a burning train wreck (charred hulk, fires that burn ~30s, smoke; `igniteTrain`, `trainWreckBlast`, `runawayTrains`, `trainWrecks`).
+
+### 2026-09-21i — Zoo breakout
+- Every ~110-200s (once you're within ~2600px of a pen) a pen's fence blows apart and its animals escape (`zooBreakout`, `updateZooBreakout`): "ZOO BREAKOUT" alarm + explosions at the fence corners.
+- Escapees (`c.esc`, `BEAST` table, `beastStep`): lions/foxes/scorpions/pandas hunt the nearest person (player, civilians, cops) and bite; the elephant tramples in a wandering line through walls, props and people; camels/zebras/giraffes/deer stampede and barge into anyone in the way; penguins etc. are harmless. They take several melee hits or bullets to kill (`hitCritters` / `updateBullets` handle `esc`), still with no reward.
+- Admin panel → city events → 🦁 zoo breakout (nearest pen).
+
+### 2026-09-21j — Police helicopters + ferris wheel ride
+- Police helicopters (`updateHelicopters`, `drawHelicopters`, `helis`): at 3★ (wanted 60+) one chopper flies in, circles the player and shines a searchlight; at 4★ it opens fire in bursts; at 5★ there are two and they rope down SWAT every ~16s. They leave once heat drops. Shoot them (bullets), blow them up (explosions) — they spiral down and explode (+$150, fires). Admin panel → city events: 🚁 police chopper (3★) / 🚁 max heat (5★).
+- Ferris wheel ride: press E at the base to climb into the nearest gondola and ride one full turn (~15s, wheel speeds up, camera rides up with you; you're hidden + invulnerable; you step off at the bottom). If the wheel is wrecked mid-ride you drop out unharmed (`boardFerris`, `ferrisRideStep`, `FERRIS_PADS`).
+
+### 2026-09-21k — Crash sweep + frame-rate check (city)
+- Swept all 49 chunks of the city in every country 1-6 (every district + unique building): 0 script errors, 0 draw errors, 0 console errors.
+- Frame rate: draw is cheap (~2-3ms) in every district; the cost was the SIMULATION — every person in the whole explored city was simulated every frame (step ~13ms with ~180 people, frame ~25ms). Fixed: city folk more than 1500px from the player who aren't hunting/targets/responders/soldiers now wait frozen until you come near (`updateEnemy` cull in step). Same city with 239 people: step 5.0ms, frame 8.3ms.
+
+### 2026-09-21l — Heists
+- Any safe in a city can be cracked: stand next to it and press E, then stay put ~10s (`startHeist`, `updateHeist`, progress bar over the safe, sparks). Leaving the safe drains the progress (bail after a few seconds). The alarm rings (red/blue flashing light), heat jumps to 3★ so choppers + cops come.
+- Payout by place kind (`SAFE_LOOT`): bank $700, exchange $600, casino $550, customs $350, museum $300, lab $260, hotel $220, office $200, other $150. Cracked safes show an open door with cash stacks.
+- CLEAN GETAWAY: escape the heat (wanted back to 0, no chopper overhead) after a heist for a 40% bonus on everything you cracked.
+- 2026-09-21m: police chopper drawn 2x (hit radius/bullet origin/shadow scaled); searchlight cone fades to fully transparent at the ground and the ground spot is far fainter.
+- 2026-09-21n: three new strong biomes — Cursed Wasteland (purple blight soil, green slime rivers/pools, twisted slime-beaded trees, slimelings, drifting spores), Haunted Marsh (murky ground, ghost trees with hanging moss, gravestones, thick fog, wisps, murk river), Crystal Caverns (dark blue stone, crystal-shard trees, stalagmites, glowcaps, glowing crystal pools, cyan glints). Each has its own ground, city ground/roofs, flora, water, night glow and weather. New countries now DEAL their biome from a per-run shuffled deck (no repeats until all 17 are seen; country 1 stays the plain forest; older saves keep their biome). UNTESTED IN-BROWSER (127.0.0.1 navigation was denied) — parse-checked only.
+- 2026-09-21o: Crystal Caverns rework per feedback — rocks are now big 'geode' clusters (stone base, 7 softly glowing crystals, 1.55x); trees are crystal bonsai (gnarled dark trunk on a stone mound, canopy of crystal petals in 3 clumps). Also fixed: new rock kinds (geode/stalag/tomb/blightstone) weren't in the drawProp whitelist so they fell back to plain boulders. Deck verified: 17 countries in a row, no repeats.
+- 2026-09-21p: Crystal Caverns rocks redrawn as rounded shaded boulders with crystals sprouting from the top at varied angles (no more rectangular base).
+- IDEA (user, 2026-09-21, not started): give the country/world map more detail than dots and lines — show land beneath, rivers, oceans/coast, biome-tinted regions, so countries read as places.
+- 2026-09-21q: GIANT SLIME raid boss — some cities (deterministic per city; ~34% in country 1 from tier 2, ~48% later; never the capital/rival/revolt cities) are held by a Giant Slime instead of a faction + hold-the-square. Moves: Slam (shadow, shockwave), Spit (acid globs -> damaging pools), Split (slimelings), Roll (charge that flattens walls/props), Absorb (eats slimelings to heal), phases at 66%/33%; core exposed (+60% damage) after slam/roll; untouchable mid-air/roar. Boss HP bar with phase ticks; kill = +1 SLIME DNA (village.dna.slime; +2 at tier 3+) — DNA is stored but mutations not built yet. Lumpy melting scary look (bloodshot slit eyes, toothy maw, drool, spines, swallowed skull). Admin: 'Giant Slime boss' button. Also: Jade Pagoda (temple district) is now 3x size with a health bar (700 hp), cracks/smoke as it's damaged, collapses in a burning blast; mkLandmark exported on debug hook. IDEA logged: more detailed world map.
+- 2026-09-21r: MUTATION LAB. Buildable 'Mutation Lab' (cult OR holding any DNA; craft/build menu; E beside it opens the lab, reusing the #smithy overlay). Spend 1 slime DNA to mutate a villager: RANDOM look (Slime Arm / Slimed Face / Gel Torso / Glowing Eyes / Slime Crest / Goo Feet, 4 slime colours) + RANDOM gift (Gelatinous Might +35% dmg, Jelly Hide +50% hp when mustered, Regenerating Goo, Toxic Touch slows enemies, Slime Slide +25% speed, Sticky Hands +30% work); max 3 per villager; live animated close-up portrait in the lab (drawMutPortrait — reusable for the upcoming villager conversations); mutations drawn on the in-world villagers (drawMutOverlays); stored on village.villagers[].mut, DNA carries into New Game+. Admin: '+3 slime DNA + lab'. Boss: health bar now floats over its head (with phase ticks) even for admin-spawned bosses; explosions do 3x damage to it. Debug hook exports mkProp/openMutLab/mutateVillager.
+- 2026-09-21s: FIVE MORE BIOME BOSSES on a shared fight engine (BK table): Magma Golem (Ashlands; eruptions, lava spit, boulder charge, ember imps), Frost Colossus (Snowfields; ice spikes, icicle rings, slowing pools, frost sprites), Bog Lich (Haunted Marsh; blinks next to you, grasping hands that root, soul ring, skeleton minions), Crystal Titan (Crystal Caverns; shard rings, crystal spikes, shardlings), Thorn Horror (Steaming Jungle; vine lashes, poison spit, sprouts). Country 1 = Giant Slime; other biomes without their own boss draw a random kind per city. New shared moves: 'strike' (telegraphed hits around/on you, kind-specific effect) and 'ring' (radial shot ring); Bog Lich 'blink'. Each boss drops its own DNA (slime/magma/frost/bone/crystal/thorn). Mutation Lab is now multi-DNA: each type has its own palette, look names and 6 gifts (36 total incl. new effects: ignite, frostbite, guard, thorns, lifesteal); overlays per type (flame crests, ice crowns, antlers, bone ribs, crystal crests, flower crests...). Admin: boss-kind select + spawn, '+3 every DNA'. Verified: all 6 bosses draw, every move x every kind runs with 0 errors, lab UI ok.
+- 2026-09-21t: boss redesign after 'too basic/friendly, all slimes': Magma Golem -> MAGMA DRAGON (bat wings with lava veins, horns, fangs, clawed legs, spiked tail, fire in jaws), Frost Colossus -> FROST GIANT (fur boots, horned helm, ice beard, tusks, huge spiked tree-trunk club that raises on attacks), Bog Lich (much bigger; skull staff with green fire, orbiting skulls, rune circle, ribcage), Crystal Titan -> CRYSTAL SCORPION (8 legs, pincers that open, arching tail with glowing stinger, cluster of eyes, crystal spines), Thorn Horror -> THORNWOOD ANCIENT (colossal treant: root legs, hollow glowing face w/ splinter teeth, thorned branch arms + vine whip, canopy crown). All drawn 1.35-1.4x with larger hitboxes (r 32-46); 0 errors across every move.
+- 2026-09-21u: Magma Dragon rebuilt as a side-on four-legged dragon (ref: charcoal dragon with gold belly + purple wings): near/far wings that flap (bigger when airborne/roaring), four legs on a real walk cycle (feet swing/lift only while it travels, planted when it stands), swaying tail, neck plates, horned head with hinged jaw, teeth, smoking nostrils, fire breath cone on spit/strike/ring/roar; faces the player (mirrors). Frost Giant legs now step and bob; Crystal Scorpion legs step from real distance travelled. Bosses track a._wk/_mv (distance-driven walk phase).
+- 2026-09-21v: bosses now have THREE views chosen by where you stand (side E/W mirrored, front when you're below, back when above; hysteresis in bossView): Magma Dragon (side/front w/ spread wings + back w/ spined back, wings and tail toward you), Frost Giant (side striding w/ club held out front, front, back w/ fur cloak + club on shoulder), Bog Lich (front/side + new back w/ glowing sigil), Crystal Scorpion (side, front, back w/ tail rising), Thornwood Ancient (front/side + back w/ bark back and knot glow). All walk (feet lift by distance travelled). Added fine surface textures (_texEllipse: scales, fur, stone facets, bark) on torsos/heads. Side club now held forward instead of covering the torso. 0 errors across every boss x view x state.
+- 2026-09-21w: Bog Lich and Thornwood Ancient got real SIDE views (lich: hunched profile, skull face, ribcage rent, spine, antlers, streaming cape, skull staff, detached casting hand w/ orb, orbiting skulls; ancient: striding trunk legs w/ root toes, hunched thorny trunk, hollow-eyed profile face w/ brow branch + splintered mouth, thorned reaching arm + vine whip, swept canopy). Every boss now has side/front/back (left/right mirrored). New per-boss AURA (drawn under the body): dragon heat glow + embers, giant snow swirl, lich wisps, scorpion orbiting shards + light shafts, ancient falling leaves. 0 errors across all bosses x views x moves.
+- 2026-09-21x: RANDOM CHAMPION BOSSES. 12 champions (Necromancer, Zombie Brute, Vampire Lord, Plague Doctor, Storm Witch, Shadow Master, Ogre Chieftain, Ringmaster, Butcher, Time Weaver, Wraith Queen, Arsonist), dealt per run from a shuffled deck (village.champUsed). Each country: two tier-2/3 cities (not capital/rival) are held by a champion (ensureChampions, node.champion) — marked on the map with a purple ring, ☠ and the champion's name so you can pick a path. Beating one grants the matching existing PLAYER_TRAIT (necromancer/zombie/vampire/plaguedoctor/stormcaller/ninja/ogre/hypnotist/cannibal/timebender/ghost/pyromaniac) for the WHOLE playthrough (village.powers, re-applied by applyPlayerPerks, carried into New Game+; duplicate = +3 legacy). Champions ride the biome-boss fight engine (slam/strike/ring/spit/split/roll/absorb/blink, phases, minions incl. new zombie/bat/rat/shadow/goblin/clown) but are drawn as big actors (real front/side/back walking) with signature trimmings; ~60% of a biome boss's HP. Admin boss dropdown lists them. 0 errors across all 12 x all moves; necromancer kill verified granting + applying its power (HUD shows it).
+- 2026-09-21y: skeleton thralls (Necromancer perk) now drawn as real skeletons: see-through ribcage (no torso/shirt, no dark backing), spine, sternum/clavicles (front), shoulder blades (back), profile ribs (side), pelvis, bone arms/legs with joints, bare skull with big hollow eye sockets (faint green glint), nose hole and teeth; s._skel flag set in raiseSkeleton. Exports raiseSkeleton on the debug hook.
+- 2026-09-21z: zombies (Zombie perk Outbreak converts, wager zombies, player's own Zombie perk look) now KEEP their original clothes: shirt/pants drained + darkened (mutedColor), skin blended toward sickly green (convertZombie), plus per-zombie dirt smudges, torn ragged hem, blood splashes/streaks and red hands (drawZombieGrime); no more universal green shirt. Skeletons keep hats/glasses/beards: raiseSkeleton copies the victim's _look (random look for Raise Dead), drawActorLook 'face' layer is drawn again for skeletons.
+- 2026-09-22a: perk info boxes (#traithud) now show recharge: each active perk's box fills left-to-right (purple->gold) as its cooldown recharges, with a live countdown (e.g. 21.0s) top-right; when ready the box gets a gold outline, a pulsing gold fill and 'READY' (updatePerkFill, per frame). Passive perks unchanged.
+- 2026-09-22b: berry bushes in Snowfields now frost-bitten (blue-green leaves, snow caps on every clump, snow drifted at the foot, duller berries). Marsh gets passive slimelings. 10 new fantasy critters wander the later biomes: pixie (glowing air fairy), jackalope, raptor, wyvern, unicorn, frostbun, yeti, griffin, crystalbug, phoenix chick (per-biome fauna lists). Zoos in later countries mix in the local fantasy beasts (ZOO_FANTASY) and breakouts know them (BEAST): raptors sprint, yetis/griffins maul, wyverns breathe fire (FWOOSH! fire hazards). Kennels in later countries have ~45% fantasy pets (FANTASY_KENNEL): raptor (fast, hostile), drakelet (breathes fire), yeti, unicorn foal, slimeling.
+- 2026-09-22c: Jade Pagoda shadow fixed — it was drawn 45px below the base as a detached blob; now a tight contact shadow hugging the base with a soft wider penumbra.
+- 2026-09-22d: Jade Pagoda gets a long angled tiered shadow (falls to the right) AND much more detail: stone platform with steps, balustrade, moss; plinth with block lines, studded red double doors under a gilded plaque, foo-dog guardians, red pillars; each storey has red corner pillars, lattice windows with a warm glow, curved tiled roofs with tile lines/ridges, upturned eaves with gold tips, pulsing hanging lanterns and swaying bells; gilded sōrin ring stack + glowing jewel finial; smoking incense burner. Also detail passes on other large landmarks: locomotive (headlamp glow, brass boiler bands, rivets, lit cab window, number plate, wheels + rod), prop plane (cockpit glass, panel lines, engine cowling, wheels, roundels), rocket (panel seams/rivets, checker band, framed portholes, hazard band, flag, gantry platforms and cables), crane (rust streaks, cab window, hazard stripes, cables, beacon), radio dish (bolted base, struts, mesh rings, beacon), fire truck (light glow, hose reel, door shine, stripes).
+- 2026-09-22e: FIRE TRUCK rebuilt (98x36): red cab roof + one big raked windscreen wrapping the whole nose with chrome bumper/grille/wing mirrors, siren light bar across the cab roof (flashing red/blue with glow), ladder racked along the roof (rails, rungs, brackets, yellow tip, turntable), roller-shutter equipment lockers, hazard-chevron tail, rear cannon. It was already drivable (E, hose on attack) but the boarding reach was 50px from its centre so an 84px truck was un-enterable from the ends — reach now scales with vehicle size; hp 220 -> 520, takes 60% less damage, rams 1.5x harder. FERRIS WHEEL: chasing rim bulbs, bulbs up the legs + X bracing, bulbs along every spoke, gondola roofs/doors/windows, animated gold hub, platform, ticket booth, queue rail, sign. CAROUSEL: scalloped canopy edge with gold trim, panel shading, gilded centre pole + mirror panels, painted scenes under the canopy, candy-striped horse poles, manes/tails/saddles/eyes, platform boards, chasing platform bulbs. SLEEPING: the head in a bed is drawn at the standing sprite's true size (hair, closed eyes) instead of a tiny ellipse, and there's a body-shaped bump under the blanket (shoulders, torso, two feet, shadow, highlight, chest fold). PATROLS: village guards patrol at a chill 92 walk (still sprint when they spot a threat); street thugs / beat cops / gang guards patrolling calmly move at half speed; anything stuck 7s gets 1.6s of noclip then is nudged onto open ground (trapTick).
+- 2026-09-22f: fire truck made far tougher after it kept blowing up: hp 520 -> 1800, takes 88% less damage (was 60%), and barely loses speed when it rams things (its big 98px footprint clips walls and props constantly, which was grinding the old hp down within seconds).
+- 2026-09-22g: vehicle collision physics: head-on hits bounce the car back (speed sign flips, sparks, camera shake), people bowled along the heading with knockback scaled by speed. 2026-09-22h: speed-scaled SMASH — a fast head-on hit does damage ~700*speedFrac^3 to walls/props so a flat-out run bursts through (only bounces if the obstacle survives). KENNEL ANIMALS now real creatures: species HP, damaged by melee/bullets/explosions, knockback, die (hostile ones no longer time out for 40s+). Logic verified by syntax check only; not played live.
+- 2026-09-22i: guard patrol routes/zones only drawn while placing one or while talking to the owning guard; villager name tags hidden until you've talked to them (village record .met), quest targets still labelled. Unverified live.
+- 2026-09-22j: villager name tags also appear when a villager is hurt or appears in gossip (both speaker and subject). Unverified live.
+- 2026-09-22k: guards report to the campfire each new day (warm up ~1.6s) before starting their beat; new progress-based stuck detector (under 30px progress in 3s while trying to move -> 2.2s noclip straight at target) catches corner-jitter that the old raw-movement check missed; squadAvoid skipped while noclipping. Unverified live.
