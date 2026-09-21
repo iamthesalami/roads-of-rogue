@@ -96,6 +96,15 @@
      the original top:150 here undershot that by 16px and silently overlapped it the whole time,
      never actually caught because the verification screenshot didn't have any perk active with
      enough content to visibly collide). top:180 clears the minimap's real bottom edge with margin. */
+  body.editing #traithud{display:none !important}
+  body.invillage #traithud{top:216px;max-width:190px;padding:4px 6px}
+  body.invillage #traithud .tline b, body.invillage #traithud .tline .tkey{white-space:nowrap}
+  body.invillage #traithud .tline .tin{display:flex;align-items:center;gap:4px;white-space:nowrap}       /* icon, name, [key] and READY all on one row */
+  body.invillage #traithud .tline .tin br{display:none}
+  body.invillage #traithud .tline .tcd{float:none;order:9;margin-left:auto;padding-left:6px}
+  body.invillage #traithud{max-width:230px}                    /* in the village: sit below the sky clock, and shrink to a slim name-only bar */
+  body.invillage #traithud .tdesc, body.invillage #traithud .ttitle{display:none}
+  body.invillage #traithud .tline{margin-top:3px;padding:1px 4px}
   #traithud{position:fixed;right:12px;top:180px;max-width:200px;background:rgba(18,14,22,.78);
     border:1px solid #4a3a5c;border-radius:4px;padding:5px 8px;font-size:11px;color:#e6d6f5;
     text-shadow:1px 1px 0 #000;letter-spacing:.3px;pointer-events:none;display:none;line-height:1.5;z-index:8}
@@ -1009,13 +1018,19 @@ const TOWN_TIERS = [
   { name: 'Town',    cap: 60, need: { pop: 36, housed: 24, build: { altar: 1, weaponrack: 1, shrine: 6, blacksmith: 1, temple: 1, market: 1 } } },
 ];
 const SHRINE_REACH = 260, SHRINE_CAP = 3, TOWN_BUILD_CAP = 3;
+// pieces that only work inside a building the player has built (a roofed room); the market stall is the outdoor one
+const TOWN_INDOOR = new Set(['granary', 'barracks', 'scriptorium', 'temple']);
+function propIndoors(pp){ return !!(village && (village.roofs || []).some(r => inRoom(r, pp.x, pp.y))); }
+const TOWN_MAX = { granary: 5, barracks: 5 };                                  // these two are meant to be built in numbers (a granary full of grain stores, a barracks full of bunks)
+const townCap = id => TOWN_MAX[id] || TOWN_BUILD_CAP;
 const TOWN_BUILDINGS = [
-  { id: 'market',      name: 'Market Stall', glyph: '⌂', w: 2, h: 1, cost: { wood: 6, stone: 4 },  blurb: '+8 cash a day' },
-  { id: 'scriptorium', name: 'Scriptorium',  glyph: '✎', w: 2, h: 1, cost: { wood: 8, stone: 6 },  blurb: '+4 research a day' },
-  { id: 'temple',      name: 'Temple',       glyph: '⛪', w: 2, h: 1, cost: { wood: 6, stone: 16 }, blurb: '+3 favor a day' },
-  { id: 'granary',     name: 'Granary',      glyph: '▣', w: 1, h: 1, cost: { wood: 8, stone: 2 },  blurb: '+5 food a day' },
-  { id: 'barracks',    name: 'Barracks',     glyph: '⚔', w: 2, h: 1, cost: { wood: 10, stone: 8 }, blurb: '+2 to the muster squad' },
-  { id: 'watchtower',  name: 'Watchtower',   glyph: '♜', w: 1, h: 1, cost: { wood: 12, stone: 6 }, blurb: 'guards within sight hit 25% harder' },
+  { id: 'market',      name: 'Market Stall', glyph: '⌂', w: 3, h: 2, cost: { wood: 8, stone: 4 },  blurb: '+8 cash a day · sets up OUTDOORS — put several together to make a marketplace' },
+  { id: 'scriptorium', name: 'Scribe\'s Desk', glyph: '✎', w: 2, h: 1, cost: { wood: 8, stone: 6 }, blurb: '+4 research a day · place inside a building you\'ve built' },
+  { id: 'temple',      name: 'Temple Font',  glyph: '⛪', w: 2, h: 2, cost: { wood: 6, stone: 16 }, blurb: '+3 favor a day · place inside a building you\'ve built' },
+  { id: 'granary',     name: 'Grain Store',  glyph: '▣', w: 2, h: 2, cost: { wood: 8, stone: 2 },  blurb: '+1 food a day each · up to 5 · place inside a building you\'ve built' },
+  { id: 'barracks',    name: 'Barracks Bunks', glyph: '⚔', w: 2, h: 3, cost: { wood: 10, stone: 8 }, blurb: '+1 to the muster squad each · up to 5 · place inside a building you\'ve built' },
+  { id: 'watchtower',  name: 'Watchtower Stairs', glyph: '♜', w: 4, h: 2, cost: { wood: 14, stone: 8 }, blurb: '4x2 — R rotates it. Place in a 4x4 room you\'ve built: it becomes a watchtower, its roof the lookout platform. Assign a guard to man it — they shoot raiders from above' },
+  { id: 'grandshrine', name: 'Grand Shrine', glyph: '⛩', w: 4, h: 4, cost: { wood: 24, stone: 36 }, blurb: '+2 favor a day · 20 designs · one per village · also costs 5 favor + 5 conviction' },
 ];
 // user: "as the village levels up and things like the well are unlocked, make them placeable through
 // the build menu once unlocked — I don't like them being crowded around the already crowded camp
@@ -1042,7 +1057,7 @@ function registerYardBuilds(){
   for (const b of YARD_BUILDINGS){
     if (!(village.research && village.research[b.res])) continue;
     if (!RECIPES.some(r => r.id === b.id)) RECIPES.push({ id: b.id, name: b.name, ico: b.id, in: b.cost, out: { [b.id]: 1 } });
-    if (!BUILD_ITEMS.some(x => x.mat === b.id)) BUILD_ITEMS.push({ mat: b.id, cell: 0, name: b.name, ico: b.glyph, prop: b.id, w: b.w, h: b.h, cat: 'home' });
+    if (!BUILD_ITEMS.some(x => x.mat === b.id)) BUILD_ITEMS.push({ mat: b.id, cell: 0, name: b.name, ico: b.glyph, prop: b.id, w: b.w, h: b.h, cat: 'home', rotatable: b.id === 'watchtower' });
     PIECE_SHORT[b.id] = b.name; BPIC[b.id] = b.id;
   }
 }
@@ -1056,6 +1071,7 @@ const FEATURES = [
   { id: 'market',      name: 'Market Stall',  country: 1, need: 'Village rank', when: () => ((village && village.tier) || 0) >= 1, blurb: '+8 cash a day' },
   { id: 'granary',     name: 'Granary',       country: 1, need: 'Village rank', when: () => ((village && village.tier) || 0) >= 1, blurb: '+5 food a day' },
   { id: 'scriptorium', name: 'Scriptorium',   country: 1, need: 'take your first city', when: () => firstCityTaken(), blurb: '+4 research a day' },
+  { id: 'grandshrine', name: 'Grand Shrine',  country: 1, need: 'the cult (10 villagers)', when: () => !!(village && village.cult), blurb: 'the centrepiece of the village: +2 favor a day' },
   { id: 'temple',      name: 'Temple',        country: 2, blurb: '+3 favor a day' },
   { id: 'barracks',    name: 'Barracks',      country: 2, blurb: 'bigger muster squad' },
   { id: 'watchtower',  name: 'Watchtower',    country: 3, blurb: 'guards nearby hit harder' },
@@ -1102,8 +1118,8 @@ function checkTownTier(){
 }
 const HQ_REQ = [
   { prop: 'altar',     n: 1, label: 'an altar' },
-  { prop: 'bed',       n: 3, label: 'beds'    },
-  { prop: 'study',     n: 1, label: 'a study'  },
+  { prop: 'bed',       n: 3, label: 'beds', scope: 'village' },      // beds and the study count anywhere in the village — only the altar + weapon rack have to be in the hall itself
+  { prop: 'study',     n: 1, label: 'a study', scope: 'village' },
   { prop: 'weaponrack', n: 1, label: 'a weapon rack' },
 ];
 let _cultBuildRegistered = false;
@@ -1141,7 +1157,7 @@ function registerBlacksmith(){
   BPIC.blacksmith = 'blacksmith';
 }
 // announce each unlock the first time it opens up (existing saves are seeded silently so they don't get a wall of messages)
-const UNLOCK_WATCH = [['shrine', 'Shrines'], ['blacksmith', 'Blacksmith'], ['market', 'Market Stall'], ['granary', 'Granary'], ['scriptorium', 'Scriptorium'], ['temple', 'Temple'], ['barracks', 'Barracks'], ['watchtower', 'Watchtower'], ['mutlab', 'Mutation Lab']];
+const UNLOCK_WATCH = [['shrine', 'Shrines'], ['blacksmith', 'Blacksmith'], ['market', 'Market Stall'], ['granary', 'Granary'], ['scriptorium', 'Scriptorium'], ['grandshrine', 'Grand Shrine'], ['temple', 'Temple'], ['barracks', 'Barracks'], ['watchtower', 'Watchtower'], ['mutlab', 'Mutation Lab']];
 function checkUnlocks(){
   if (!village) return;
   if (!village._firstCity && village.country && village.country.nodes.some(n => n.raided)) village._firstCity = true;   // a ratchet: it stays unlocked even if the city is lost
@@ -1180,6 +1196,7 @@ function checkCult(){
       'ten souls now — raise a hall for the faith (B, then the Altar)'), 800);
 }
 // re-derive HQ validity from current roofs + furniture. Cheap; called on build / prop edits.
+function is4x4Room(r){ return (r.ix1 - r.ix0) === CELL * 4 && (r.iy1 - r.iy0) === CELL * 4 && (!r.cells || r.cells.size === 16); }
 // is a world point inside this room's floor? (irregular buildings carry their exact interior cells; plain rectangles just use the box)
 function inRoom(r, x, y){
   if (!(x > r.ix0 && x < r.ix1 && y > r.iy0 && y < r.iy1)) return false;
@@ -1188,11 +1205,12 @@ function inRoom(r, x, y){
 // each enclosed room gets a rooftop feature that shows what's inside it, so you can read the village from a distance.
 // re-derived whenever roofs are rebuilt / furniture changes (checkHQ) and every morning.
 const ROOF_ROLE_ORDER = [
+  ['tower',   ['watchtower']],                                                            // stairs inside a 4x4 room: the whole room is a watchtower and its roof is the lookout platform
   ['church',  ['altar', 'temple']],
   ['lab',     ['mutlab']],
   ['library', ['study', 'scriptorium']],
   ['forge',   ['blacksmith']],
-  ['barracks', ['weaponrack', 'barracks', 'watchtower']],
+  ['barracks', ['weaponrack', 'barracks']],
   ['market',  ['market']],
   ['granary', ['granary']],
   ['hall',    ['longtable', 'sidetable']],
@@ -1205,7 +1223,7 @@ function classifyRoofs(){
     for (const p of props) if (!p.dead && inRoom(r, p.x, p.y)) inside.add(p.t);
     const hq = village.hq && village.hq.valid && village.hq.room && Math.abs(village.hq.room.x0 - r.ix0) < 2 && Math.abs(village.hq.room.y0 - r.iy0) < 2;
     let role = hq ? 'church' : null;
-    if (!role) for (const [name, types] of ROOF_ROLE_ORDER) if (types.some(t => inside.has(t))){ role = name; break; }
+    if (!role) for (const [name, types] of ROOF_ROLE_ORDER) if (types.some(t => inside.has(t)) && (name !== 'tower' || is4x4Room(r))){ role = name; break; }
     r.role = role;
     if (!r._col0) r._col0 = r.col.slice();
     r.col = role === 'church' ? [78, 88, 114] : r._col0.slice();                       // slate blue for a church, the building's own tone otherwise
@@ -1222,8 +1240,38 @@ function isChurchCell(cx, cy){
   return false;
 }
 // coloured leaded panes for church windows
+const STAINED_PAL = ['#c8383a', '#3a68c8', '#e2b030', '#3a9a58', '#8a44b8', '#d8702a'];
+function stainedCol(seed, r, c){ const hv = ((seed * 31 + r * 7 + c * 13) >>> 0) % STAINED_PAL.length; return STAINED_PAL[(hv + (r + c) % 2 * 2) % STAINED_PAL.length]; }
+// the rose window over a church's crossing (world coords) — shared by the roof art and the night glow
+function churchRose(rf){
+  const w = rf.x1 - rf.x0, h = rf.y1 - rf.y0, horiz = w >= h, shortD = horiz ? h : w;
+  let x = horiz ? rf.x0 + w * 0.58 : rf.x0 + w / 2, y = horiz ? rf.y0 + h / 2 : rf.y0 + h * 0.58;
+  if (rf.anchor && rf._cc){ let b = null, bd = 1e18; for (const c of rf._cc){ const d = (c.x - x) ** 2 + (c.y - y) ** 2; if (d < bd){ bd = d; b = c; } } if (b){ x = b.x; y = b.y; } }
+  return { x, y, r: clamp(shortD * 0.15, 8, 14) };
+}
+// stained glass lit from inside at night (screen-space, called from the relight pass): a saturated mosaic in the arch + coloured light spilling onto the ground below
+function drawLitStained(cx, sy, ww, hh, seed, nb, groundY, vwf){
+  const g = octx, cols = 2, rows = 4, x = cx - ww / 2, peak = Math.max(2, hh * 0.32), cw = ww / cols, ch = (hh + peak) / rows;
+  g.save(); g.globalCompositeOperation = 'lighter';
+  const used = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++){ const col = stainedCol(seed, r, c); if (!used.includes(col)) used.push(col); }
+  used.slice(0, 4).forEach((col, i) => {                                              // coloured light pooled on the ground, one blob per colour, fanned out
+    const gx = cx + (i - 1.5) * vwf(5), gy = groundY + vwf(3 + (i % 2) * 3), rr = vwf(13), gr = g.createRadialGradient(gx, gy, 0, gx, gy, rr);
+    gr.addColorStop(0, hexA(col, 0.34 * nb)); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.save(); g.translate(gx, gy); g.scale(1.25, 0.6); g.translate(-gx, -gy); g.fillStyle = gr; g.fillRect(gx - rr, gy - rr, rr * 2, rr * 2); g.restore();
+  });
+  g.globalCompositeOperation = 'source-over';
+  g.beginPath(); g.moveTo(x, sy + hh); g.lineTo(x, sy + hh * 0.3); g.quadraticCurveTo(x, sy + hh * 0.04, cx, sy - peak); g.quadraticCurveTo(x + ww, sy + hh * 0.04, x + ww, sy + hh * 0.3); g.lineTo(x + ww, sy + hh); g.closePath(); g.save(); g.clip();
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++){ g.fillStyle = hexA(stainedCol(seed, r, c), nb); g.fillRect(x + c * cw, sy - peak + r * ch, cw + 0.5, ch + 0.5); }
+  g.fillStyle = 'rgba(255,240,200,' + (0.28 * nb).toFixed(2) + ')'; g.fillRect(x + ww * 0.3, sy - peak, ww * 0.4, hh + peak);            // hot lamp behind the glass
+  g.restore();
+  g.strokeStyle = 'rgba(20,14,24,' + (0.9 * nb).toFixed(2) + ')'; g.lineWidth = Math.max(0.8, vwf(0.7)); g.beginPath();
+  g.moveTo(cx, sy - peak); g.lineTo(cx, sy + hh); for (let r = 1; r < rows; r++){ g.moveTo(x, sy - peak + r * ch); g.lineTo(x + ww, sy - peak + r * ch); } g.stroke();
+  g.restore();
+}
+function hexA(hex, a){ const v = parseInt(hex.slice(1), 16); return 'rgba(' + (v >> 16 & 255) + ',' + (v >> 8 & 255) + ',' + (v & 255) + ',' + clamp(a, 0, 1).toFixed(3) + ')'; }
 function stainedGlass(g, x, y, w, h, seed, a){
-  const pal = ['#c8383a', '#3a68c8', '#e2b030', '#3a9a58', '#8a44b8', '#d8702a'], cols = 2, rows = 4, cw = w / cols, ch = h / rows;
+  const pal = STAINED_PAL, cols = 2, rows = 4, cw = w / cols, ch = h / rows;
   const peak = clamp(h * 0.42, 2.5, 5);
   const arch = () => { g.beginPath(); g.moveTo(x, y + h); g.lineTo(x, y + h * 0.3); g.quadraticCurveTo(x, y + h * 0.04, x + w / 2, y - peak); g.quadraticCurveTo(x + w, y + h * 0.04, x + w, y + h * 0.3); g.lineTo(x + w, y + h); g.closePath(); };   // a gothic pointed arch
   g.save(); arch(); g.clip();
@@ -1243,14 +1291,15 @@ function checkHQ(){
   if (village && zone === 'village') classifyRoofs();
   if (!village || !village.cult || zone !== 'village') return;
   const rooms = village.roofs || [];
-  let ok = null, bestMiss = null;
+  let ok = null, bestMiss = null, altarMiss = null;
   for (const r of rooms){
     const tiles = r.cells ? r.cells.size : Math.round((r.ix1 - r.ix0) / CELL) * Math.round((r.iy1 - r.iy0) / CELL);
     const has = t => props.filter(p => !p.dead && p.t === t && inRoom(r, p.x, p.y)).length;
     const miss = [];
     if (tiles < HQ_MIN_TILES) miss.push('bigger hall — ' + tiles + '/' + HQ_MIN_TILES + ' floor tiles');
-    for (const q of HQ_REQ){ const n = has(q.prop); if (n < q.n) miss.push(q.n > 1 ? q.label + ' (' + n + '/' + q.n + ')' : q.label); }
+    for (const q of HQ_REQ){ const n = q.scope === 'village' ? props.filter(p => !p.dead && p.t === q.prop).length : has(q.prop); if (n < q.n) miss.push(q.n > 1 ? q.label + ' (' + n + '/' + q.n + ')' : q.label); }
     if (!miss.length){ ok = r; break; }
+    if (has('altar') > 0 && (!altarMiss || miss.length < altarMiss.length)) altarMiss = miss;   // the room with the altar IS the hall — report on that one, not some other building that happens to have more of the furniture
     if (!bestMiss || miss.length < bestMiss.length) bestMiss = miss;
   }
   const was = !!(village.hq && village.hq.valid);
@@ -1266,7 +1315,7 @@ function checkHQ(){
       }, 300);
     }
   } else {
-    village.hq = { valid: false, missing: bestMiss || ['enclose a hall — walls all round and a door'] };
+    village.hq = { valid: false, missing: altarMiss || bestMiss || ['enclose a hall — walls all round and a door'] };
     if (was) saveVillage(true);
   }
 }
@@ -2685,6 +2734,7 @@ addEventListener('keydown', e => {
     if (musingOpen) closeMusings();
     else if (giftPickOpen) closeGiftPick();
     else if (cultMenuOpen) closeCultMenu();
+    else if (shrinePickOpen) closeShrinePick();
     else if (assignOpen) closeAssign();
     else if (researchOpen) closeResearch();
     else if (packOpen) togglePack(false);
@@ -2721,6 +2771,7 @@ addEventListener('keydown', e => {
     buildDoorVert = !buildDoorVert;
     const it = BUILD_ITEMS[buildSel];
     if (it && (it.mat === 'door' || it.doorTint != null)){ A.S.wood(); popText(player.x, player.y - 26, buildDoorVert ? 'door: ↕' : 'door: ↔', '#ffd24a'); }
+    else if (it && it.rotatable){ A.S.wood(); popText(player.x, player.y - 26, buildDoorVert ? 'stairs: ↕' : 'stairs: ↔', '#ffd24a'); }
     return;
   }
   if (['1','2','3','4','5'].includes(k) && player) equipQuick(+k - 1);
@@ -2770,6 +2821,14 @@ cv.addEventListener('mousedown', e => {
       const mx = (e.clientX - r.left) * (W / r.width), my = (e.clientY - r.top) * (H / r.height);
       const rc = giftPickRects.find(x => mx >= x.sx && mx <= x.sx + x.sw && my >= x.sy && my <= x.sy + x.sh);
       if (rc) giftPickTake(rc.t); else closeGiftPick();
+    }
+    return;
+  }
+  if (shrinePickOpen){
+    if (e.button === 0){
+      const r = cv.getBoundingClientRect(), mx = (e.clientX - r.left) * (W / r.width), my = (e.clientY - r.top) * (H / r.height);
+      const rc = shrineRects.find(x => mx >= x.sx && mx <= x.sx + x.sw && my >= x.sy && my <= x.sy + x.sh);
+      if (rc) confirmGrandShrine(rc.i); else closeShrinePick();
     }
     return;
   }
@@ -2942,6 +3001,7 @@ const FARM_GROW_SECS = 150;
 // footprint of a build piece, accounting for a rotated door
 function itemDims(item){
   if (item && (item.mat === 'door' || item.doorTint != null)) return buildDoorVert ? { w: 1, h: 2 } : { w: 2, h: 1 };
+  if (item && item.rotatable && buildDoorVert) return { w: item.h || 1, h: item.w || 1 };                    // R turns a rotatable piece 90 degrees
   return { w: (item && item.w) || 1, h: (item && item.h) || 1 };
 }
 let MIX_RATIO = 0.4;   // set from storage in the settings-wiring block at the bottom
@@ -3407,6 +3467,25 @@ const ICONS = {
     g.fillStyle='rgba(0,0,0,0.3)'; g.fillRect(S*0.16,S*0.4,S*0.68,S*0.04); g.fillRect(S*0.16,S*0.64,S*0.68,S*0.04);
     for(const [x,c] of [[0.2,'#b04a3a'],[0.3,'#3a6ea0'],[0.4,'#c8a24a'],[0.52,'#4c8a44'],[0.62,'#8a4a9a'],[0.72,'#c86a3a']])
       g.fillStyle=c, g.fillRect(S*x,S*0.18,S*0.06,S*0.2), g.fillRect(S*x,S*0.44,S*0.06,S*0.18); },
+  grandshrine(g,S){
+    const gr=g.createRadialGradient(S*0.5,S*0.34,S*0.04,S*0.5,S*0.38,S*0.5); gr.addColorStop(0,'rgba(255,224,130,0.85)'); gr.addColorStop(0.5,'rgba(255,200,90,0.28)'); gr.addColorStop(1,'rgba(255,200,90,0)'); g.fillStyle=gr; g.fillRect(0,0,S,S);   // golden radiance
+    g.strokeStyle='rgba(255,226,140,0.55)'; g.lineWidth=Math.max(1,S*0.02); for(let i=0;i<9;i++){ const a=-Math.PI*0.95+i*Math.PI*0.9/8; g.beginPath(); g.moveTo(S*0.5+Math.cos(a)*S*0.2,S*0.36+Math.sin(a)*S*0.2); g.lineTo(S*0.5+Math.cos(a)*S*0.46,S*0.36+Math.sin(a)*S*0.46); g.stroke(); }
+    g.fillStyle='#6e685c'; g.fillRect(S*0.06,S*0.8,S*0.88,S*0.12); g.fillStyle='#8a8478'; g.fillRect(S*0.06,S*0.8,S*0.88,S*0.05);   // three steps
+    g.fillStyle='#8a8478'; g.fillRect(S*0.14,S*0.7,S*0.72,S*0.11); g.fillStyle='#a49e92'; g.fillRect(S*0.14,S*0.7,S*0.72,S*0.045);
+    g.fillStyle='#a49e92'; g.fillRect(S*0.24,S*0.6,S*0.52,S*0.11); g.fillStyle='#bab4a6'; g.fillRect(S*0.24,S*0.6,S*0.52,S*0.04);
+    g.fillStyle='#8a8478'; g.beginPath(); g.moveTo(S*0.4,S*0.6); g.lineTo(S*0.44,S*0.14); g.lineTo(S*0.5,S*0.03); g.lineTo(S*0.56,S*0.14); g.lineTo(S*0.6,S*0.6); g.closePath(); g.fill();   // the spire
+    g.fillStyle='#c4beb0'; g.beginPath(); g.moveTo(S*0.4,S*0.6); g.lineTo(S*0.44,S*0.14); g.lineTo(S*0.5,S*0.03); g.lineTo(S*0.5,S*0.6); g.closePath(); g.fill();
+    g.fillStyle='#f0c840'; for(const y of [0.2,0.32,0.44]) g.fillRect(S*0.475,S*y,S*0.05,S*0.07);   // glowing runes
+    g.fillStyle='#f0c840'; g.beginPath(); g.moveTo(S*0.5,S*0.0); g.lineTo(S*0.53,S*0.07); g.lineTo(S*0.47,S*0.07); g.closePath(); g.fill();   // gilded tip
+    for(const x of [0.2,0.8]){ g.fillStyle='#6e685c'; g.fillRect(S*(x-0.035),S*0.44,S*0.07,S*0.2); g.fillStyle='#a49e92'; g.fillRect(S*(x-0.035),S*0.44,S*0.03,S*0.2);   // flanking pillars with flames
+      g.fillStyle='#ff8a20'; g.beginPath(); g.moveTo(S*x,S*0.3); g.quadraticCurveTo(S*(x+0.07),S*0.4,S*(x+0.04),S*0.45); g.lineTo(S*(x-0.04),S*0.45); g.quadraticCurveTo(S*(x-0.07),S*0.4,S*x,S*0.3); g.fill();
+      g.fillStyle='#ffe070'; g.beginPath(); g.moveTo(S*x,S*0.36); g.quadraticCurveTo(S*(x+0.035),S*0.42,S*(x+0.02),S*0.45); g.lineTo(S*(x-0.02),S*0.45); g.quadraticCurveTo(S*(x-0.035),S*0.42,S*x,S*0.36); g.fill(); }
+  },
+  couch(g,S){ g.fillStyle='#7a3a3a'; g.fillRect(S*0.1,S*0.34,S*0.8,S*0.3); g.fillStyle='#5e2c2c'; g.fillRect(S*0.1,S*0.22,S*0.8,S*0.16); g.fillRect(S*0.06,S*0.3,S*0.1,S*0.36); g.fillRect(S*0.84,S*0.3,S*0.1,S*0.36);
+    g.fillStyle='#93504a'; g.fillRect(S*0.2,S*0.4,S*0.28,S*0.2); g.fillRect(S*0.52,S*0.4,S*0.28,S*0.2); g.fillStyle='#3a2418'; g.fillRect(S*0.14,S*0.64,S*0.06,S*0.1); g.fillRect(S*0.8,S*0.64,S*0.06,S*0.1); },
+  plant(g,S){ g.fillStyle='#a8623f'; g.beginPath(); g.moveTo(S*0.3,S*0.56); g.lineTo(S*0.7,S*0.56); g.lineTo(S*0.62,S*0.84); g.lineTo(S*0.38,S*0.84); g.closePath(); g.fill();
+    g.fillStyle='#3f8a44'; for(const [x,y,r] of [[0.5,0.32,0.16],[0.36,0.42,0.13],[0.64,0.42,0.13],[0.5,0.48,0.12]]){ g.beginPath(); g.arc(S*x,S*y,S*r,0,7); g.fill(); }
+    g.fillStyle='#63b062'; g.beginPath(); g.arc(S*0.46,S*0.28,S*0.06,0,7); g.fill(); },
   sidetable(g,S){ g.fillStyle='#6a4a2c'; g.fillRect(S*0.16,S*0.36,S*0.68,S*0.12);
     g.fillStyle='#5a3f26'; g.fillRect(S*0.24,S*0.48,S*0.08,S*0.32); g.fillRect(S*0.68,S*0.48,S*0.08,S*0.32);
     g.fillStyle='#c9a24a'; g.beginPath(); g.arc(S*0.4,S*0.28,S*0.08,0,7); g.fill();
@@ -3619,7 +3698,9 @@ function pocketMade(g){
 }
 // the previews that can be crafted from what's ON THE GROUND right now (nothing shows from pocket items alone)
 function craftResults(){
-  return RECIPES.filter(r => { for (const m in r.in) if (groundCount(m) < r.in[m]) return false; return true; });
+  const haveShrine = props.some(p => !p.dead && p.t === 'grandshrine');
+  return RECIPES.filter(r => { if (haveShrine && r.id === 'grandshrine') return false;             // only one per village — no point offering another
+     for (const m in r.in) if (groundCount(m) < r.in[m]) return false; return true; });
 }
 function craftMultiple(r, n){   // shift+click a recipe to batch-craft up to n, stopping early if materials run out
   for (let i = 0; i < n; i++){
@@ -4783,7 +4864,7 @@ const LAST  = ['Prewitt','Ashby','Kettle','Duff','Marsh','Crabbe','Tuttle','Vosk
 const TOWN_NAMES = ['Ashford','Millbrook','Dunwich Halt','Pewter Row','Greely','Hodgeport','Sump End','Two Larches','Cobb Hollow','Marrowfield'];
 const OBJECTS_SMALL = ['teddy bear','desk lamp','carriage clock','snow globe','houseplant','toaster',
   'chicken sandwich','goldfish bowl','toy rabbit'];
-const OBJECTS_BULKY = ['record player','armchair','grandfather clock','television set','chest freezer',
+const OBJECTS_BULKY = ['record player','armchair','couch','grandfather clock','television set','chest freezer',
   'fishing rod','umbrella stand'];
 const VILLAGER_BARKS = ['"Is there a road out of here?"','"I\'ve stopped trying to leave."','"Lovely spot, really."','"Have you seen my phone?"','"When\'s dinner?"','"I miss my cat."','"This is fine. This is fine."','"Nice weather for it."'];
 // ---- daily narratives + quirks: lightweight village "flavour", secondary to occupation ----
@@ -4974,7 +5055,7 @@ const URGES = [
 ];
 const URGE_TRAVELS = new Set(['kidnap','money','groceries','errand','grudge']);
 const urgeTpl = id => URGES.find(t => t.id === id);
-function urgeSummary(u){ const t = urgeTpl(u.id); return t ? t.summary(u) : u.kind; }
+function urgeSummary(u){ const t = urgeTpl(u.id); return (t ? t.summary(u) : u.kind) + (u.forName ? '  (for ' + u.forName + '\'s room)' : ''); }
 
 let _urgeOffers = [];
 function offerUrges(){
@@ -4992,6 +5073,13 @@ function offerUrges(){
     let think = pick(t.think);
     if (made.obj) think = think.replace('{obj}', made.obj);   // the musing must name the object the mission will actually be about
     picks.push(Object.assign({ id: t.id, kind: t.kind, think }, made));
+  }
+  // a villager's room request becomes a bonus job on the board: fetch that object from the city
+  const req = v.villagers.find(x => x.errand && x.errand.kind === 'furnish' && x.errand.obj && !(v.hoard || []).some(h => h.t === x.errand.obj));
+  if (req){
+    const E = req.errand, holder = randPerson();
+    picks.unshift({ id: 'gimme', kind: 'errand', obj: E.obj, bulky: !!E.bulky, holder, forName: firstName(req), forVid: req.id, think: '…' + firstName(req) + ' wants ' + E.name + ' for their room.' });
+    if (picks.length > 3) picks.length = 3;
   }
   _urgeOffers = picks;
   return picks;
@@ -5889,10 +5977,10 @@ function villageDayTick(){
     pFavor = Math.round(pFavor);
   }
   const drained = darkShrineDrain(V); maybeSpawnDarkShrine();
-  const nb = id => Math.min(TOWN_BUILD_CAP, props.filter(pp => !pp.dead && pp.t === id).length);
-  if (V.cult) pFavor += nb('temple') * 3;
+  const nb = id => Math.min(townCap(id), props.filter(pp => !pp.dead && pp.t === id && (TOWN_INDOOR.has(id) ? propIndoors(pp) : id === 'market' ? !propIndoors(pp) : true)).length);   // indoor pieces need a roof over them; stalls need open sky
+  if (V.cult) pFavor += nb('temple') * 3 + (props.some(pp => !pp.dead && pp.t === 'grandshrine') ? 2 : 0);   // the Grand Shrine: +2 a day
   vs.favor = (vs.favor || 0) + pFavor;
-  vs.food += nb('granary') * 5; vs.research += nb('scriptorium') * 4; money += nb('market') * 8;
+  vs.food += nb('granary') * 1; vs.research += nb('scriptorium') * 4; money += nb('market') * 8;
   const pCash = R.ledger ? Math.floor(V.villagers.length * 0.6) : 0;   // The Ledger: a little cash a day, per villager
   if (pCash) money += pCash;
   const eat =Math.round(V.villagers.length * (R.smokehouse ? 0.75 : 1));
@@ -6222,6 +6310,11 @@ function drawAssign(){
   // user: "the guard is just sticking hard against the beds... could the player choose an area
   // (circle) where the guard patrols" — offered right here, the moment someone's actually a guard,
   // rather than buried in a separate menu they'd have no reason to go looking for.
+  if (v.job === 'guard'){
+    const nTow = (village.roofs || []).filter(r => r.role === 'tower').length, taken = village.villagers.filter(x => x.tower && x.id !== v.id).length;
+    if (nTow || v.tower) rows.push({ act: 'tower', label: v.tower ? 'Back to patrol' : 'Man the watchtower', ico: 'guard', dim: !v.tower && taken >= nTow,
+      sub: v.tower ? 'come down and walk the beat again' : taken >= nTow ? 'every watchtower already has a guard' : 'climb up and keep watch — shoots raiders' });
+  }
   if (v.job === 'guard') rows.push({ act: 'guardzone', label: v.guardZone ? 'Move patrol area' : 'Set patrol area', ico: 'guard',
     sub: 'walk it, aim with the mouse, click to drop' });
   if (v.job === 'guard') rows.push({ act: 'guardroute', label: v.guardZone && v.guardZone.route ? 'Redraw patrol route' : 'Draw a patrol route', ico: 'guard',
@@ -6281,6 +6374,12 @@ function doAssign(rc){
     toggleGuardZoneMode(true, vid, rc.act === 'guardroute');
     return;
   }
+  if (rc.act === 'tower'){
+    const nTow = (village.roofs || []).filter(r => r.role === 'tower').length, taken = village.villagers.filter(x => x.tower && x.id !== v.id).length;
+    if (!v.tower && taken >= nTow){ popText(player.x, player.y - 26, 'no free watchtower', '#ff8f8f'); return; }
+    v.tower = !v.tower; for (const e of enemies) if (e._vid === v.id && !v.tower){ e._onTower = null; e._towerBack = true; }
+    popText(player.x, player.y - 26, v.tower ? 'to the watchtower' : 'back on patrol', '#cde8b0'); saveVillage(true); closeAssign(); return;
+  }
   if (rc.act === 'chat'){ const vid = v.id; closeAssign(); openChat(vid); return; }
   if (rc.act === 'preach'){
     if (!canPreachTo(v)){ popText(player.x, player.y - 26, 'not now', '#ff8f8f'); return; }
@@ -6315,7 +6414,8 @@ function openChat(vid){
   revealName(v);
   _chatS = { vid, v, scene: villagerIndoors(v) ? 'indoor' : 'outdoor', face: makeFace('guarded'), phase: 'talk', line: '', lineFull: '', typeT: 0, pushT: 0, _t: 0, asked: '' };
   _sceneCanvasStart();
-  chatSet(chatGreeting(v), '', v.hungry > 0 ? 'pleading' : 'neutral');
+  if (v.errand && v.errand.kind === 'furnish' && furnishDone(v, v.errand)) chatSet(chatFinishFurnish(v), '', 'weeping');
+  else chatSet(chatGreeting(v), '', v.hungry > 0 ? 'pleading' : 'neutral');
 }
 function chatSet(text, asked, mood){
   const s = _chatS; if (!s) return;
@@ -6330,8 +6430,59 @@ function chatPick(v, pool){
   mem[line] = 1; if (Object.keys(mem).length > 40) v._chatMem = {};
   return line;
 }
+// what a villager remembers about you: fed / helped / chatted / been hurt by you. Saved on their record, so it persists.
+function vmem(v){ return v.mem || (v.mem = { fed: 0, helped: 0, chats: 0, hurt: 0, lastChat: -99, lastHurt: -99 }); }
+function reputation(){
+  const V = village; let fed = 0, helped = 0, hurt = 0;
+  for (const x of V.villagers){ const m = x.mem; if (!m) continue; fed += m.fed || 0; helped += m.helped || 0; hurt += m.hurt || 0; }
+  return { kind: fed + helped, hurt, fed, helped };
+}
+const ERRANDS = [
+  { res: 'wood',  lo: 5, hi: 9, ask: n => '"The roof leaks something awful. If you could spare ' + n + ' wood, I\'d patch it before the next rain."', thanks: '"That\'ll keep the damp out. You\'re a good sort."' },
+  { res: 'stone', lo: 4, hi: 8, ask: n => '"I\'d love a proper hearth of my own. ' + n + ' good stones would do it — could you spare them?"', thanks: '"Now I can cook something properly. Thank you."' },
+  { res: 'stick', lo: 6, hi: 12, ask: n => '"Kindling. ' + n + ' sticks and I can stop shivering through the mornings."', thanks: '"Warm at last — or nearly. Thank you."' },
+  { res: 'dirt',  lo: 5, hi: 9, ask: n => '"I\'m trying to grow a little garden by my door. ' + n + ' dirt would get me started."', thanks: '"You\'ve no idea what this means to me. Truly."' },
+];
+const FURNISH = [
+  { obj: 'couch', bulky: true, name: 'a couch' },
+  { obj: 'armchair', bulky: true, name: 'an armchair' },
+  { obj: 'houseplant', name: 'a pot plant' },
+  { obj: 'desk lamp', name: 'a lamp' },
+  { obj: 'snow globe', name: 'a snow globe' },
+  { prop: 'torchpost', name: 'a standing torch' },                                       // (this one you can build yourself)
+];
+const FURNISH_THANKS = ['"Look at it. It makes the whole room feel like mine. Thank you."', '"I keep going back to look at it. I can\'t tell you what this means."', '"It\'s perfect. I\'d hug you but I\'m not sure that\'s allowed."'];
+function furnishAsk(F){
+  return F.prop ? '"It gets so dark in my corner at night. ' + F.name.replace(/^a /, 'A ') + ' in my room would help — could you set one up?"'
+    : '"My room is so bare. ' + F.name.replace(/^an? /, m => m.toUpperCase()) + ' would make it feel like a home — but the good ones are out in the city. If you find one, could you put it in my room? It\'ll be on the board at the campfire."';
+}
+// is the requested piece standing in this villager's room (or right by their bed if they've no roof)? a built prop, or a hoard / display object
+function furnishDone(v, F){
+  if (!v.bed) return false;
+  const rf = roomOf(v.bed.x, v.bed.y), near = (x, y) => rf ? inRoom(rf, x, y) : Math.hypot(x - v.bed.x, y - v.bed.y) < 70;
+  if (F.prop) return props.some(p => !p.dead && p.t === F.prop && near(p.x, p.y));
+  if ((village.hoard || []).some(h => h.t === F.obj && near(h.x, h.y))) return true;
+  for (const d of (village.displayspots || [])) if (d.item === F.obj && near(d.x, d.y)) return true;
+  for (const d of (village.displays || [])) if ((d.items || []).includes(F.obj) && near(d.x, d.y)) return true;
+  return false;
+}
+// the thank-you gift: sometimes a small decorative keepsake from their own things, set down at your feet
+function errandGift(v, chance){
+  if (Math.random() > chance) return '';
+  const obj = pick(OBJECTS_SMALL);
+  (village.hoard = village.hoard || []).push({ t: obj, x: Math.round(player.x + rand(-14, 14)), y: Math.round(player.y + rand(10, 24)), day: village.day });
+  return ' They press ' + (/^[aeiou]/i.test(obj) ? 'an ' : 'a ') + obj + ' into your hands — "for your trouble."';
+}
 function chatGreeting(v){
-  const first = !v._chatDone; v._chatDone = true;
+  const m = vmem(v), day = village.day || 0, gap = day - m.lastChat;
+  m.chats++; m.lastChat = day;
+  const memPool = [];
+  if (m.hurt > 0 && day - m.lastHurt < 8) memPool.push('"…Oh. It\'s you. I remember what you did."', '"Keep your hands to yourself this time."');
+  if (m.helped > 0) memPool.push('"Well, if it isn\'t my benefactor. Good to see you."', '"After what you did for me — anything you need."');
+  if (m.fed > 0 && m.hurt === 0) memPool.push('"I haven\'t forgotten who fed me. Hello again."');
+  if (m.chats > 3 && gap >= 5 && m.helped + m.fed === 0) memPool.push('"Been a while. I\'d started to wonder if you\'d noticed us at all."');
+  if (memPool.length && Math.random() < 0.75) return chatPick(v, memPool);
+  const first = !v._chatDone && m.chats <= 1; v._chatDone = true;
   const night = village && village.tod != null && todLerp().night > 0.5;
   const pool = [];
   if (first) pool.push('"Oh — hello. Yes? You wanted something?"', '"Didn\'t think you\'d stop and talk to us."');
@@ -6384,6 +6535,11 @@ function chatWorldFacts(v){
     if (conv >= 3) out.push('"You\'ve got a way of making folk believe things. It\'s… a lot of responsibility, is what I\'d say."');
   }
   if (pop >= 12) out.push('"There are ' + pop + ' of us now. Travellers call us \'the place that doesn\'t sleep\'. I don\'t know if that\'s a compliment."');
+  {
+    const rp = reputation();
+    if (rp.kind >= 3) out.push('"People say you look after your own. It\'s got around — even the folk on the road have heard."');
+    if (rp.hurt >= 1) out.push('"Some of us are wary of you. You\'ve put hands on one of ours, and that doesn\'t get forgotten."');
+  }
   if (hungryN > 0) out.push('"' + hungryN + ' of us went hungry this week. You\'re out conquering and our bowls are empty — that\'s how your impact reads from here."');
   if (mutN > 0) out.push('"Folk on the road heard about the lab. Some queue up to be changed; some cross the road to avoid us. That\'s what your experiments have done to our name."');
   // --- the wild + the land
@@ -6402,9 +6558,18 @@ function chatNews(v){
   const a = chatPick(v, facts), rest = facts.filter(f => f !== a), b = rest.length && Math.random() < 0.55 ? chatPick(v, rest) : null;
   return b ? [a, b] : [a];
 }
+function repGossip(v){                                                            // a line about what you did for/to a fellow villager (or null)
+  const m2 = village.villagers.filter(o => o.id !== v.id && o.mem && (o.mem.fed || o.mem.helped || o.mem.hurt));
+  if (!m2.length) return null;
+  const o = pick(m2), nm = firstName(o), mm = o.mem; revealName(o);
+  if (mm.hurt > 0 && (mm.fed + mm.helped === 0 || Math.random() < 0.4)) return pick(['"' + nm + ' says you took a swing at them. They still flinch when you walk past."', '"Did you really hit ' + nm + '? People are saying so. I\'d watch your back."']);
+  if (mm.helped > 0) return pick(['"' + nm + ' hasn\'t stopped talking about the way you helped them out. Word gets round."', '"You did ' + nm + ' a real kindness. ' + nm + ' told everyone."']);
+  return pick(['"' + nm + ' said you fed them when they were starving. That stuck with people."', '"They say ' + nm + ' would have gone hungry if not for you."']);
+}
 function chatGossip(v){
   const others = village.villagers.filter(o => o.id !== v.id);
   if (!others.length) return '"It\'s just me out here, isn\'t it."';
+  if (Math.random() < 0.5){ const rg = repGossip(v); if (rg) return rg; }
   const o = pick(others);
   const line = (dossierFor(o) ? gossipLine(v, o) : null);
   if (line){ revealName(o); return line; }
@@ -6428,13 +6593,45 @@ function chatSelf(v){
   return chatPick(v, pool);
 }
 function chatNeeds(v){
+  const m = vmem(v), day = village.day || 0;
+  if (v.errand && v.errand.kind === 'furnish' && furnishDone(v, v.errand)) return chatFinishFurnish(v);
+  if (v.errand && day - v.errand.day > 7) v.errand = null;                                                // ignored for too long — they've made do
+  if (v.hungry > 0 && Math.random() < 0.6) return chatPick(v, ['"Food. Just food. There isn\'t enough to go round and I\'m not the only one going without."', '"Honestly? Something to eat. I\'ve stopped noticing the hunger, which is worse."']);
+  if (v.errand && v.errand.kind === 'furnish') return v.errand.prop ? '"Still thinking about ' + v.errand.name + ' for my room, if you ever get the chance."' : '"Still dreaming of ' + v.errand.name + ' for my room. Somebody in the city must have one going spare…"';
+  if (v.errand) return '"Still hoping for those ' + v.errand.n + ' ' + v.errand.res + ', if you\'ve got them. No rush… well, a little rush."';
+  if ((v._errandCd || 0) <= day && v.bed && Math.random() < 0.5){                                     // a personal request for their own room
+    const opts = FURNISH.filter(f => !furnishDone(v, f));
+    if (opts.length){ const F = pick(opts); v.errand = { kind: 'furnish', prop: F.prop, obj: F.obj, bulky: !!F.bulky, name: F.name, day, thanks: pick(FURNISH_THANKS) }; saveVillage(); return furnishAsk(F); }
+  }
+  if ((v._errandCd || 0) <= day && Math.random() < 0.8){
+    const E = pick(ERRANDS), n = E.lo + Math.floor(Math.random() * (E.hi - E.lo + 1));
+    v.errand = { res: E.res, n, day, thanks: E.thanks }; saveVillage();
+    return E.ask(n);
+  }
   const out = [];
   if (v.hungry > 0) out.push('"Food. Just food. There isn\'t enough to go round and I\'m not the only one going without."');
   if (!v.bed) out.push('"A roof, when you get the chance. Somewhere the wind doesn\'t find me at night."');
   if (v.want) out.push('"I keep thinking about a ' + v.want.obj + '. Silly, I know. But if you ever came across one…"');
   if (!out.length) out.push('"Nothing I can\'t handle. You\'ve looked after us — mostly — so thank you."', '"I\'m fine. Really. Save it for someone who isn\'t."');
-  const nm = firstName(v);
-  return chatPick(v, out) + (v.hungry > 0 && village.stores.food >= 1 ? '' : '');
+  return chatPick(v, out);
+}
+function chatFinishFurnish(v){
+  const e = v.errand; v.errand = null; v._errandCd = (village.day || 0) + 3; vmem(v).helped++;
+  v.mood = Math.min(1.5, (v.mood || 1) + 0.4);
+  if (village.cult){ village.conviction = Math.min(convictionCap(), (village.conviction || 0) + 1); } else village.stores.favor = (village.stores.favor | 0) + 1;
+  const g = errandGift(v, 0.7);
+  saveVillage(true); syncHUD(); A.S.thud && A.S.thud();
+  if (_chatS) _chatS.pendingMood = 'weeping';
+  return (e.thanks || '"Thank you."') + g;
+}
+function chatGive(v){
+  const e = v.errand; if (!e || !e.res || (player.res[e.res] || 0) < e.n) return null;
+  player.res[e.res] -= e.n; const m = vmem(v); m.helped++; v.errand = null; v._errandCd = (village.day || 0) + 3;
+  v.mood = Math.min(1.5, (v.mood || 1) + 0.3);
+  if (village.cult){ village.conviction = Math.min(convictionCap(), (village.conviction || 0) + 1); } else village.stores.favor = (village.stores.favor | 0) + 1;
+  const g = errandGift(v, 0.25);
+  savePlayer(); saveVillage(true); syncHUD(); A.S.thud && A.S.thud();
+  return (e.thanks || '"Thank you."') + g;
 }
 function chatMoodFor(text){
   if (/revolt|fallen|restless|hungry|warband|tide|frightening|empty|rot sets|fire waiting|jump at|worse moved|lab|stare/i.test(text)) return 'rattled';
@@ -6449,9 +6646,13 @@ function chatAct(act){
   else if (act === 'gossip'){ const t = chatGossip(v); chatSet(t, 'Heard anything about the others?', chatMoodFor(t)); }
   else if (act === 'self'){ const t = chatSelf(v); chatSet(t, 'How are you doing?', v.hungry > 0 ? 'pleading' : chatMoodFor(t)); }
   else if (act === 'needs'){ const t = chatNeeds(v); chatSet(t, 'Need anything?', v.hungry > 0 ? 'pleading' : 'serene'); }
+  else if (act === 'give'){
+    const n0 = v.errand ? v.errand.n + ' ' + v.errand.res : '';
+    const t = chatGive(v); if (t) chatSet(t, '(you hand over ' + n0 + ')', 'weeping');
+  }
   else if (act === 'feed'){
     if ((village.stores.food || 0) >= 1 && v.hungry > 0){
-      village.stores.food -= 1; v.hungry = 0; v.mood = Math.min(1.5, (v.mood || 1) + 0.2);
+      village.stores.food -= 1; v.hungry = 0; v.mood = Math.min(1.5, (v.mood || 1) + 0.2); vmem(v).fed++;
       chatSet(chatPick(v, ['"Thank you. Really. I won\'t forget it."', '"…That\'s the first proper meal in days."']), '(you hand them some food)', 'weeping');
       saveVillage(true); syncHUD(); A.S.thud && A.S.thud();
     }
@@ -6502,6 +6703,7 @@ function chatFrame(){
   _sermonRects.length = 0;
   const btns = [{ a: 'news', l: 'Any news?', sub: 'the wider world' }, { a: 'gossip', l: 'Gossip', sub: 'the others' }, { a: 'self', l: 'How are you?', sub: 'them' }, { a: 'needs', l: 'Need anything?', sub: 'what they lack' }];
   if (v.hungry > 0 && (village.stores.food || 0) >= 1) btns.push({ a: 'feed', l: 'Give food', sub: '-1 food' });
+  if (v.errand && v.errand.res && (player.res[v.errand.res] || 0) >= v.errand.n) btns.push({ a: 'give', l: 'Give ' + v.errand.n + ' ' + v.errand.res, sub: 'their request' });
   btns.push({ a: 'bye', l: 'Leave', sub: 'Esc' });
   const n = btns.length, gap = 10, bw = Math.min(170, Math.floor((SW - 40 - gap * (n - 1)) / n)), tot = n * bw + (n - 1) * gap, x0 = Math.round(SW / 2 - tot / 2), yb = SH - 78;
   btns.forEach((b, i) => {
@@ -6896,6 +7098,14 @@ function drawHoardItem(h, ox, oy, held){
     g.fillStyle = 'rgba(150,200,210,0.35)'; g.fillRect(-4, -3, 3, 3);
     g.fillStyle = '#c9b070'; g.fillRect(4, -3, 1.6, 1.6); g.fillRect(4, 0, 1.6, 1.6);   // dials
     g.strokeStyle = '#9a9a9a'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(-2, -5); g.lineTo(-5, -9); g.moveTo(1, -5); g.lineTo(4, -9); g.stroke();  // rabbit ears
+  } else if (T === 'couch'){
+    g.fillStyle = 'rgba(0,0,0,0.24)'; g.beginPath(); g.ellipse(0, 5.6, 12, 2.8, 0, 0, 7); g.fill();
+    g.fillStyle = '#2e2028'; g.fillRect(-12, -9, 24, 14);                                      // dark frame
+    g.fillStyle = '#7a3a3a'; g.fillRect(-12, -9, 24, 6);                                     // tall back
+    g.fillStyle = '#93504a'; g.fillRect(-12, -9, 24, 1.8);
+    g.fillStyle = '#6a3030'; g.fillRect(-12, -6, 3.5, 11); g.fillRect(8.5, -6, 3.5, 11);      // arms
+    g.fillStyle = '#b06a62'; g.fillRect(-8, -3, 7.4, 6); g.fillRect(0.6, -3, 7.4, 6);          // two seat cushions
+    g.fillStyle = '#c98a82'; g.fillRect(-8, -3, 7.4, 1.4); g.fillRect(0.6, -3, 7.4, 1.4);
   } else if (T === 'armchair'){
     // low 3/4 view — dark frame, two fat arms, a tall back, and a pale cushion that pops
     g.fillStyle = 'rgba(0,0,0,0.24)'; g.beginPath(); g.ellipse(0, 5.6, 8.5, 2.6, 0, 0, 7); g.fill();
@@ -8361,6 +8571,17 @@ function buildPlaceable(cx, cy, item, skipDist){
 function placeBuildAt(cx, cy, item, skipDist){
   if (player.mats[item.mat] <= 0) return false;
   if (!buildPlaceable(cx, cy, item, skipDist)) return false;
+  if (item.mat === 'grandshrine'){
+    if (props.some(pp => !pp.dead && pp.t === 'grandshrine')){ popText(player.x, player.y - 26, 'only one Grand Shrine per village', '#ff8f8f'); return false; }
+    if ((village.stores.favor | 0) < 5 || (village.conviction || 0) < 5){ popText(player.x, player.y - 26, 'needs 5 favor + 5 conviction', '#ff8f8f', 1.6); return false; }
+    openShrinePick(cx, cy, item); return false;                                           // the chooser finishes the job (and charges you) once you pick a design
+  }
+  if (item.mat === 'watchtower'){
+    const { w: iw, h: ih } = itemDims(item), tx = cx * CELL + iw * CELL / 2, ty = cy * CELL + ih * CELL / 2, rf = roomOf(tx, ty);
+    if (!rf || !inRoom(rf, tx, ty) || !is4x4Room(rf)){ popText(player.x, player.y - 26, 'watchtower stairs go in a 4x4 room', '#ff8f8f', 2); return false; }
+    if (props.some(pp => !pp.dead && pp.t === 'watchtower' && inRoom(rf, pp.x, pp.y))){ popText(player.x, player.y - 26, 'this room already has stairs', '#ff8f8f', 1.6); return false; }
+  }
+  if (TOWN_MAX[item.mat] && props.filter(pp => !pp.dead && pp.t === item.mat).length >= TOWN_MAX[item.mat]){ popText(player.x, player.y - 26, 'you already have the maximum (' + TOWN_MAX[item.mat] + ')', '#ff8f8f', 1.6); return false; }
   const { w, h } = itemDims(item);
   const wx = cx * CELL + CELL / 2, wy = cy * CELL + CELL / 2;
   player.mats[item.mat]--;
@@ -8383,11 +8604,14 @@ function placeBuildAt(cx, cy, item, skipDist){
     saveVillage(true);
   } else if (item.prop){
     // furniture — a placed prop at the piece centre (bed / study). non-solid so villagers can use it.
-    const px = cx * CELL + w * CELL / 2, py = cy * CELL + h * CELL / 2;
-    const dm = PROP_DIM[item.prop] || [20, 24];
-    const p = mkProp(px, py, dm[0], dm[1], item.prop); p.solid = false; p.hp = p.maxhp = 9999;
+    let px = cx * CELL + w * CELL / 2, py = cy * CELL + h * CELL / 2;
+    const dm = PROP_DIM[item.prop] || [20, 24], rot = !!(item.rotatable && buildDoorVert);
+    if (item.prop === 'watchtower'){ if (rot) py -= CELL / 2; else px += CELL / 2; }                       // the flight fills all but one cell of the footprint: that free cell at the bottom is where you step on
+    const p = mkProp(px, py, rot ? dm[1] : dm[0], rot ? dm[0] : dm[1], item.prop); p.solid = true; p.hp = p.maxhp = 9999; if (rot) p._rot = true;       // furniture and buildings have substance — nothing you build can be walked over
     props.push(p);
-    notePlacedProp(px, py, item.prop);
+    notePlacedProp(px, py, item.prop, rot ? 1 : null);
+    if (TOWN_INDOOR.has(item.prop)){ scheduleRoofs(); setTimeout(() => { if (!p.dead && !propIndoors(p)) popText(p.x, p.y - 26, 'needs a roof — build a room around it', '#ffcf8a', 2.2); }, 900); }
+    else if (item.prop === 'market') setTimeout(() => { if (!p.dead && propIndoors(p)) popText(p.x, p.y - 26, 'stalls only trade outdoors', '#ffcf8a', 2.2); }, 400);
   } else if (item.floor){
     const texture = item.plot ? 'plot' : (item.texture || null);
     const codexArc = typeof texture === 'string' && texture.startsWith('codex:') ? (CODEX_BY_ID[+texture.slice(6)] || {}).arc : null;
@@ -8490,7 +8714,7 @@ function removeBuild(){
     }
   }
   // a placed bed / study / torch / rack near the cursor?
-  const pp = props.find(p => !p.dead && (p.t === 'bed' || p.t === 'study' || p.t === 'altar' || p.t === 'shrine' || p.t === 'blacksmith' || TOWN_BUILD_IDS.includes(p.t) || p.t === 'torchpost' || p.t === 'weaponrack') && Math.hypot(p.x - w.x, p.y - w.y) < 20);
+  const pp = props.find(p => !p.dead && (p.t === 'bed' || p.t === 'study' || p.t === 'altar' || p.t === 'shrine' || p.t === 'blacksmith' || TOWN_BUILD_IDS.includes(p.t) || p.t === 'torchpost' || p.t === 'weaponrack' || p.t === 'couch' || p.t === 'plant') && Math.hypot(p.x - w.x, p.y - w.y) < 20);
   if (pp){
     if (pp.t === 'bed') village.villagers.forEach(v => { if (v.bed && Math.hypot(v.bed.x - pp.x, v.bed.y - pp.y) < 8) v.bed = null; });
     village.placedProps = village.placedProps.filter(q => !(q.t === pp.t && Math.abs(q.x - pp.x) < 3 && Math.abs(q.y - pp.y) < 3));
@@ -11996,7 +12220,7 @@ function noteTreeRemoved(x, y, t, sp, mc){
   if (sp){ (village.treeSp ||= {})[k] = sp + '|' + (mc || ''); }                          // remember WHAT it was, so the stump can match
   saveVillage();
 }
-function notePlacedProp(x, y, t){ village.placedProps.push({ x: Math.round(x), y: Math.round(y), t }); saveVillage(); checkHQ(); }
+function notePlacedProp(x, y, t, v){ const o = { x: Math.round(x), y: Math.round(y), t }; if (v != null) o.v = v; village.placedProps.push(o); saveVillage(); checkHQ(); }
 function noteRockHp(x, y, hp){ village.rocks[Math.round(x) + ',' + Math.round(y)] = Math.max(0, Math.round(hp)); saveVillage(); }
 // ---------- day / night cycle (village only, real time) ----------
 // village.tod: 0..1 wall-clock, 0 = deep pre-dawn, ~0.16 = sunrise, ~0.42 = midday,
@@ -12125,7 +12349,7 @@ function enterZone(name){
   buildMode = false; packOpen = false; craftOpen = false; travelOpen = false;
   craftGround = []; craftOpts = []; viewZoom = 1; viewZoomT = 1; buildOptScroll = 0; buildOptRects = []; ambient = []; clouds = []; steam = []; thrownItems = []; hazards = []; grenades = []; kickBits = []; _gtCache = null;
   specialProps = []; warningCars = []; panicCars = []; kennelPets = []; ambientCars = []; rollingBarrels = []; rollingWheels = []; helis = []; heist = null; _heistLoot = 0; slimePools = []; slimeGlobs = []; slimeFx = []; bossShots = []; FERRIS_PADS.length = 0; if (player) player._rideFerris = null; trainRuns = []; runawayTrains = []; trainWrecks = []; RAIL_LINES.length = 0; if (player) player._rideRocket = null; rocketFlights = []; rocketDebris = []; ROCKET_PADS.length = 0; drivingCar = null;
-  weather.mode = 'clear'; weather.t = 0; weather.hold = rand(8, 20); weather.rain = 0; weather.sun = 0; weather.flash = 0; weather.drops.length = 0;
+  weather.mode = 'clear'; weather.t = 0; weather.hold = rand(14, 30); weather.rain = 0; weather.sun = 0; weather.flash = 0; weather.drops.length = 0; weather.over = 0; weather.fog = 0; weather.windy = false;
   $('craftbar').classList.remove('on'); $('crafthint').classList.remove('on');
   $('pack').classList.remove('open'); $('travel').classList.remove('open');
   const cameFromMission = zone !== 'village' && name === 'village' && runStart;
@@ -12527,8 +12751,9 @@ function applyVillageProps(){
   for (const pp of village.placedProps)
     if (!props.some(p => p.t === pp.t && Math.abs(p.x - pp.x) < 2 && Math.abs(p.y - pp.y) < 2)){
       const dm = PROP_DIM[pp.t] || [16, 16];
-      const np = mkProp(pp.x, pp.y, dm[0], dm[1], pp.t);
-      if (pp.t === 'bed' || pp.t === 'study' || pp.t === 'altar' || pp.t === 'shrine' || pp.t === 'blacksmith' || TOWN_BUILD_IDS.includes(pp.t) || pp.t === 'torchpost' || pp.t === 'weaponrack'){ np.solid = false; np.hp = np.maxhp = 9999; }
+      const rotd = pp.t === 'watchtower' && pp.v === 1;
+      const np = mkProp(pp.x, pp.y, rotd ? dm[1] : dm[0], rotd ? dm[0] : dm[1], pp.t); if (rotd) np._rot = true; else if (pp.v != null) np._var = pp.v;
+      if (pp.t === 'bed' || pp.t === 'study' || pp.t === 'altar' || pp.t === 'shrine' || pp.t === 'blacksmith' || TOWN_BUILD_IDS.includes(pp.t) || pp.t === 'torchpost' || pp.t === 'weaponrack' || pp.t === 'couch' || pp.t === 'plant'){ np.solid = true; np.hp = np.maxhp = 9999; }
       props.push(np);
     }
 }
@@ -14274,20 +14499,20 @@ const PROP_MAT = { car:'metal', van:'metal', dumpster:'metal', hydrant:'metal', 
   stool:'wood', booth:'soft', pooltable:'wood', arcade:'glass', shelf:'wood', rack:'metal',
   register:'metal', locker:'metal', sink:'metal', safe:'metal',
   tree:'wood', stump:'wood', campfire:'wood', signpost:'wood', rock:'metal', bush:'soft', flowers:'soft', reeds:'soft',
-  twigbush:'wood', pebbles:'metal', dump:'metal', study:'wood', altar:'stone', shrine:'stone', blacksmith:'metal', bones:'wood', furn:'wood', landmark:'stone', cliff:'stone', waterfall:'stone', log:'wood', darkshrine:'stone', well:'stone', logpile:'wood', stonepile:'stone', smokerack:'wood', handcart:'wood', sheaves:'wood', market:'wood', barracks:'wood', watchtower:'wood', scriptorium:'wood', temple:'stone', granary:'wood', mutlab:'metal', icestatue:'glass',
+  twigbush:'wood', pebbles:'metal', dump:'metal', study:'wood', altar:'stone', shrine:'stone', blacksmith:'metal', bones:'wood', furn:'wood', landmark:'stone', cliff:'stone', waterfall:'stone', log:'wood', darkshrine:'stone', well:'stone', logpile:'wood', stonepile:'stone', smokerack:'wood', handcart:'wood', sheaves:'wood', market:'wood', barracks:'wood', watchtower:'wood', scriptorium:'wood', temple:'stone', grandshrine:'stone', granary:'wood', mutlab:'metal', icestatue:'glass',
   manhole:'metal', firework:'wood', cementmixer:'metal', kennel:'wood', neonsign:'glass', wreckingball:'metal', trafficcar:'metal' };
 const PROP_HP = { car:90, van:9999, dumpster:120, hydrant:40, barrel:14, crate:20, table:22, chair:8, tv:10,
   firebarrel:60, vent:9999, lamppost:26,
   counter:34, bed:16, plant:6, fridge:30, couch:20,
   stool:8, booth:30, pooltable:44, arcade:16, shelf:20, rack:22, register:14, locker:26, sink:20, safe:60,
-  tree:40, stump:16, campfire:9999, signpost:9999, rock:400, bush:14, flowers:4, reeds:6, twigbush:8, pebbles:6, dump:9999, study:9999, altar:9999, shrine:9999, blacksmith:9999, bones:9999, furn:40, landmark:9999, cliff:9999, waterfall:9999, log:70, darkshrine:70, well:9999, logpile:9999, stonepile:9999, smokerack:9999, handcart:9999, sheaves:9999, market:9999, barracks:9999, watchtower:9999, scriptorium:9999, temple:9999, granary:9999, mutlab:9999, icestatue:46,
+  tree:40, stump:16, campfire:9999, signpost:9999, rock:400, bush:14, flowers:4, reeds:6, twigbush:8, pebbles:6, dump:9999, study:9999, altar:9999, shrine:9999, blacksmith:9999, bones:9999, furn:40, landmark:9999, cliff:9999, waterfall:9999, log:70, darkshrine:70, well:9999, logpile:9999, stonepile:9999, smokerack:9999, handcart:9999, sheaves:9999, market:9999, barracks:9999, watchtower:9999, scriptorium:9999, temple:9999, grandshrine:9999, granary:9999, mutlab:9999, icestatue:46,
   manhole:20, firework:24, cementmixer:70, kennel:16, neonsign:28, wreckingball:9999, trafficcar:90 };   // same as a parked 'car' — it should take damage and blow up the same way, not shrug off everything
 const PROP_DIM = { table:[26,18], chair:[14,14], tv:[22,14], counter:[46,16], bed:[24,30], plant:[14,14],
   firebarrel:[20,18], vent:[26,20], lamppost:[7,8], torchpost:[7,10],
   fridge:[18,24], couch:[40,18], stool:[12,12], booth:[30,20], pooltable:[46,28], arcade:[18,22],
   shelf:[34,14], rack:[24,14], register:[16,12], locker:[16,26], sink:[22,14], safe:[20,20],
   tree:[16,14], stump:[14,12], campfire:[16,14], signpost:[12,16], rock:[16,12], bush:[16,12], flowers:[14,10], reeds:[10,10],
-  twigbush:[16,13], pebbles:[13,9], dump:[40,20], study:[24,22], altar:[26,18], shrine:[16,16], blacksmith:[30,18], bones:[16,10], furn:[30,18], landmark:[30,20], cliff:[46,16], waterfall:[60,18], log:[30,12], darkshrine:[18,30], well:[26,24], logpile:[26,18], stonepile:[24,18], smokerack:[26,24], handcart:[30,18], sheaves:[20,20], market:[30,18], barracks:[30,18], watchtower:[18,18], scriptorium:[30,18], temple:[32,20], granary:[18,18], mutlab:[34,20], weaponrack:[26,12], icestatue:[24,34],
+  twigbush:[16,13], pebbles:[13,9], dump:[40,20], study:[24,22], altar:[26,18], shrine:[16,16], blacksmith:[30,18], bones:[16,10], furn:[30,18], landmark:[30,20], cliff:[46,16], waterfall:[60,18], log:[30,12], darkshrine:[18,30], well:[26,24], logpile:[26,18], stonepile:[24,18], smokerack:[26,24], handcart:[30,18], sheaves:[20,20], market:[48,30], barracks:[32,46], watchtower:[48,32], scriptorium:[34,20], grandshrine:[58,34], temple:[30,30], granary:[32,28], mutlab:[34,20], weaponrack:[26,12], icestatue:[24,34],
   manhole:[13,13], firework:[20,24], cementmixer:[26,24], kennel:[18,15], neonsign:[32,10], wreckingball:[20,20], trafficcar:[64,30] };   // same silhouette size as a parked 'car' — it was spawning at under half scale
 // props with faux-3D height — y-sort earlier by ~half their visual rise so a player level with
 // the base draws in front of the tall part (same trick as trees / beds / boulders)
@@ -14299,7 +14524,7 @@ const PROP_SORT_LIFT = { crate:14, barrel:16, dumpster:18, car:12, van:14, hydra
 // but approaching from the dry side still lets you reach and lift it without ever stepping in.
 const PROP_NONSOLID = new Set(['bones', 'chair','plant','hydrant','tv','stool','register','sink','flowers','reeds','twigbush','pebbles','dump','bed','study','altar','shrine','blacksmith','well','logpile','stonepile','smokerack','handcart','sheaves','market','barracks','watchtower','scriptorium','temple','granary','mutlab','vent','lamppost','torchpost','weaponrack','manhole','neonsign']);
 const NATURE_PROP = new Set(['bones', 'cliff', 'waterfall','log','tree','rock','bush','flowers','reeds','stump','campfire','signpost','twigbush','pebbles','dump','vent']);
-const FIXED_PROP = new Set(['bones', 'furn', 'landmark', 'cliff', 'waterfall','log','tree','stump','campfire','signpost','reeds','flowers','bush','twigbush','pebbles','dump','bed','study','altar','shrine','blacksmith','darkshrine','well','logpile','stonepile','smokerack','handcart','sheaves','market','barracks','watchtower','scriptorium','temple','granary','firebarrel','vent','lamppost','torchpost','weaponrack','van','icestatue','manhole','firework','cementmixer','neonsign','wreckingball']);  // never slide when hit / bumped — the raid van is a fixed landmark, not clutter; an ice statue is stuck to the ground it froze on; trafficcar is deliberately NOT fixed — it drives
+const FIXED_PROP = new Set(['bones', 'furn', 'landmark', 'cliff', 'waterfall','log','tree','stump','campfire','signpost','reeds','flowers','bush','twigbush','pebbles','dump','bed','study','altar','shrine','blacksmith','darkshrine','well','logpile','stonepile','smokerack','handcart','sheaves','market','barracks','watchtower','scriptorium','temple','grandshrine','granary','firebarrel','vent','lamppost','torchpost','weaponrack','van','icestatue','manhole','firework','cementmixer','neonsign','wreckingball']);  // never slide when hit / bumped — the raid van is a fixed landmark, not clutter; an ice statue is stuck to the ground it froze on; trafficcar is deliberately NOT fixed — it drives
 // user: "the ability to lift and throw furniture and items... can't lift and throw the fridge but
 // you can throw crates." A short, deliberately conservative list — light clutter and freestanding
 // pieces, not the bulky fixed-to-the-wall stuff. City-only, same as the combat that gives it a
@@ -14642,7 +14867,7 @@ function spawnVillagers(){
 }
 // ---- Phase 2: the squad — mustered villagers who follow and fight ----
 const SQUAD_CAP = 6;
-function squadCap(){ return SQUAD_CAP + 2 * Math.min(TOWN_BUILD_CAP, props.filter(p => !p.dead && p.t === 'barracks').length); }   // Barracks: +2 each
+function squadCap(){ return SQUAD_CAP + 1 * Math.min(TOWN_MAX.barracks, props.filter(p => !p.dead && p.t === 'barracks' && propIndoors(p)).length); }   // Barracks: +2 each
 function promoteSoldier(e, rec){
   e.soldier = true; e.team = 'player'; e.routed = false;
   e.speed = 160 * ((e._mutB && e._mutB.swift) || 1); e.invuln = e.invuln || 0; e.mad = false;   // a marching pace — slower than the player, no sprint into the fray
@@ -14801,8 +15026,8 @@ function wipeSave(appearance){
   village = null;
   // drop the previous save's discovered materials from the shared runtime tables too —
   // otherwise a wiped game could still craft materials it never actually discovered
-  for (let i = RECIPES.length - 1; i >= 0; i--) if (/^(mat_|matf_|matd_|path_|altar$|shrine$|blacksmith$|well$|logpile$|stonepile$|smokerack$|handcart$|sheaves$|market$|barracks$|watchtower$|scriptorium$|temple$|granary$|mutlab$|wpn-)/.test(RECIPES[i].id)) RECIPES.splice(i, 1);
-  for (let i = BUILD_ITEMS.length - 1; i >= 0; i--) if (/^(mat_|matf_|matd_|path_|altar$|shrine$|blacksmith$|well$|logpile$|stonepile$|smokerack$|handcart$|sheaves$|market$|barracks$|watchtower$|scriptorium$|temple$|granary$|mutlab$)/.test(BUILD_ITEMS[i].mat)) BUILD_ITEMS.splice(i, 1);
+  for (let i = RECIPES.length - 1; i >= 0; i--) if (/^(mat_|matf_|matd_|path_|altar$|shrine$|blacksmith$|well$|logpile$|stonepile$|smokerack$|handcart$|sheaves$|market$|barracks$|watchtower$|scriptorium$|temple$|granary$|grandshrine$|mutlab$|wpn-)/.test(RECIPES[i].id)) RECIPES.splice(i, 1);
+  for (let i = BUILD_ITEMS.length - 1; i >= 0; i--) if (/^(mat_|matf_|matd_|path_|altar$|shrine$|blacksmith$|well$|logpile$|stonepile$|smokerack$|handcart$|sheaves$|market$|barracks$|watchtower$|scriptorium$|temple$|granary$|grandshrine$|mutlab$)/.test(BUILD_ITEMS[i].mat)) BUILD_ITEMS.splice(i, 1);
   for (let i = ROSTER.enemies.length - 1; i >= 0; i--) if (/^raid-/.test(ROSTER.enemies[i].id)){ delete ROSTER_ENEMY[ROSTER.enemies[i].id]; ROSTER.enemies.splice(i, 1); }
   _pathsRegistered = false;
   _cultBuildRegistered = false;
@@ -15847,6 +16072,7 @@ function moveActor(a, dt){
 
   for (const p of props){
     if (p.dead || !p.solid) continue;
+    if (village && zone === 'village' && Math.abs(a.x - p.x) < (p.w + a.r*1.4)/2 && Math.abs(a.y - p.y) < (p.h + a.r*1.4)/2) continue;   // already inside one (built around you / slept in it): let them walk out instead of being pinned
     if (Math.abs(nx - p.x) < (p.w + a.r*1.4)/2 && Math.abs(ny - p.y) < (p.h + a.r*1.4)/2){
       if (speed > 380 && !a._slammed){
         hurtProp(p, speed * 0.05, a);
@@ -15861,11 +16087,12 @@ function moveActor(a, dt){
   // display spots & gift piles are furniture — you walk around them, not through them (so a
   // full-size item on one never ends up looming over you)
   if (zone === 'village' && village){
-    for (const arr of [village.displayspots, village.giftpiles]){
+    for (const arr of [village.displayspots, village.giftpiles, village.displays]){
       if (!arr) continue;
       for (const d of arr){
-        const rad = 10 + a.r * 0.6;
-        if (Math.abs(nx - d.x) < rad && Math.abs(ny - d.y) < rad){
+        const hw = (d.kind === 'longtable' ? 16 : d.kind === 'sidetable' ? 8 : 15) + a.r * 0.6, hh = (d.kind === 'longtable' || d.kind === 'sidetable' ? 8 : 15) + a.r * 0.6;   // 2x2 piles/spots, 2x1 long table, 1x1 side table
+        if (Math.abs(a.x - d.x) < hw && Math.abs(a.y - d.y) < hh) continue;                                   // already inside: walk out
+        if (Math.abs(nx - d.x) < hw && Math.abs(ny - d.y) < hh){
           const dx = a.x - d.x, dy = a.y - d.y;
           if (Math.abs(dx) >= Math.abs(dy)){ nx = a.x; a.vx *= -0.2; } else { ny = a.y; a.vy *= -0.2; }
         }
@@ -16440,10 +16667,15 @@ function attack(a){
 
 function damage(t, dmg, from, knock, noHeat){
   if (t.dead) return;
-  if (t.villager && !t._met && village) revealName(village.villagers.find(v => v.id === t._vid));
+  if (t.villager && village){
+    const _rec = village.villagers.find(v => v.id === t._vid);
+    if (!t._met) revealName(_rec);
+    if (_rec && from && (from === player || from.team === 'player') && !(t._memT > performance.now())){ t._memT = performance.now() + 8000; const _m = vmem(_rec); _m.hurt++; _m.lastHurt = village.day || 0; }
+  }
   if (t._indestructible){ burst(t.x, t.y - 8, 3, '#ffe08a', 140); return; }   // the Terminator wager's robot
   if (t.slimeBoss && t._sb){ if (t._sb.air || t._sb.invuln > 0){ burst(t.x, t.y - 8, 4, BK[t._bk || 'slime'].burst[0], 140); return; } if (t._sb.vuln > 0) dmg *= 1.6; }
   if (t._mutB && t._mutB.guard) dmg *= t._mutB.guard;                                                                                // Cinder Skin & co.   // untouchable mid-air / mid-roar; its exposed core takes extra
+  if (t === player && (drivingCar || (mission && mission.vanGetaway))) return;                       // behind the wheel (or diving into the getaway van) you can't be hurt — no dying on the way out
   if (t.team === 'player' && (t.invuln > 0 || godMode || zone === 'village')) return;
   if (runWagers.length && zone === 'city'){                                  // Glass Cannon
     if (t === player && wagerOn('glass')) dmg *= 1.75;
@@ -16863,6 +17095,7 @@ function exitCar(wrecked){
     player.x = p.x - Math.cos(p._facing || 0) * 30; player.y = p.y - Math.sin(p._facing || 0) * 30;
   }
   drivingCar = null;
+  player.invuln = Math.max(player.invuln || 0, wrecked ? 2.5 : 1.2);                        // a moment of grace after leaving the car (longer if it was blown out from under you)
   if (wrecked) popText(player.x, player.y - 18, 'thrown clear!', '#ff8f8f', 1.2);   // an unplanned exit still deserves a beat — a calm one doesn't need any announcement
 }
 function tryInteract(){
@@ -17488,7 +17721,35 @@ function nearestFoe(e, range){
   }
   return best;
 }
+// the watchtower a guard has been assigned to: {rf, stairs}, or null
+function guardTowerFor(e, rec){
+  if (!rec || !rec.tower || !village || !village.roofs) return null;
+  const towers = village.roofs.filter(r => r.role === 'tower');
+  let tw = e._onTower ? towerRoofOf(e) : null;
+  if (!tw) tw = towers.find(r => !enemies.some(o => o !== e && !o.dead && o._onTower && o._onTower.ix0 === r.ix0 && o._onTower.iy0 === r.iy0));
+  if (!tw) return null;
+  const st = props.find(pp => !pp.dead && pp.t === 'watchtower' && inRoom(tw, pp.x, pp.y));
+  return st ? { rf: tw, stairs: st._rot ? { x: st.x, y: st.y + st.h / 2 + 12 } : { x: st.x - st.w / 2 - 12, y: st.y } } : null;
+}
+// up on the roof: hold position, can't be hurt, and shoot any raider / hostile who comes within range
+function towerLookout(e, dt, rf){
+  e.vx = e.vy = 0; e.x = (rf.ix0 + rf.ix1) / 2; e.y = (rf.iy0 + rf.iy1) / 2; e.invuln = Math.max(e.invuln || 0, 0.5); e._inBed = false;
+  e.atkCd = Math.max(0, (e.atkCd || 0) - dt); e._twT = (e._twT || 0) - dt;
+  if (e._twT > 0) return;
+  let tg = null, bd = 340 * 340;
+  for (const o of enemies){ if (o.dead || o.team !== 'enemy' || o.civ || o.villager || o.cop) continue; const d = dist2(o.x, o.y, e.x, e.y); if (d < bd){ bd = d; tg = o; } }
+  if (!tg){ e._twT = 0.25; return; }
+  e._aim = Math.atan2(tg.y - e.y, tg.x - e.x); e._twT = 1.05;
+  if ((e._callT || 0) < performance.now()){ e._callT = performance.now() + 15000; popText(e.x, e.y - 34, '"Hostiles!"', '#ffb070', 1.6); }
+  const wp = WEAPONS.smg, vis = bulletVisual(wp, 'smg', e), ang = e._aim + rand(-0.05, 0.05);
+  bullets.push({ x: e.x + Math.cos(ang) * 10, y: e.y - 22 + Math.sin(ang) * 10, vx: Math.cos(ang) * 560, vy: Math.sin(ang) * 560, ang, style: vis.style, col: vis.col, dmg: 13, knock: 120, team: 'player', life: 0.85, wp, from: { x: e.x, y: e.y - 22 } });
+}
 function updateSoldier(e, dt){
+  if (e._onTower){ const trf = towerRoofOf(e); const rec0 = village && village.villagers.find(v => v.id === e._vid); if (trf && rec0 && rec0.tower){ e._torch = village.tod != null && todLerp().night > 0.3; if (e._torch) lights.push({ x: e.x, y: e.y - 24, r: 130, col: [255, 176, 84], life: 0.02, t: 0.06 }); towerLookout(e, dt, trf); return; } e._onTower = null; }
+  if (e._isGuard && zone === 'village' && village && village.tod != null){        // village guards carry a torch after dark: a warm pool of light that moves with them
+    const nt = todLerp().night; e._torch = nt > 0.3 && !e._inBed && !e._napping;
+    if (e._torch){ const fl = 0.85 + Math.sin(performance.now() / 90 + e.x) * 0.1 + Math.random() * 0.05; lights.push({ x: e.x + Math.cos(e.dir || 0) * 9, y: e.y - 6, r: 118 * fl, col: [255, 176, 84], life: 0.02, t: 0.06 }); }
+  }
   if (e._thrallT != null){                          // Necromancer's skeletons crumble on their own timer
     e._thrallT -= dt;
     if (e._thrallT <= 0){ e.dead = true; e.corpseT = 0; burst(e.x, e.y, 10, '#c9c9d2', 120); return; }
@@ -17548,12 +17809,13 @@ function updateSoldier(e, dt){
     if (e._isGuard){
       // guards are on their feet all night, so they get a few hours' sleep around midday: each one heads to their bed (or beside the fire) at a slightly different time, sleeps, then goes back to the beat
       const tod = village && village.tod != null ? village.tod : 0.3, nrec = village && e._vid ? village.villagers.find(v => v.id === e._vid) : null;
-      const ns = 0.36 + (Math.abs(strHash(e._vid || 'g')) % 4) * 0.02, nap = zone === 'village' && tod >= ns && tod < ns + 0.09;
+      const twInfo = guardTowerFor(e, nrec);
+      const ns = 0.36 + (Math.abs(strHash(e._vid || 'g')) % 4) * 0.02, nap = zone === 'village' && tod >= ns && tod < ns + 0.09 && !twInfo;
       if (e._inBed && !nap){ e._inBed = false; ejectFromWalls(e, 20); e._patrolPath = null; }
       if (nap){
         const fireP = props.find(pp => !pp.dead && pp.t === 'campfire' && !pp.dead) || { x: e.x, y: e.y };
         napTarget = nrec && nrec.bed ? nrec.bed : { x: fireP.x + 34, y: fireP.y + 26 };
-        if (Math.hypot(napTarget.x - e.x, napTarget.y - e.y) < 22){
+        if (Math.hypot(napTarget.x - e.x, napTarget.y - e.y) < 27){
           e.vx = e.vy = 0; e.dir = 1.75; e._napping = true;
           e._zzz = (e._zzz ?? rand(0.5, 3)) - dt;
           if (e._zzz <= 0){ e._zzz = rand(3, 6); popText(e.x, e.y - 18, 'z', 'rgba(150,150,175,0.85)', 1.8); }
@@ -17564,6 +17826,10 @@ function updateSoldier(e, dt){
         }
       }
       e._napping = false;
+      if (twInfo){                                                                                        // assigned to a watchtower: walk to its stairs, then climb up
+        napTarget = twInfo.stairs;
+        if (Math.hypot(napTarget.x - e.x, napTarget.y - e.y) < 30){ e._onTower = { ix0: twInfo.rf.ix0, iy0: twInfo.rf.iy0 }; e.x = (twInfo.rf.ix0 + twInfo.rf.ix1) / 2; e.y = (twInfo.rf.iy0 + twInfo.rf.iy1) / 2; e.vx = e.vy = 0; burst(e.x, e.y - 8, 8, 'rgba(200,190,170,0.6)', 100); return; }
+      }
       const pts = guardPatrolPoints(e);
       const idx = ((e._patrolIdx || 0) % pts.length + pts.length) % pts.length;
       const wp2 = pts[idx];
@@ -17959,7 +18225,7 @@ function updateEnemy(e, dt){
     if (e._fishing) e.dir = Math.atan2(hy - e.y, hx - e.x);        // face the water while casting
     const nightTarget = nightSleep ? ((rec && rec.bed) ? rec.bed : e._anch) : null;   // the actual bed, not the door waypoint
     const bedGd = nightTarget ? Math.hypot(nightTarget.x - e.x, nightTarget.y - e.y) : 999;
-    e._asleep = nightSleep && bedGd < 22;
+    e._asleep = nightSleep && bedGd < 27;
     if (nightSleep && !e._asleep){                                 // meant to be in bed but not there yet
       const moving = Math.hypot(e.vx, e.vy) > 12;
       e._stuckT = moving ? Math.max(0, (e._stuckT || 0) - dt * 2) : (e._stuckT || 0) + dt;
@@ -20887,7 +21153,7 @@ function drawRollingBarrel(b){
 }
 let heads = [], spurts = [];         // severed heads (bouncing, rolling, bleeding) and neck blood-fountains — Executioner's beheading
 let fx = [];                             // one-off cosmetic overlay shapes (shockwave rings, ...) — no gameplay, just a timed draw
-const weather = { mode: 'clear', t: 0, hold: 22, rain: 0, sun: 0, flash: 0, drops: [], heat: false };
+const weather = { mode: 'clear', t: 0, hold: 22, rain: 0, sun: 0, flash: 0, drops: [], heat: false, over: 0, fog: 0, rainMax: 0.6, windy: false };
 const _LEAF_COL  = ['#4e7d34', '#5f9440', '#77993a', '#b5892f', '#a8662a', '#caa23c'];
 const _FLY_COL   = ['#f4f4ef', '#ffe14a', '#ff9a3a', '#8ab6ff', '#ff8ad4'];
 const _TRASH_COL = ['#cfcaba', '#b7b2a0', '#9a948298', '#dcd6c2', '#8b8496'];
@@ -20900,14 +21166,27 @@ function updateWeather(dt){
     if (w.mode === 'clear'){
       // mostly a rain shower rolls in, but every so often it's a real heatwave instead — dries the
       // whole city out, feeds any fire that's burning, and makes water builds noticeably worse
-      if (Math.random() < countryStyle().heat){ w.mode = 'heat'; w.hold = rand(20, 34); w.heat = true; }
-      else { w.mode = 'rain'; w.hold = rand(13, 33); }
+      // weather is varied now and rain is no longer the default: a fair spell usually just stays fair, and what does roll in is one of
+      // overcast / fog / a windy spell / a light shower / (rarely) a proper storm / (per country) a heatwave
+      const st = countryStyle(), r = Math.random(), wet = 1 / Math.max(0.6, st.clear || 1);
+      if (r < st.heat * 0.7){ w.mode = 'heat'; w.hold = rand(20, 34); w.heat = true; }
+      else if (r < 0.10 + st.heat * 0.7){ w.mode = 'rain'; w.rainMax = rand(0.45, 0.7); w.hold = rand(12, 26); }              // light shower
+      else if (r < 0.10 + st.heat * 0.7 + 0.04 * wet){ w.mode = 'rain'; w.rainMax = 1; w.hold = rand(18, 30); }               // storm (only these get lightning)
+      else if (r < 0.32 + st.heat * 0.7){ w.mode = 'overcast'; w.hold = rand(26, 50); }
+      else if (r < 0.46 + st.heat * 0.7){ w.mode = 'fog'; w.hold = rand(22, 42); }
+      else if (r < 0.62 + st.heat * 0.7){ w.mode = 'windy'; w.hold = rand(18, 34); }
+      else { w.mode = 'clear'; w.hold = rand(30, 65) * (st.clear || 1); }                                                        // another fair spell
+      w.windy = w.mode === 'windy';
     }
-    else { w.mode = 'clear'; w.hold = rand(24, 52) * countryStyle().clear; w.sun = 0.001; w.heat = false; }   // arm the sunbreak (fair spells are longer on the plains, shorter in the wetlands)
+    else { w.mode = 'clear'; w.hold = rand(34, 70) * (countryStyle().clear || 1); w.sun = 0.001; w.heat = false; w.windy = false; }   // arm the sunbreak (fair spells are longer on the plains, shorter in the wetlands)
   }
-  const tgt = w.mode === 'rain' ? 1 : 0;
+  const tgt = w.mode === 'rain' ? (w.rainMax || 0.6) : 0;
+  w.over += ((w.mode === 'overcast' ? 1 : w.mode === 'rain' ? 0.7 : 0) - w.over) * Math.min(1, dt * 0.35);
+  w.fog += ((w.mode === 'fog' ? 1 : 0) - w.fog) * Math.min(1, dt * 0.3);
+  if (w.windy && Math.random() < dt * 0.9) wind.gust = Math.max(wind.gust, rand(30, 60));            // a steady run of gusts (leaves, litter and flecks tear across)
   w.rain += (tgt - w.rain) * Math.min(1, dt * (w.mode === 'rain' ? 0.32 : 0.6));
   if (w.rain < 0.004) w.rain = 0;
+  if (w.over < 0.004) w.over = 0; if (w.fog < 0.004) w.fog = 0;
   // sunbreak: swells then fades over the ~8s after a shower ends
   if (w.mode === 'clear' && w.sun > 0) w.sun += (w.rain > 0.35 ? 1 : -1) * dt * (w.rain > 0.35 ? 1.1 : 0.28);
   w.sun = clamp(w.sun, 0, 1); if (w.mode === 'rain') w.sun = 0;
@@ -21648,7 +21927,13 @@ function drawFireflies(camx, camy){
 // city sky: rain streaks, overcast wash, sunbreak shafts, lightning — screen-space, drawn on ctx
 function drawWeather(){
   const w = weather;
-  if (w.rain < 0.02 && w.sun < 0.02 && w.flash < 0.02) return;
+  if (w.rain < 0.02 && w.sun < 0.02 && w.flash < 0.02 && w.over < 0.02 && w.fog < 0.02) return;
+  if (w.over > 0.02){ ctx.fillStyle = `rgba(66,72,90,${0.16 * w.over})`; ctx.fillRect(0, 0, W, H); }   // a grey lid on the sky
+  if (w.fog > 0.02){                                                                                     // drifting fog banks
+    ctx.fillStyle = `rgba(196,204,214,${0.16 * w.fog})`; ctx.fillRect(0, 0, W, H);
+    const tf = performance.now() / 1000;
+    for (let i = 0; i < 6; i++){ const bx = ((i * 0.23 * W + tf * (8 + i * 3)) % (W * 1.5)) - W * 0.25, by = H * (0.15 + ((i * 37) % 60) / 100), gr = ctx.createRadialGradient(bx, by, 10, bx, by, W * 0.34); gr.addColorStop(0, `rgba(214,220,228,${0.2 * w.fog})`); gr.addColorStop(1, 'rgba(214,220,228,0)'); ctx.fillStyle = gr; ctx.fillRect(bx - W * 0.34, by - W * 0.34, W * 0.68, W * 0.68); }
+  }
   let sheltered = false;                          // ease off the rain when the player is under a roof
   for (const c of chunks.values()){ const r = c.roof; if (r && player.x > r.x0 && player.x < r.x1 && player.y > r.y0 && player.y < r.y1){ sheltered = true; break; } }
   if (w.rain > 0.02){
@@ -22006,6 +22291,7 @@ function _logRORDrawError(err){
   if (window.__RORDrawErrors.length > 20) window.__RORDrawErrors.shift();
   console.error('[draw]', err);
 }
+let _editUI = false, _inVillageUI = false;
 function draw(){
   const shx = (Math.random()-0.5) * cam.shake, shy = (Math.random()-0.5) * cam.shake;
   const camx = cam.x + shx, camy = cam.y + shy;
@@ -22017,7 +22303,7 @@ function draw(){
   const _dn = performance.now(); const _dz = Math.min(0.05, (_dn - (draw._t || _dn)) / 1000); draw._t = _dn;
   viewZoom += (viewZoomT - viewZoom) * Math.min(1, _dz * 16);
   if (Math.abs(viewZoom - viewZoomT) < 0.01) viewZoom = viewZoomT;
-  if (!craftOpen && !musingOpen && !assignOpen && !giftPickOpen && !cultMenuOpen && !researchOpen && viewZoom <= 1.001 && paused && !packOpen && !travelOpen && !mapOpen && !cityOpen && !sermonOpen && !dossierOpen && !spoilsOpen && !winOpen && !legacyOpen && !smithyOpen && !ngFleeOpen && !$('settings').classList.contains('open')) paused = false;
+  if (!craftOpen && !musingOpen && !assignOpen && !shrinePickOpen && !giftPickOpen && !cultMenuOpen && !researchOpen && viewZoom <= 1.001 && paused && !packOpen && !travelOpen && !mapOpen && !cityOpen && !sermonOpen && !dossierOpen && !spoilsOpen && !winOpen && !legacyOpen && !smithyOpen && !ngFleeOpen && !$('settings').classList.contains('open')) paused = false;
   // user: "pausing seems to stop the people but things keep occuring that shake the screen - as
   // if the environment is not paused". This call used to run unconditionally every real frame
   // (draw() itself isn't gated on `paused`, only step() is) — so weather kept advancing, and a
@@ -22122,7 +22408,7 @@ function draw(){
   for (const pk of pickups) if (!pk.taken && inView(pk.x, pk.y, camx, camy)) _dl.push(pk.y - 30, 1, _dl.length, pk);
   for (const it of thrownItems) if (inView(it.x, it.y, camx, camy)) _dl.push(it.y - (it.z > 4 ? 30 : 3), 5, _dl.length, it);
   for (const g of grenades) if (inView(g.x, g.y, camx, camy)) _dl.push(g.y - (g.z > 4 ? 26 : 2), 9, _dl.length, g);
-  for (const e of enemies) if (!e.dead && !e._inBed && inView(e.x, e.y, camx, camy)) _dl.push(e.y, 2, _dl.length, e);   // lying-in-bed villagers are drawn by the bed prop itself (see bedSleeper) — not as a standing actor too
+  for (const e of enemies) if (!e.dead && !e._inBed && !e._onTower && inView(e.x, e.y, camx, camy)) _dl.push(e.y, 2, _dl.length, e);   // lying-in-bed villagers are drawn by the bed prop itself (see bedSleeper) — not as a standing actor too
   for (const e of enemies) if (e.dead && inView(e.x, e.y, camx, camy)) _dl.push(e.y - 40, 2, _dl.length, e);
   // user: "floating on top of things" — a loose kennel pet used to be drawn in its own pass AFTER
   // this whole y-sorted list, so it rendered on top of every prop and wall no matter its actual
@@ -22319,7 +22605,7 @@ function draw(){
       octx.restore();
     }
   } else {                                       // city: dark noir wash, deepened a touch while it rains
-    octx.fillStyle = `rgba(12,11,26,${0.34 + 0.07 * weather.rain})`;
+    octx.fillStyle = `rgba(12,11,26,${0.34 + 0.07 * weather.rain + 0.05 * weather.over + 0.04 * weather.fog})`;
     octx.fillRect(0, 0, OW, OH);
     if (viewZoom <= 1.05) for (const cl of clouds){   // clouds roll overhead here too — a moving pool of deeper shadow
       const sx = vw(cl.x - camx), sy = vw(cl.y - camy), rx = vw(cl.rx), ry = vw(cl.ry), rm = Math.max(rx, ry);
@@ -22373,7 +22659,7 @@ function draw(){
     for (const rf of village.roofs){
       const op = roomOpenings(rf);
       for (const w of op.windows){                                     // a small halo just around a visible pane
-        if (!winShown(rf, w)) continue;
+        if (!winShown(rf, w) || isChurchCell(Math.floor(w.x / CELL), Math.floor(w.y / CELL))) continue;   // (church panes are stained glass — lit separately below)
         const wx = vw(w.x - camx), wy = vw(w.y + 3 - camy);            // +3: the pane sits on the wall face, just below the cell centre
         if (wx < -20 || wx > OW + 20 || wy < -20 || wy > OH + 20) continue;
         const wf = tod.night * (0.85 + 0.16 * Math.sin(now / 170 + w.x));
@@ -22516,16 +22802,62 @@ function draw(){
     const nb = Math.min(1, (tod.night - 0.32) / 0.5);
     drawDoorGlow(camx, camy, nb);                                       // ONE warm pool on the path at each south doorway
     if (village && village.roofs) for (const rf of village.roofs){
+      const ra = rf._a == null ? 1 : rf._a;
+      if (ra > 0.05){
+        if (rf.role === 'library'){                                     // skylight: warm lamplit glass with a bloom
+          const k = skylightRect(rf), sx = vw(k.x - camx), sy = vw(k.y - camy), sw2 = vw(k.w), sh2 = vw(k.h);
+          if (k.w > 0 && sx + sw2 > 0 && sx < OW && sy + sh2 > 0 && sy < OH){
+            octx.save(); octx.globalCompositeOperation = 'lighter';
+            const bg = octx.createRadialGradient(sx + sw2 / 2, sy + sh2 / 2, 0, sx + sw2 / 2, sy + sh2 / 2, Math.max(sw2, sh2) * 1.0); bg.addColorStop(0, `rgba(236,152,54,${0.3 * nb * ra})`); bg.addColorStop(1, 'rgba(0,0,0,0)');
+            octx.fillStyle = bg; octx.fillRect(sx - sw2, sy - sh2, sw2 * 3, sh2 * 3);
+            octx.restore();
+            const fk = 0.9 + 0.1 * Math.sin(now / 210 + rf.seed);
+            octx.fillStyle = `rgba(206,132,32,${nb * ra * 0.92})`; octx.fillRect(sx, sy, sw2, sh2);                             // deep gold pane, like the windows
+            octx.fillStyle = `rgba(255,206,110,${nb * ra * fk * 0.85})`; octx.fillRect(sx + sw2 * 0.18, sy + sh2 * 0.22, sw2 * 0.64, sh2 * 0.56);   // hot centre
+            octx.strokeStyle = `rgba(46,38,32,${0.85 * nb * ra})`; octx.lineWidth = Math.max(1, vw(0.9)); octx.strokeRect(sx, sy, sw2, sh2);   // frame + bars
+            octx.beginPath(); for (let i = 1; i < 4; i++){ octx.moveTo(sx + sw2 * i / 4, sy); octx.lineTo(sx + sw2 * i / 4, sy + sh2); } octx.moveTo(sx, sy + sh2 / 2); octx.lineTo(sx + sw2, sy + sh2 / 2); octx.stroke();
+          }
+        } else if (rf.role === 'church'){                               // rose window: a wheel of coloured light
+          const ro = churchRose(rf), rx = vw(ro.x - camx), ry = vw(ro.y - camy), rr = vw(ro.r), hz = (rf.x1 - rf.x0) >= (rf.y1 - rf.y0), sq = 0.68;
+          if (rx + rr * 3 > 0 && rx - rr * 3 < OW && ry + rr * 3 > 0 && ry - rr * 3 < OH){
+            octx.save(); octx.translate(rx, ry); octx.scale(hz ? 1 : sq, hz ? sq : 1);                                 // foreshortened onto the pitched roof, not a flat disc
+            octx.globalCompositeOperation = 'lighter';
+            const gl = octx.createRadialGradient(0, 0, rr * 0.4, 0, 0, rr * 2.8); gl.addColorStop(0, `rgba(230,120,30,${0.34 * nb * ra})`); gl.addColorStop(1, 'rgba(0,0,0,0)'); octx.fillStyle = gl; octx.fillRect(-rr * 3, -rr * 3, rr * 6, rr * 6);
+            octx.globalCompositeOperation = 'source-over';
+            for (let i = 0; i < 8; i++){ octx.fillStyle = hexA(['#d01c2c', '#1c4ce0', '#f0a000', '#14a048'][i % 4], 0.86 * nb * ra); octx.beginPath(); octx.moveTo(0, 0); octx.arc(0, 0, rr, i * Math.PI / 4, (i + 1) * Math.PI / 4); octx.closePath(); octx.fill(); }
+            const shade = octx.createLinearGradient(hz ? 0 : -rr, hz ? -rr : 0, hz ? 0 : rr, hz ? rr : 0); shade.addColorStop(0, 'rgba(255,240,200,0.25)'); shade.addColorStop(0.5, 'rgba(0,0,0,0)'); shade.addColorStop(1, `rgba(10,4,20,${0.42 * nb * ra})`);   // curvature: catching light on the upslope, deeper on the far side
+            octx.fillStyle = shade; octx.beginPath(); octx.arc(0, 0, rr, 0, 7); octx.fill();
+            octx.strokeStyle = `rgba(20,14,24,${0.85 * nb * ra})`; octx.lineWidth = Math.max(1, vw(0.8)); octx.beginPath(); for (let i = 0; i < 8; i++){ octx.moveTo(0, 0); octx.quadraticCurveTo(Math.cos(i * Math.PI / 4 + 0.25) * rr * 0.6, Math.sin(i * Math.PI / 4 + 0.25) * rr * 0.6, Math.cos(i * Math.PI / 4) * rr, Math.sin(i * Math.PI / 4) * rr); } octx.stroke(); octx.beginPath(); octx.arc(0, 0, rr, 0, 7); octx.stroke();
+            octx.restore();
+          }
+        }
+      }
       for (const w of roomOpenings(rf).windows){
         if (!winShown(rf, w)) continue;                                 // south-wall panes only, and not right beside the door
         const wx = vw(w.x - camx), wy = vw(w.y - camy);
         if (wx < -10 || wx > OW + 10 || wy < -10 || wy > OH + 10) continue;
+        if (isChurchCell(Math.floor(w.x / CELL), Math.floor(w.y / CELL))){                 // a stained-glass window lit from within: coloured panes + coloured light on the ground
+          drawLitStained(wx, wy + vw(0.5), vw(8), vw(7), Math.floor(w.x / CELL) * 5 + Math.floor(w.y / CELL), nb, wy + vw(11), vw);
+          continue;
+        }
         const fl = 0.88 + 0.12 * Math.sin(now / 200 + w.x);
         octx.fillStyle = `rgba(206,132,32,${nb})`;                       // solid dark-gold pane, set into the wall face
         octx.fillRect(wx - vw(4.5), wy - vw(2), vw(9), vw(9));
         octx.fillStyle = `rgba(255,206,110,${nb * fl})`;                 // hot centre
         octx.fillRect(wx - vw(2), wy + vw(0.4), vw(4), vw(4.6));
       }
+    }
+    if (village && village.roofs) for (const rf of village.roofs){                   // the watchtower brazier, while the roof is showing
+      if (rf.role !== 'tower' || !rf._brazier || !(rf._a > 0.05)) continue;
+      const bx = vw(rf._brazier.x - camx), by = vw(rf._brazier.y - 5 - camy);
+      if (bx < -30 || bx > OW + 30 || by < -30 || by > OH + 30) continue;
+      octx.save(); octx.globalAlpha = Math.min(1, rf._a); octx.translate(bx, by); torchFlame(octx, VS * 1.5, now, rf._brazier.x, rf._brazier.y); octx.restore();
+    }
+    for (const e of enemies){                                                        // patrolling guards' hand torches
+      if (!e._torch || e.dead || e._inBed || e._onTower) continue;
+      const sx = vw(e.x + Math.cos((e.dir || 0) + 1.0) * 9 - camx), sy = vw(e.y - 2 - 13 - camy);
+      if (sx < -20 || sx > OW + 20 || sy < -20 || sy > OH + 20) continue;
+      octx.save(); octx.translate(sx, sy); torchFlame(octx, VS * 0.8, now, e.x, e.y); octx.restore();
     }
     for (const p of props){
       if (p.dead || (p.t !== 'campfire' && p.t !== 'firebarrel' && p.t !== 'torchpost')) continue;
@@ -22632,11 +22964,13 @@ function draw(){
   }
   _tSeg = _mark('postfx', _tSeg);
   if (zone === 'city' && mission) drawObjectiveHUD();
-  drawMinimap();
+  { const _ed = !!(craftOpen || buildMode); if (_ed !== _editUI){ _editUI = _ed; document.body.classList.toggle('editing', _ed); } const _iv = zone === 'village'; if (_iv !== _inVillageUI){ _inVillageUI = _iv; document.body.classList.toggle('invillage', _iv); } }   // crafting/building: the perks box + minimap get out of the way
+  if (!_editUI) drawMinimap();
   _tSeg = _mark('minimap', _tSeg);
-  drawSkyClock();
+  if (!_editUI) drawSkyClock();
   if (musingOpen) drawMusings();
   if (assignOpen) drawAssign();
+  if (shrinePickOpen) drawShrinePick();
   if (giftPickOpen) drawGiftPick();
   if (cultMenuOpen) drawCultMenu();
   if (researchOpen) drawResearch();
@@ -22764,12 +23098,226 @@ function villageWelcomeBack(){
     setTimeout(() => { if (zone === 'village' && !e.dead) popText(e.x, e.y - 26, pick(pool), devo < 0.3 ? '#c8b0b0' : '#e8dcb0', 2.6); }, 500 + i * 650);
   });
 }
+// ================= THE GRAND SHRINE — 20 designs, one per village =================
+const SHRINE_VARIANTS = [
+  { name: 'Sunspire Obelisk',   kind: 'obelisk', stone: '#b8b0a0', accent: '#e8c050', glow: [255, 200, 90] },
+  { name: 'Moonstone Obelisk',  kind: 'obelisk', stone: '#9aa0b8', accent: '#9ac0f0', glow: [150, 190, 255] },
+  { name: 'Crimson Torii',      kind: 'torii',   stone: '#7a4a3a', accent: '#c83a30', glow: [255, 120, 80] },
+  { name: 'Jade Torii',         kind: 'torii',   stone: '#5a6a58', accent: '#3aa070', glow: [120, 240, 170] },
+  { name: 'Lantern Pagoda',     kind: 'pagoda',  stone: '#a89880', accent: '#b03a3a', glow: [255, 180, 90] },
+  { name: 'Frost Pagoda',       kind: 'pagoda',  stone: '#a8b8c8', accent: '#4a7ab8', glow: [170, 220, 255] },
+  { name: 'Heart Crystals',     kind: 'crystal', stone: '#8a7a98', accent: '#e05a9a', glow: [255, 120, 190] },
+  { name: 'Deep Crystals',      kind: 'crystal', stone: '#6a7098', accent: '#5a8af0', glow: [120, 160, 255] },
+  { name: 'Robed Oracle',       kind: 'statue',  stone: '#b4aca0', accent: '#8a5ac8', glow: [200, 150, 255] },
+  { name: 'Stone Warden',       kind: 'statue',  stone: '#8a8478', accent: '#c8a040', glow: [255, 210, 110] },
+  { name: 'Lantern Tree',       kind: 'tree',    stone: '#7a6a50', accent: '#e8a840', glow: [255, 190, 90] },
+  { name: 'Blossom Tree',       kind: 'tree',    stone: '#7a6058', accent: '#f0a0c0', glow: [255, 170, 210] },
+  { name: 'Tiered Fountain',    kind: 'fountain', stone: '#b0b4b8', accent: '#5aa8d8', glow: [130, 210, 255] },
+  { name: 'Ember Brazier',      kind: 'brazier', stone: '#6a6068', accent: '#f07a20', glow: [255, 130, 40] },
+  { name: 'Standing Ring',      kind: 'ring',    stone: '#8e8a80', accent: '#78c878', glow: [150, 240, 160] },
+  { name: 'Horned Skull Altar', kind: 'skull',   stone: '#5a5058', accent: '#c8c0a8', glow: [220, 100, 255] },
+  { name: 'Floating Orb',       kind: 'orb',     stone: '#a0a0b0', accent: '#a0e0ff', glow: [140, 220, 255] },
+  { name: 'Crescent Gate',      kind: 'moon',    stone: '#8a90a8', accent: '#e8e8f8', glow: [200, 210, 255] },
+  { name: 'Radiant Sun Disc',   kind: 'sun',     stone: '#b8a078', accent: '#f0c030', glow: [255, 210, 80] },
+  { name: 'All-Seeing Eye',     kind: 'eye',     stone: '#68607a', accent: '#f0d060', glow: [255, 220, 110] },
+];
+function drawGrandShrine(g, vi, t, live, prop){
+  const V = SHRINE_VARIANTS[((vi % 20) + 20) % 20], st = V.stone, ac = V.accent, night = (live && village && village.tod != null) ? todLerp().night : 0, fl = 0.85 + 0.15 * Math.sin(t * 3 + vi);
+  const dk = c => _tone(c, -0.3), lt = c => _tone(c, 0.18), glow = a => 'rgba(' + V.glow[0] + ',' + V.glow[1] + ',' + V.glow[2] + ',' + a + ')';
+  g.save();
+  g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(0, 22, 33, 7, 0, 0, 7); g.fill();
+  // stepped platform
+  g.fillStyle = dk(st); g.fillRect(-31, 14, 62, 9); g.fillStyle = st; g.fillRect(-31, 14, 62, 6); g.fillStyle = lt(st); g.fillRect(-31, 14, 62, 1.6);
+  g.fillStyle = dk(st); g.fillRect(-23, 8, 46, 7); g.fillStyle = st; g.fillRect(-23, 8, 46, 5); g.fillStyle = lt(st); g.fillRect(-23, 8, 46, 1.4);
+  g.fillStyle = glow(0.5 * fl); g.fillRect(-23, 13, 46, 1.2);                                        // a thin ribbon of light along the upper step
+  const base = 8;                                                                                     // top of the upper step
+  const pillar = (x, y, w2, h2, c) => { g.fillStyle = dk(c); g.fillRect(x, y, w2, h2); g.fillStyle = c; g.fillRect(x, y, w2 * 0.66, h2); g.fillStyle = lt(c); g.fillRect(x, y, w2 * 0.2, h2); };
+  const orb = (x, y, r, col) => { const gr = g.createRadialGradient(x - r * 0.3, y - r * 0.3, 0, x, y, r * 2.2); gr.addColorStop(0, col); gr.addColorStop(0.4, col); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = glow(0.22 * fl); g.beginPath(); g.arc(x, y, r * 2.1, 0, 7); g.fill(); g.fillStyle = col; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.arc(x - r * 0.3, y - r * 0.3, r * 0.32, 0, 7); g.fill(); };
+  switch (V.kind){
+    case 'obelisk': {
+      g.fillStyle = dk(st); g.beginPath(); g.moveTo(-8, base); g.lineTo(-5, -34); g.lineTo(0, -44); g.lineTo(5, -34); g.lineTo(8, base); g.closePath(); g.fill();
+      g.fillStyle = st; g.beginPath(); g.moveTo(-8, base); g.lineTo(-5, -34); g.lineTo(0, -44); g.lineTo(0, base); g.closePath(); g.fill();
+      for (let i = 0; i < 5; i++){ g.fillStyle = glow((0.55 + 0.4 * Math.sin(t * 2 + i)) * fl); g.fillRect(-1.6, -30 + i * 8, 3.2, 4); }
+      pillar(-14, -6, 6, 14, st); pillar(8, -6, 6, 14, st); orb(-11, -9, 2.4, ac); orb(11, -9, 2.4, ac); break; }
+    case 'torii': {
+      pillar(-20, -22, 6, 30, st); pillar(14, -22, 6, 30, st);
+      g.fillStyle = ac; g.fillRect(-27, -26, 54, 5); g.fillStyle = dk(ac); g.fillRect(-27, -22, 54, 1.4); g.fillRect(-24, -21, 48, 3); g.fillStyle = ac; g.fillRect(-24, -13, 48, 3);
+      g.fillStyle = lt(ac); g.beginPath(); g.moveTo(-31, -24); g.lineTo(-27, -28); g.lineTo(27, -28); g.lineTo(31, -24); g.lineTo(27, -25); g.lineTo(-27, -25); g.closePath(); g.fill();
+      g.fillStyle = glow(0.5 * fl); g.fillRect(-1.5, -22, 3, 30); orb(0, -5, 3.4, glow(1)); break; }
+    case 'pagoda': {
+      for (let i = 0; i < 3; i++){ const w2 = 24 - i * 6, y = base - 10 - i * 13; pillar(-w2 / 2 + 2, y, w2 - 4, 11, st); g.fillStyle = dk(ac); g.beginPath(); g.moveTo(-w2 / 2 - 6, y); g.lineTo(0, y - 8); g.lineTo(w2 / 2 + 6, y); g.lineTo(w2 / 2 + 2, y + 2); g.lineTo(-w2 / 2 - 2, y + 2); g.closePath(); g.fill(); g.fillStyle = ac; g.beginPath(); g.moveTo(-w2 / 2 - 6, y); g.lineTo(0, y - 8); g.lineTo(0, y); g.closePath(); g.fill(); g.fillStyle = glow(0.8 * fl); g.fillRect(-1.5, y + 3, 3, 5); }
+      g.fillStyle = '#e8d890'; g.fillRect(-0.8, -45, 1.6, 9); orb(0, -46, 2, glow(1)); break; }
+    case 'crystal': {
+      for (const [x, h2, w2, c] of [[-13, 22, 6, dk(ac)], [12, 26, 7, dk(ac)], [-4, 40, 9, ac], [5, 30, 6, lt(ac)], [-19, 12, 5, ac], [19, 13, 5, ac]]){
+        g.fillStyle = c; g.beginPath(); g.moveTo(x - w2, base); g.lineTo(x - w2 * 0.5, base - h2 * 0.8); g.lineTo(x, base - h2); g.lineTo(x + w2 * 0.6, base - h2 * 0.75); g.lineTo(x + w2, base); g.closePath(); g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.32)'; g.beginPath(); g.moveTo(x - w2 * 0.3, base); g.lineTo(x - w2 * 0.4, base - h2 * 0.75); g.lineTo(x, base - h2); g.lineTo(x - w2 * 0.05, base); g.closePath(); g.fill(); }
+      g.fillStyle = glow(0.16 * fl); g.beginPath(); g.arc(0, -8, 26, 0, 7); g.fill(); break; }
+    case 'statue': {
+      pillar(-8, -6, 16, 14, st);
+      g.fillStyle = dk(st); g.beginPath(); g.moveTo(-9, -6); g.lineTo(-5, -26); g.lineTo(5, -26); g.lineTo(9, -6); g.closePath(); g.fill(); g.fillStyle = st; g.beginPath(); g.moveTo(-9, -6); g.lineTo(-5, -26); g.lineTo(0, -26); g.lineTo(0, -6); g.closePath(); g.fill();   // robe
+      g.fillStyle = lt(st); g.beginPath(); g.arc(0, -31, 5, 0, 7); g.fill();                      // head
+      g.strokeStyle = st; g.lineWidth = 3.4; g.lineCap = 'round'; g.beginPath(); g.moveTo(-5, -24); g.lineTo(-13, -36); g.moveTo(5, -24); g.lineTo(13, -36); g.stroke();   // raised arms
+      orb(-13, -38, 2.6, ac); orb(13, -38, 2.6, ac); g.fillStyle = glow(0.6 * fl); g.beginPath(); g.arc(0, -31, 8, 0, 7); g.fill(); g.fillStyle = lt(st); g.beginPath(); g.arc(0, -31, 5, 0, 7); g.fill(); break; }
+    case 'tree': {
+      g.fillStyle = st; g.fillRect(-3.5, -16, 7, 24); g.fillStyle = dk(st); g.fillRect(0, -16, 3.5, 24); g.strokeStyle = st; g.lineWidth = 3; g.beginPath(); g.moveTo(0, -12); g.lineTo(-15, -26); g.moveTo(0, -14); g.lineTo(15, -28); g.moveTo(0, -18); g.lineTo(0, -34); g.stroke();
+      const leaf = V.name.indexOf('Blossom') === 0 ? ['#e88ab0', '#f2b0c8', '#d47098'] : ['#4a8a48', '#5aa058', '#3a7a3c'];
+      for (const [x, y, r, c] of [[-16, -32, 12, leaf[2]], [16, -34, 12, leaf[2]], [0, -40, 14, leaf[0]], [-8, -30, 11, leaf[1]], [9, -30, 11, leaf[1]]]){ g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
+      for (const [x, y] of [[-18, -22], [-8, -22], [8, -22], [18, -24], [0, -26]]){ g.strokeStyle = '#3a2c1c'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x, y - 6); g.lineTo(x, y - 2); g.stroke(); orb(x, y, 2.6, ac); } break; }
+    case 'fountain': {
+      pillar(-3, -14, 6, 22, st);
+      for (const [y, w2] of [[base - 2, 20], [-6, 13], [-16, 8]]){ g.fillStyle = dk(st); g.beginPath(); g.ellipse(0, y, w2, w2 * 0.28, 0, 0, 7); g.fill(); g.fillStyle = ac; g.beginPath(); g.ellipse(0, y - 1, w2 - 2, w2 * 0.22, 0, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.ellipse(-w2 * 0.3, y - 1.4, w2 * 0.3, w2 * 0.07, 0, 0, 7); g.fill(); }
+      g.strokeStyle = 'rgba(210,240,255,0.75)'; g.lineWidth = 1.4; for (let i = 0; i < 4; i++){ const a = (i - 1.5) * 0.55; g.beginPath(); g.moveTo(0, -20); g.quadraticCurveTo(Math.sin(a) * 12, -32 + Math.abs(a) * 5, Math.sin(a) * 20, -6); g.stroke(); }
+      orb(0, -23, 2.4, glow(1)); break; }
+    case 'brazier': {
+      pillar(-14, -4, 6, 12, st); pillar(8, -4, 6, 12, st); g.fillStyle = dk(st); g.beginPath(); g.moveTo(-17, -6); g.lineTo(17, -6); g.lineTo(11, -16); g.lineTo(-11, -16); g.closePath(); g.fill(); g.fillStyle = st; g.fillRect(-17, -7, 34, 3);
+      const f = 1 + Math.sin(t * 9 + vi) * 0.1;
+      g.fillStyle = 'rgba(240,80,20,0.95)'; g.beginPath(); g.moveTo(0, -46 * f); g.quadraticCurveTo(15, -28, 10, -16); g.lineTo(-10, -16); g.quadraticCurveTo(-15, -28, 0, -46 * f); g.fill();
+      g.fillStyle = 'rgba(255,170,40,0.95)'; g.beginPath(); g.moveTo(0, -38 * f); g.quadraticCurveTo(8, -26, 6, -16); g.lineTo(-6, -16); g.quadraticCurveTo(-8, -26, 0, -38 * f); g.fill();
+      g.fillStyle = 'rgba(255,240,170,0.95)'; g.beginPath(); g.moveTo(0, -28); g.quadraticCurveTo(3.5, -22, 2.6, -16); g.lineTo(-2.6, -16); g.quadraticCurveTo(-3.5, -22, 0, -28); g.fill(); break; }
+    case 'ring': {
+      for (let i = 0; i < 7; i++){ const a = i / 7 * 6.283, x = Math.cos(a) * 22, y = base - 6 + Math.sin(a) * 6, h2 = 26 - Math.sin(a) * 4; if (Math.sin(a) < 0) continue; pillar(x - 3.5, y - h2 + 4, 7, h2, st); }
+      for (let i = 0; i < 7; i++){ const a = i / 7 * 6.283; if (Math.sin(a) >= 0) continue; const x = Math.cos(a) * 22, y = base - 6 + Math.sin(a) * 6, h2 = 24; pillar(x - 3, y - h2 + 4, 6, h2, dk(st)); }
+      g.fillStyle = glow(0.4 * fl); g.beginPath(); g.ellipse(0, base - 4, 16, 5, 0, 0, 7); g.fill(); orb(0, -14, 5, ac); break; }
+    case 'skull': {
+      pillar(-12, -2, 24, 10, st);
+      g.fillStyle = ac; g.beginPath(); g.ellipse(0, -14, 12, 11, 0, 0, 7); g.fill(); g.fillRect(-7, -6, 14, 8); g.fillStyle = dk(ac); g.fillRect(-7, -1, 14, 1.4);
+      g.fillStyle = '#1a1420'; g.beginPath(); g.ellipse(-4.5, -15, 3, 3.6, 0, 0, 7); g.ellipse(4.5, -15, 3, 3.6, 0, 0, 7); g.fill(); g.beginPath(); g.moveTo(0, -11); g.lineTo(-1.6, -7); g.lineTo(1.6, -7); g.closePath(); g.fill();
+      g.fillStyle = glow(0.9 * fl); g.beginPath(); g.arc(-4.5, -15, 1.5, 0, 7); g.arc(4.5, -15, 1.5, 0, 7); g.fill();
+      g.strokeStyle = ac; g.lineWidth = 3.2; g.lineCap = 'round'; g.beginPath(); g.moveTo(-10, -20); g.quadraticCurveTo(-20, -24, -19, -38); g.moveTo(10, -20); g.quadraticCurveTo(20, -24, 19, -38); g.stroke(); break; }
+    case 'orb': {
+      pillar(-6, -4, 12, 12, st); g.fillStyle = dk(st); g.fillRect(-9, -6, 18, 3); const bob = Math.sin(t * 1.6 + vi) * 2.4;
+      g.strokeStyle = glow(0.5 * fl); g.lineWidth = 1.2; g.beginPath(); g.ellipse(0, -24 + bob, 16, 5, t * 0.6, 0, 7); g.stroke(); g.beginPath(); g.ellipse(0, -24 + bob, 12, 3.6, -t * 0.9, 0, 7); g.stroke();
+      orb(0, -24 + bob, 9, ac); g.fillStyle = glow(0.24 * fl); g.beginPath(); g.arc(0, -24 + bob, 24, 0, 7); g.fill(); break; }
+    case 'moon': {
+      pillar(-22, -12, 6, 20, st); pillar(16, -12, 6, 20, st);
+      g.strokeStyle = ac; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.arc(0, -12, 22, Math.PI * 1.06, Math.PI * 1.94); g.stroke(); g.strokeStyle = glow(0.5 * fl); g.lineWidth = 2; g.beginPath(); g.arc(0, -12, 22, Math.PI * 1.06, Math.PI * 1.94); g.stroke();
+      g.fillStyle = ac; g.beginPath(); g.arc(0, -16, 8, 0, 7); g.fill(); g.fillStyle = st; g.beginPath(); g.arc(3, -17, 7, 0, 7); g.fill();
+      orb(-20, -16, 2.2, glow(1)); orb(20, -16, 2.2, glow(1)); break; }
+    case 'sun': {
+      pillar(-16, -6, 6, 14, st); pillar(10, -6, 6, 14, st);
+      for (let i = 0; i < 12; i++){ const a = i / 12 * 6.283 + t * 0.15; g.strokeStyle = ac; g.lineWidth = 2.4; g.beginPath(); g.moveTo(Math.cos(a) * 13, -22 + Math.sin(a) * 13); g.lineTo(Math.cos(a) * 21, -22 + Math.sin(a) * 21); g.stroke(); }
+      g.fillStyle = dk(ac); g.beginPath(); g.arc(0, -22, 12, 0, 7); g.fill(); g.fillStyle = ac; g.beginPath(); g.arc(0, -22, 10, 0, 7); g.fill(); g.fillStyle = lt(ac); g.beginPath(); g.arc(-2, -24, 5, 0, 7); g.fill(); g.fillStyle = glow(0.22 * fl); g.beginPath(); g.arc(0, -22, 30, 0, 7); g.fill(); break; }
+    case 'eye': {
+      pillar(-10, -6, 20, 14, st);
+      g.fillStyle = dk(st); g.beginPath(); g.moveTo(0, -46); g.lineTo(-18, -6); g.lineTo(18, -6); g.closePath(); g.fill(); g.fillStyle = st; g.beginPath(); g.moveTo(0, -46); g.lineTo(-18, -6); g.lineTo(0, -6); g.closePath(); g.fill();
+      g.fillStyle = '#f0e8d0'; g.beginPath(); g.moveTo(-10, -22); g.quadraticCurveTo(0, -32, 10, -22); g.quadraticCurveTo(0, -14, -10, -22); g.fill();
+      g.fillStyle = ac; g.beginPath(); g.arc(0, -22, 4.6, 0, 7); g.fill(); g.fillStyle = '#20182a'; g.beginPath(); g.arc(0, -22, 2.2, 0, 7); g.fill(); g.fillStyle = glow(0.25 * fl); g.beginPath(); g.arc(0, -22, 18, 0, 7); g.fill();
+      g.strokeStyle = glow(0.6 * fl); g.lineWidth = 1; for (let i = 0; i < 5; i++){ const a = -Math.PI / 2 + (i - 2) * 0.5; g.beginPath(); g.moveTo(Math.cos(a) * 16, -22 + Math.sin(a) * 12); g.lineTo(Math.cos(a) * 24, -22 + Math.sin(a) * 18); g.stroke(); } break; }
+  }
+  g.restore();
+  if (live && night > 0.3 && g === octx && prop){                                                  // it lights the square at night
+    lights.push({ x: prop.x, y: prop.y - 8, r: 170, col: V.glow, life: 0.02, t: 0.06 });
+  }
+}
+let shrinePickOpen = false, shrineRects = [], _shrineAt = null;
+function openShrinePick(cx, cy, item){ shrinePickOpen = true; _shrineAt = { cx, cy, item }; paused = true; for (const k in keys) keys[k] = false; }
+function closeShrinePick(){ shrinePickOpen = false; shrineRects = []; _shrineAt = null; }
+function confirmGrandShrine(vi){
+  const at = _shrineAt; if (!at) return;
+  const { cx, cy, item } = at;
+  if (props.some(pp => !pp.dead && pp.t === 'grandshrine') || (village.stores.favor | 0) < 5 || (village.conviction || 0) < 5 || (player.mats[item.mat] || 0) <= 0){ closeShrinePick(); popText(player.x, player.y - 26, 'can\'t raise it now', '#ff8f8f'); return; }
+  const { w, h } = itemDims(item), px = cx * CELL + w * CELL / 2, py = cy * CELL + h * CELL / 2;
+  player.mats[item.mat] = 0; village.stores.favor -= 5; village.conviction = Math.max(0, (village.conviction || 0) - 5);
+  const dm = PROP_DIM.grandshrine, np = mkProp(px, py, dm[0], dm[1], 'grandshrine'); np.solid = true; np.hp = np.maxhp = 9999; np._var = vi;
+  props.push(np); notePlacedProp(px, py, 'grandshrine', vi);
+  closeShrinePick(); paused = false;
+  burst(px, py - 10, 40, '#ffe6a0', 320); shake(8); A.S.wood();
+  flash('The ' + SHRINE_VARIANTS[vi].name + ' rises', '#ffe6a0', 'the heart of the village — +2 favor a day');
+  saveVillage(true); savePlayer(); syncHUD(); scheduleRoofs();
+}
+function drawShrinePick(){
+  shrineRects = [];
+  ctx.save(); ctx.fillStyle = 'rgba(6,8,10,0.72)'; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#f0e6c8'; ctx.font = 'bold 17px "Courier New",monospace'; ctx.fillText('Choose your Grand Shrine', W / 2, 78);
+  ctx.fillStyle = '#9a9484'; ctx.font = '11px "Courier New",monospace'; ctx.fillText('one per village · costs 5 favor + 5 conviction (and the wood and stone you\'ve gathered) · +2 favor a day · Esc to cancel', W / 2, 96);
+  const cols = 5, rows = 4, pad = 8, cw = Math.min(150, Math.floor((W - 40 - pad * (cols - 1)) / cols)), ch = Math.min(124, Math.floor((H - 150 - pad * (rows - 1)) / rows)), x0 = Math.round(W / 2 - (cols * cw + (cols - 1) * pad) / 2), y0 = 112, now = performance.now() / 1000;
+  for (let i = 0; i < 20; i++){
+    const c = i % cols, r = (i / cols) | 0, x = x0 + c * (cw + pad), y = y0 + r * (ch + pad), hov = mouse.x >= x && mouse.x <= x + cw && mouse.y >= y && mouse.y <= y + ch;
+    ctx.fillStyle = hov ? '#1c2434' : '#10151e'; ctx.fillRect(x, y, cw, ch); ctx.lineWidth = 2; ctx.strokeStyle = hov ? '#ffe6a0' : '#3a4a5c'; ctx.strokeRect(x, y, cw, ch);
+    ctx.save(); ctx.beginPath(); ctx.rect(x + 1, y + 1, cw - 2, ch - 2); ctx.clip(); ctx.translate(x + cw / 2, y + ch * 0.6); const sc = Math.min(cw / 72, (ch - 22) / 68); ctx.scale(sc, sc);
+    drawGrandShrine(ctx, i, now, false, null); ctx.restore();
+    ctx.fillStyle = hov ? '#ffe6a0' : '#d8d0b8'; ctx.font = '10px "Courier New",monospace'; ctx.textAlign = 'center'; ctx.fillText(SHRINE_VARIANTS[i].name, x + cw / 2, y + ch - 6);
+    shrineRects.push({ i, sx: x, sy: y, sw: cw, sh: ch });
+  }
+  ctx.restore();
+}
 function skylightRect(rf){
   const w = rf.x1 - rf.x0, h = rf.y1 - rf.y0;
   if (rf.anchor){ const a = rf.anchor, kw = 30, kh = 18, ok = [[-kw / 2, -kh / 2], [kw / 2, -kh / 2], [-kw / 2, kh / 2], [kw / 2, kh / 2]].every(([dx, dy]) => rf.fp && rf.fp.has(Math.floor((a.x + dx) / CELL) + ',' + Math.floor((a.y + dy + 6) / CELL))); return ok ? { x: a.x - kw / 2, y: a.y - kh / 2, w: kw, h: kh } : { x: a.x, y: a.y, w: 0, h: 0 }; }
   return w >= h ? { x: rf.x0 + w * 0.2, y: rf.y0 + h * 0.3, w: w * 0.6, h: h * 0.4 } : { x: rf.x0 + w * 0.3, y: rf.y0 + h * 0.2, w: w * 0.4, h: h * 0.6 };
 }
+// who is up on this tower roof? (guards store the room's key, not the object — roofs get rebuilt)
+const towerGuardOf = rf => enemies.find(o => !o.dead && o._onTower && o._onTower.ix0 === rf.ix0 && o._onTower.iy0 === rf.iy0);
+function towerRoofOf(e){ return e._onTower ? (village.roofs || []).find(r => r.ix0 === e._onTower.ix0 && r.iy0 === e._onTower.iy0 && r.role === 'tower') : null; }
+function drawTowerPlatform(rf, w, h){
+  // the lookout deck, in the same oblique view as the walls: a sunken plank floor inside a raised stone parapet (its tops lifted, the near side's outer face and the far side's inner face showing), corner turrets and merlons
+  const g = octx, tt = performance.now() / 1000, x0 = rf.x0, y0 = rf.y0, cx = x0 + w / 2, cy = y0 + h / 2, Hp = 9, m = 6;
+  const top = '#b4ae9e', topL = '#cdc7b6', face = '#7a7468', faceD = '#5e5a52', deck = '#7a5a34';
+  g.fillStyle = deck; g.fillRect(x0, y0, w, h);                                                             // deck planks
+  g.fillStyle = 'rgba(0,0,0,0.2)'; for (let yy = y0 + 4; yy < y0 + h; yy += 5) g.fillRect(x0, yy, w, 1);
+  g.fillStyle = 'rgba(255,230,170,0.08)'; for (let xx = x0 + 10; xx < x0 + w; xx += 14) g.fillRect(xx, y0, 1, h);
+  // shadow the parapet throws across the deck (far side + left side)
+  { const sg = g.createLinearGradient(0, y0 + m, 0, y0 + m + 16); sg.addColorStop(0, 'rgba(0,0,0,0.38)'); sg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = sg; g.fillRect(x0 + m, y0 + m, w - 2 * m, 16); }
+  { const sg = g.createLinearGradient(x0 + m, 0, x0 + m + 12, 0); sg.addColorStop(0, 'rgba(0,0,0,0.25)'); sg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = sg; g.fillRect(x0 + m, y0 + m, 12, h - 2 * m); }
+  // far (north) parapet: top lifted, and its INNER face shows down onto the deck
+  g.fillStyle = face; g.fillRect(x0, y0 - Hp + m, w, Hp); g.fillStyle = faceD; g.fillRect(x0, y0 - Hp + m + Hp - 2, w, 2);
+  g.fillStyle = 'rgba(0,0,0,0.16)'; for (let xx = x0 + 6; xx < x0 + w - 3; xx += 12) g.fillRect(xx, y0 - Hp + m, 1, Hp);          // block joints
+  g.fillStyle = top; g.fillRect(x0, y0 - Hp, w, m); g.fillStyle = topL; g.fillRect(x0, y0 - Hp, w, 1.6);
+  // side parapets: tops only (their inner faces point sideways, out of view)
+  g.fillStyle = top; g.fillRect(x0, y0 - Hp, m, h); g.fillRect(x0 + w - m, y0 - Hp, m, h); g.fillStyle = topL; g.fillRect(x0, y0 - Hp, 1.6, h);
+  g.fillStyle = faceD; g.fillRect(x0 + w - 2, y0 - Hp, 2, h);
+  // trapdoor, brazier, lookout (on the deck)
+  {
+    const tx = x0 + 14, ty = cy - 4, tw = 26, th = 24;
+    g.fillStyle = '#4a3220'; g.fillRect(tx - 2, ty - 2, tw + 4, th + 4);
+    g.fillStyle = '#140d07'; g.fillRect(tx, ty, tw, th);
+    for (let i = 0; i < 4; i++){ g.fillStyle = i % 2 ? '#2a1e12' : '#3a2a1a'; g.fillRect(tx + 2, ty + 3 + i * 5.2, tw - 4, 3); }
+    g.fillStyle = '#8a6a3a'; g.fillRect(tx - 1, ty - 13, tw + 2, 12); g.fillStyle = 'rgba(0,0,0,0.22)'; for (let i = 1; i < 5; i++) g.fillRect(tx - 1, ty - 13 + i * 2.4, tw + 2, 0.8);
+    g.fillStyle = '#5a3d22'; g.fillRect(tx - 1, ty - 13, tw + 2, 1.6); g.fillRect(tx + 2, ty - 13, 3, 12); g.fillRect(tx + tw - 5, ty - 13, 3, 12);
+    g.fillStyle = '#26221e'; g.fillRect(tx + 1, ty - 2, 6, 2); g.fillRect(tx + tw - 7, ty - 2, 6, 2);
+    g.strokeStyle = '#26221e'; g.lineWidth = 1.4; g.beginPath(); g.arc(tx + tw / 2, ty - 7, 2.4, 0, 7); g.stroke();
+  }
+  {
+    const bx = x0 + w - 24, by = y0 + h - 26, f = 1 + Math.sin(tt * 9 + rf.seed) * 0.12;
+    rf._brazier = { x: bx, y: by };
+    g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(bx + 1, by + 9, 10, 3.6, 0, 0, 7); g.fill();
+    g.strokeStyle = '#2c2822'; g.lineWidth = 2; g.beginPath(); g.moveTo(bx - 6, by + 8); g.lineTo(bx - 3, by - 1); g.moveTo(bx + 6, by + 8); g.lineTo(bx + 3, by - 1); g.moveTo(bx, by + 8); g.lineTo(bx, by - 1); g.stroke();
+    g.fillStyle = '#3a342e'; g.beginPath(); g.moveTo(bx - 9, by - 4); g.lineTo(bx + 9, by - 4); g.lineTo(bx + 5, by + 2); g.lineTo(bx - 5, by + 2); g.closePath(); g.fill();
+    g.fillStyle = '#5a5248'; g.fillRect(bx - 9, by - 5, 18, 1.8); g.fillStyle = '#ff6a18'; g.fillRect(bx - 6, by - 6, 12, 2.4);
+    g.fillStyle = 'rgba(255,120,30,0.95)'; g.beginPath(); g.moveTo(bx, by - 20 * f); g.quadraticCurveTo(bx + 9, by - 11, bx + 6, by - 5); g.lineTo(bx - 6, by - 5); g.quadraticCurveTo(bx - 9, by - 11, bx, by - 20 * f); g.fill();
+    g.fillStyle = 'rgba(255,200,70,0.95)'; g.beginPath(); g.moveTo(bx, by - 14 * f); g.quadraticCurveTo(bx + 5, by - 9, bx + 3.4, by - 5); g.lineTo(bx - 3.4, by - 5); g.quadraticCurveTo(bx - 5, by - 9, bx, by - 14 * f); g.fill();
+    g.fillStyle = 'rgba(255,238,170,0.95)'; g.beginPath(); g.moveTo(bx, by - 9); g.quadraticCurveTo(bx + 2, by - 7, bx + 1.6, by - 5); g.lineTo(bx - 1.6, by - 5); g.quadraticCurveTo(bx - 2, by - 7, bx, by - 9); g.fill();
+    if ((village && village.tod != null ? todLerp().night : 0) > 0.3) lights.push({ x: bx, y: by - 6, r: 150 * (0.92 + 0.08 * Math.sin(tt * 9)), col: [255, 150, 60], life: 0.02, t: 0.06 });
+  }
+  const gd = towerGuardOf(rf);
+  if (gd){
+    const gx = cx, gy = cy + 4, aim = gd._aim || 0;
+    g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(gx, gy + 7, 7, 2.6, 0, 0, 7); g.fill();
+    g.fillStyle = '#3a3a46'; g.fillRect(gx - 4, gy, 3.4, 7); g.fillRect(gx + 0.6, gy, 3.4, 7);
+    g.fillStyle = gd.shirt || '#4a6a9a'; g.fillRect(gx - 5.5, gy - 8, 11, 9);
+    g.fillStyle = gd.skin || '#e0b58c'; g.beginPath(); g.arc(gx, gy - 12, 4.4, 0, 7); g.fill(); g.fillStyle = gd.hair || '#3a2a1a'; g.beginPath(); g.arc(gx, gy - 13.4, 4.4, Math.PI, 0); g.fill();
+    g.strokeStyle = '#6a4a2a'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(gx + 6, gy + 6); g.lineTo(gx + 6 + Math.cos(aim) * 4, gy - 17 + Math.sin(aim) * 2); g.stroke();
+    g.fillStyle = '#c8c8d0'; g.beginPath(); g.moveTo(gx + 6 + Math.cos(aim) * 4, gy - 21 + Math.sin(aim) * 2); g.lineTo(gx + 8 + Math.cos(aim) * 4, gy - 16 + Math.sin(aim) * 2); g.lineTo(gx + 4 + Math.cos(aim) * 4, gy - 16 + Math.sin(aim) * 2); g.closePath(); g.fill();
+    if (gd._torch){ const fk = Math.sin(tt * 14) * 0.8; g.fillStyle = '#4a3320'; g.fillRect(gx - 9, gy - 8, 1.6, 9); g.fillStyle = 'rgba(255,140,40,0.9)'; g.beginPath(); g.ellipse(gx - 8.2, gy - 11 + fk * 0.3, 2.6, 4 + fk * 0.4, 0, 0, 7); g.fill(); g.fillStyle = 'rgba(255,224,130,0.95)'; g.beginPath(); g.ellipse(gx - 8.2, gy - 10.6, 1.3, 2.3, 0, 0, 7); g.fill(); }
+  }
+  // near (south) parapet: in front of everything — its top lifted with the OUTER face showing below it
+  g.fillStyle = face; g.fillRect(x0, y0 + h - Hp, w, Hp); g.fillStyle = faceD; g.fillRect(x0, y0 + h - 2.4, w, 2.4);
+  g.fillStyle = 'rgba(0,0,0,0.16)'; for (let xx = x0 + 6; xx < x0 + w - 3; xx += 12) g.fillRect(xx, y0 + h - Hp, 1, Hp - 2);
+  g.fillStyle = top; g.fillRect(x0, y0 + h - m - Hp, w, m); g.fillStyle = topL; g.fillRect(x0, y0 + h - m - Hp, w, 1.6);
+  // merlons: little raised blocks along the top (each with its own front face), then taller corner turrets
+  for (let xx = x0 + 3; xx < x0 + w - 8; xx += 11){
+    for (const yy of [y0 - Hp - 4, y0 + h - m - Hp - 4]){ g.fillStyle = topL; g.fillRect(xx, yy, 7, m - 1); g.fillStyle = face; g.fillRect(xx, yy + m - 1, 7, 4); g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(xx + 6, yy, 1, m + 3); }
+  }
+  for (const [tx, ty] of [[x0 - 2, y0 - Hp - 6], [x0 + w - 8, y0 - Hp - 6], [x0 - 2, y0 + h - m - Hp - 6], [x0 + w - 8, y0 + h - m - Hp - 6]]){
+    g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(tx + 2, ty + m + 6, 10, 3);
+    g.fillStyle = face; g.fillRect(tx, ty + m, 10, 9); g.fillStyle = faceD; g.fillRect(tx + 8, ty + m, 2, 9);
+    g.fillStyle = top; g.fillRect(tx, ty, 10, m + 1); g.fillStyle = topL; g.fillRect(tx, ty, 10, 1.4);
+  }
+  // banner on the north-east turret
+  { const px = x0 + w - 4, py = y0 - Hp - 6; g.fillStyle = '#5a3d22'; g.fillRect(px, py - 20, 2, 22); const wv = Math.sin(tt * 3 + rf.seed) * 1.8; g.fillStyle = '#b8402e'; g.beginPath(); g.moveTo(px + 2, py - 20); g.lineTo(px + 15 + wv, py - 16); g.lineTo(px + 2, py - 10); g.closePath(); g.fill(); }
+}
 function drawRoofRole(rf, w, h){
+  if (rf.role === 'tower'){ drawTowerPlatform(rf, w, h); return; }
   const g = octx, tt = performance.now() / 1000, an = rf.anchor, cx = an ? an.x : rf.x0 + w / 2, cy = an ? an.y : rf.y0 + h / 2, horiz = w >= h;
   const sm = an ? Math.max(24, Math.min(w, h) * 0.6) : Math.min(w, h);
   const snap = (x, y) => { if (!rf._cc) return [x, y]; let b = null, bd = 1e18; for (const c of rf._cc){ const d = (c.x - x) ** 2 + (c.y - y) ** 2; if (d < bd){ bd = d; b = c; } } return b ? [b.x, b.y] : [x, y]; };
@@ -22806,14 +23354,20 @@ function drawRoofRole(rf, w, h){
       g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x - q, y - q); g.lineTo(x + q, y + q); g.moveTo(x + q, y - q); g.lineTo(x - q, y + q); g.stroke();
       g.fillStyle = '#f0d060'; g.fillRect(x - 1.3, y - 7, 2.6, 13); g.fillRect(x - 4.5, y - 3.5, 9, 2.6);                   // gilded cross on the spire tip
       g.fillStyle = 'rgba(255,240,170,' + (0.22 + 0.12 * Math.sin(tt * 2)).toFixed(2) + ')'; g.beginPath(); g.arc(x, y, 10, 0, 7); g.fill();
-      // rose window over the crossing (stained glass — glows at night)
-      const rr = clamp(shortD * 0.15, 8, 14), pal = ['#c8383a', '#3a68c8', '#e2b030', '#3a9a58'];
-      if (night > 0.4){ g.fillStyle = 'rgba(255,190,110,' + (0.22 * night).toFixed(2) + ')'; g.beginPath(); g.arc(tcx, tcy, rr * 2.3, 0, 7); g.fill(); }
-      g.fillStyle = '#b8b4a6'; g.beginPath(); g.arc(tcx, tcy, rr + 2, 0, 7); g.fill();
-      for (let i = 0; i < 8; i++){ g.fillStyle = pal[i % 4]; g.beginPath(); g.moveTo(tcx, tcy); g.arc(tcx, tcy, rr, i * Math.PI / 4, (i + 1) * Math.PI / 4); g.closePath(); g.fill(); }
-      g.strokeStyle = 'rgba(24,20,30,0.85)'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i < 8; i++){ g.moveTo(tcx, tcy); g.lineTo(tcx + Math.cos(i * Math.PI / 4) * rr, tcy + Math.sin(i * Math.PI / 4) * rr); } g.stroke();
-      g.beginPath(); g.arc(tcx, tcy, rr * 0.5, 0, 7); g.stroke(); g.beginPath(); g.arc(tcx, tcy, rr, 0, 7); g.stroke();
-      g.fillStyle = '#f0d060'; g.beginPath(); g.arc(tcx, tcy, rr * 0.22, 0, 7); g.fill();
+      // rose window over the crossing: it sits on the pitched roof, so it's foreshortened across the slope, has a raised stone rim, curved leading and a shaded curve
+      const rr = churchRose(rf).r, pal = ['#c8383a', '#3a68c8', '#e2b030', '#3a9a58'], sqz = 0.68;
+      if (night > 0.4){ g.fillStyle = 'rgba(230,120,30,' + (0.2 * night).toFixed(2) + ')'; g.beginPath(); g.ellipse(tcx, tcy, rr * 2.3, rr * 2.3 * (horiz ? sqz : 1) * (horiz ? 1 : 1), 0, 0, 7); g.fill(); }
+      g.save(); g.translate(tcx, tcy); g.scale(horiz ? 1 : sqz, horiz ? sqz : 1);
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.arc(1.6, 2.6, rr + 3, 0, 7); g.fill();                    // cast shadow down the slope
+      g.fillStyle = '#6a6672'; g.beginPath(); g.arc(0, 1.8, rr + 2.4, 0, 7); g.fill();                                // the rim's thickness
+      g.fillStyle = '#c4c0b2'; g.beginPath(); g.arc(0, 0, rr + 2.4, 0, 7); g.fill();                                  // stone rim
+      for (let i = 0; i < 8; i++){ g.fillStyle = pal[i % 4]; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, rr, i * Math.PI / 4, (i + 1) * Math.PI / 4); g.closePath(); g.fill(); }
+      const sh = g.createLinearGradient(horiz ? 0 : -rr, horiz ? -rr : 0, horiz ? 0 : rr, horiz ? rr : 0); sh.addColorStop(0, 'rgba(255,255,255,0.3)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(10,6,24,0.45)');
+      g.fillStyle = sh; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.fill();                                                 // light on the upslope, darker where it curves away
+      g.strokeStyle = 'rgba(24,20,30,0.85)'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i < 8; i++){ g.moveTo(0, 0); g.quadraticCurveTo(Math.cos(i * Math.PI / 4 + 0.25) * rr * 0.6, Math.sin(i * Math.PI / 4 + 0.25) * rr * 0.6, Math.cos(i * Math.PI / 4) * rr, Math.sin(i * Math.PI / 4) * rr); } g.stroke();
+      g.beginPath(); g.arc(0, 0, rr * 0.5, 0, 7); g.stroke(); g.beginPath(); g.arc(0, 0, rr, 0, 7); g.stroke();
+      g.fillStyle = '#f0d060'; g.beginPath(); g.arc(0, 0, rr * 0.2, 0, 7); g.fill();
+      g.restore();
       break; }
     case 'lab': {                                                                            // glass flask domes bubbling green
       for (const f of [0.3, 0.68]){
@@ -23001,6 +23555,7 @@ function drawRoofs(camx, camy){
       if (rf.cells) pen = inRoom(rf, px, py) ? Math.max(pen, 7) : Math.min(pen, 0);      // irregular building: only inside the real floor plan
       let a = 1 - clamp(pen / 7, 0, 1);                                           // opaque outside; clears as soon as you step in, even hugging a wall
       a = a * a * (3 - 2 * a);
+      rf._a = a;                                                                  // (the night glow of skylights / rose windows only shows while the roof is opaque)
       if (a <= 0.02) continue;
       const [r, g, b] = rf.col, w = rf.x1 - rf.x0, h = rf.y1 - rf.y0;
       const dk = (r * 0.72) | 0, dg = (g * 0.72) | 0, db = (b * 0.72) | 0;
@@ -24170,6 +24725,12 @@ function drawActor(a){
     }
   }
 
+  if (a._torch && a._isGuard && !a.dead && !a._inBed){                              // the torch in hand: a short pole and a flickering flame
+    const tx = a.x + Math.cos((a.dir || 0) + 1.0) * 9, ty = a.y - 2, tt2 = performance.now() / 1000, fk = Math.sin(tt2 * 14 + a.x) * 0.8;
+    octx.fillStyle = '#4a3320'; octx.fillRect(tx - 1, ty - 10, 2, 11);
+    octx.fillStyle = 'rgba(255,140,40,0.85)'; octx.beginPath(); octx.ellipse(tx, ty - 13 + fk * 0.3, 3, 4.6 + fk * 0.5, 0, 0, 7); octx.fill();
+    octx.fillStyle = 'rgba(255,224,130,0.95)'; octx.beginPath(); octx.ellipse(tx, ty - 12.4, 1.6, 2.7, 0, 0, 7); octx.fill();
+  }
   // squad member — green health bar, friendly chevron, name
   if (a.soldier && !a.dead){
     if (a.hp < a.maxhp){
@@ -24723,15 +25284,34 @@ function drawTreeSp(p, sz, sway, shrink, dmg){
     C(tl - 10 * k, cy + 3 * k, 7.5 * k, '#1c5f30'); C(tl + 10 * k, cy + 4 * k, 7.5 * k, '#1c5f30'); C(tl, cy - 2 * k, 10 * k, '#25793b'); C(tl - 6 * k, cy - 5 * k, 7 * k, '#2f8f46'); C(tl + 6 * k, cy - 4 * k, 6.4 * k, '#3a9f50'); C(tl - 2 * k, cy - 9 * k, 5 * k, '#48b25c'); C(tl - 7 * k, cy - 9 * k, 2.6 * k, '#6cd070');
     for (let i = 0; i < 7; i++){ const x = tl + (i - 3) * 4.2 * k, len = (8 + (i * 5) % 9) * k, sw = Math.sin(tn / 800 + i * 1.3 + p.x * 0.05) * 1.2 * k; L(x, cy + 6 * k, x + sw, cy + 6 * k + len, 1, '#2f7a3a'); C(x + sw, cy + 6 * k + len, 1.3, '#4aa050'); }   // vines
     for (const [dx, dy, c] of [[-8, 0, '#ff5a7a'], [4, -6, '#ffd040'], [9, 2, '#ff5a7a'], [-3, -8, '#ffb0d0']]) C(tl + dx * k, cy + dy * k, 1.5, c);
-  } else if (sp === 'bamboo'){                                                                   // a clump of tall segmented stalks with feathery leaf tufts
-    const tn = performance.now(), offs = [-7, -3, 1, 5, 8.5, -10.5];
-    E(0, 4.5, 11 * k, 3 * k, 'rgba(20,40,10,0.25)');
-    for (let i = 0; i < offs.length; i++){
-      const hv = 0.72 + ((i * 37) % 9) / 22, hh = H * 1.25 * hv, x = offs[i] * k * 0.7, sw = Math.sin(tn / 1000 + i * 1.4 + p.x * 0.04) * 1.6 + sway * 0.25, w = 1.5 + k * 0.32;
-      octx.strokeStyle = i % 2 ? '#6aa03e' : '#7cb44a'; octx.lineWidth = w; octx.lineCap = 'butt'; octx.beginPath(); octx.moveTo(x, 5); octx.quadraticCurveTo(x + sw * 0.4, -hh * 0.5, x + sw, -hh); octx.stroke();
-      octx.strokeStyle = 'rgba(190,232,120,0.55)'; octx.lineWidth = Math.max(0.6, w * 0.3); octx.beginPath(); octx.moveTo(x - w * 0.25, 5); octx.quadraticCurveTo(x - w * 0.25 + sw * 0.4, -hh * 0.5, x - w * 0.25 + sw, -hh); octx.stroke();
-      octx.fillStyle = '#3f6a26'; for (let n = 1; n < 6; n++){ const t = n / 6, nx = x + sw * t * t; octx.fillRect(nx - w * 0.6, 5 - (hh + 5) * t, w * 1.2, 1); }
-      for (let l = 0; l < 4; l++){ const t = 0.66 + l * 0.09, lx = x + sw * t * t, ly = 5 - (hh + 5) * t, dir = l % 2 ? 1 : -1; L(lx, ly, lx + dir * (5 + l) * k * 0.6, ly - 3 + l * 1.4, 1.3, l % 2 ? '#5aa03a' : '#82c04c'); }
+  } else if (sp === 'bamboo'){                                                                   // bamboo groves: six looks (tall thin, giant moso, golden, black, young shoots, arching) and MUCH taller stalks than before
+    const tn = performance.now(), vr = (Math.abs(Math.round(p.x * 7 + p.y * 13)) >> 1) % 6, hs = vhash(Math.round(p.x) + 5, Math.round(p.y) - 3);
+    const V = [
+      { n: 7, h0: 2.5, h1: 3.5, w: 1.0, col: ['#6aa03e', '#7cb44a'], hi: 'rgba(190,232,120,0.55)', node: '#3f6a26', leaf: ['#5aa03a', '#82c04c'], arch: 0.15, tuft: 1.0 },      // tall thin grove
+      { n: 4, h0: 2.9, h1: 3.8, w: 2.1, col: ['#5c9a3a', '#6cae46'], hi: 'rgba(200,236,140,0.5)', node: '#34561e', leaf: ['#4e9436', '#6eb444'], arch: 0.1, tuft: 1.25 },        // giant moso: fat stalks
+      { n: 6, h0: 2.3, h1: 3.1, w: 1.2, col: ['#d8b93a', '#e8cf5a'], hi: 'rgba(255,244,170,0.6)', node: '#8a6a1a', leaf: ['#9ab83a', '#bcd050'], arch: 0.15, tuft: 1.0 },       // golden bamboo
+      { n: 6, h0: 2.5, h1: 3.3, w: 1.15, col: ['#2e2a36', '#423c4c'], hi: 'rgba(150,140,180,0.5)', node: '#181420', leaf: ['#3a7a3a', '#56983e'], arch: 0.12, tuft: 1.0 },      // black bamboo
+      { n: 10, h0: 1.3, h1: 1.9, w: 0.8, col: ['#86c04e', '#9ad45c'], hi: 'rgba(220,250,160,0.6)', node: '#4a7a2a', leaf: ['#7ac04a', '#a0d860'], arch: 0.25, tuft: 1.15 },      // young shoots: a dense low clump
+      { n: 5, h0: 2.1, h1: 2.9, w: 1.05, col: ['#6ea840', '#82bc50'], hi: 'rgba(196,236,130,0.55)', node: '#3c6420', leaf: ['#5ea63c', '#86c650'], arch: 0.85, tuft: 1.1 },        // weeping / arching
+    ][vr];
+    const spread = 6 + V.n * 1.15;
+    E(0, 4.5, (7 + V.n) * k * 0.5 + 6, 3 * k, 'rgba(20,40,10,0.28)');
+    for (let i = 0; i < V.n; i++){
+      const f = V.n === 1 ? 0.5 : i / (V.n - 1), hv = V.h0 + (V.h1 - V.h0) * vhash(Math.round(p.x) + i * 17, Math.round(p.y) + i * 5) , hh = H * hv * (0.9 + hs * 0.2);
+      const x = (f - 0.5) * spread * k * 0.5 + (vhash(i + 3, Math.round(p.x)) - 0.5) * 2, w = (1.4 + k * 0.34) * V.w;
+      const sw = Math.sin(tn / 1000 + i * 1.4 + p.x * 0.04) * (1.8 + hv * 0.7) + sway * 0.3, lean = (f - 0.5) * 9 * V.arch + (V.arch > 0.5 ? (i % 2 ? 1 : -1) * hh * 0.28 : 0);
+      const cx1 = x + lean * 0.2 + sw * 0.4, cy1 = -hh * 0.5, ex = x + lean + sw, ey = -hh;
+      octx.strokeStyle = i % 2 ? V.col[0] : V.col[1]; octx.lineWidth = w; octx.lineCap = 'butt'; octx.beginPath(); octx.moveTo(x, 5); octx.quadraticCurveTo(cx1, cy1, ex, ey); octx.stroke();
+      octx.strokeStyle = V.hi; octx.lineWidth = Math.max(0.6, w * 0.3); octx.beginPath(); octx.moveTo(x - w * 0.25, 5); octx.quadraticCurveTo(cx1 - w * 0.25, cy1, ex - w * 0.25, ey); octx.stroke();
+      const nn = Math.max(6, Math.round(hh / 7));                                   // more nodes on taller stalks
+      octx.fillStyle = V.node; for (let n = 1; n < nn; n++){ const t = n / nn, nx = (1 - t) * (1 - t) * x + 2 * (1 - t) * t * cx1 + t * t * ex, ny = (1 - t) * (1 - t) * 5 + 2 * (1 - t) * t * cy1 + t * t * ey; octx.fillRect(nx - w * 0.62, ny, w * 1.24, 1); }
+      const tufts = 5 + (hv > 2.6 ? 2 : 0);                                         // feathery leaf tufts in the top third, drooping outward
+      for (let l = 0; l < tufts; l++){
+        const t = 0.6 + l * (0.4 / tufts), tt2 = 1 - t, lx = tt2 * tt2 * x + 2 * tt2 * t * cx1 + t * t * ex, ly = tt2 * tt2 * 5 + 2 * tt2 * t * cy1 + t * t * ey, dir = l % 2 ? 1 : -1, len = (5 + l * 0.7) * V.tuft * Math.max(0.8, k * 0.5) * (1 + hv * 0.12);
+        const flut = Math.sin(tn / 700 + l + i) * 0.6;
+        L(lx, ly, lx + dir * len, ly - 2.6 + l * 1.3 + flut, 1.3, l % 2 ? V.leaf[0] : V.leaf[1]); L(lx + dir * len * 0.4, ly - 1 + flut * 0.4, lx + dir * len * 0.9, ly - 5.4 + l * 1.1, 1, V.leaf[1]);
+      }
+      C(ex, ey, 0.9 + w * 0.15, V.leaf[1]);                                          // the crown tuft
     }
   } else if (sp === 'sakura'){                                                                    // a cherry tree: dark twisty trunk under a soft cloud of blossom, petals drifting down
     const c = p._mc || '#f4a8c8', d = _tone(c, -0.16), l = _tone(c, 0.18), tn = performance.now(), cy = -H * 0.98;
@@ -24905,12 +25485,13 @@ function drawShrubKind(p){
   else if (k === 'agave'){ for (let i = 0; i < 9; i++){ const a = -Math.PI + i * (Math.PI / 8), len = 8 + (i % 3); octx.fillStyle = i % 2 ? '#5a9a80' : '#4a8a70'; octx.beginPath(); octx.moveTo(0, 3); octx.lineTo(Math.cos(a - 0.14) * len, Math.sin(a - 0.14) * len * 0.6 - 2); octx.lineTo(Math.cos(a + 0.14) * len, Math.sin(a + 0.14) * len * 0.6 - 2); octx.closePath(); octx.fill(); } C(0, -1, 2, '#3a7a60'); }
   else if (k === 'cattail'){ for (let i = 0; i < 6; i++){ const rx = (i - 2.5) * 2.4, lean = Math.sin(tn / 1100 + i + p.x) * 1.4 + (i - 2.5) * 0.5; octx.strokeStyle = '#6a8a3a'; octx.lineWidth = 1.2; octx.beginPath(); octx.moveTo(rx, 4); octx.lineTo(rx + lean, -12 - (i % 3) * 2); octx.stroke(); if (i % 2 === 0){ octx.fillStyle = '#6a3a1a'; octx.fillRect(rx + lean - 1, -13 - (i % 3) * 2, 2.2, 5); } } }
 }
+const OWN_SHADOW = new Set(['grandshrine', 'market', 'granary', 'barracks', 'watchtower', 'temple']);   // these draw their own ground shadow (the generic box would show as a dark square behind them)
 function drawProp(p){
   octx.save(); octx.translate(Math.round(p.x), Math.round(p.y - (p._z || 0)));
   const w = p.w, h = p.h;
   const _hk = Math.max(0, 1 - (performance.now() - (p._hitAt || -1e9)) / 150);   // brief shudder when struck
   if (_hk > 0) octx.translate(Math.round(Math.sin(performance.now() * 0.14) * 2.6 * _hk), 0);
-  if (!NATURE_PROP.has(p.t) && p.t !== 'car' && p.t !== 'trafficcar'){ octx.fillStyle = 'rgba(0,0,0,0.28)'; octx.fillRect(-w/2 + 2, -h/2 + 3, w, h); }   // cars draw their own rotated shadow (see drawCarShape) — this flat one doesn't turn with them
+  if (!NATURE_PROP.has(p.t) && p.t !== 'car' && p.t !== 'trafficcar' && !OWN_SHADOW.has(p.t)){ octx.fillStyle = 'rgba(0,0,0,0.28)'; octx.fillRect(-w/2 + 2, -h/2 + 3, w, h); }   // cars draw their own rotated shadow (see drawCarShape) — this flat one doesn't turn with them
   const dmg = 1 - p.hp / p.maxhp;
   const T = p.t;
   if (T === 'car'){
@@ -25133,24 +25714,57 @@ function drawProp(p){
       octx.fillStyle = 'rgba(255,214,74,' + Math.sin(k * Math.PI) + ')'; octx.fillRect(-w/2 + 6 + k * (w - 14), top - 3 - k * 6, 2.4, 2.4);
     }
   }
-  else if (T === 'barracks'){
-    octx.fillStyle = 'rgba(0,0,0,0.24)'; octx.beginPath(); octx.ellipse(0, h/2 - 1, w*0.58, 4, 0, 0, 7); octx.fill();
-    octx.fillStyle = '#6a5a4a'; octx.fillRect(-w/2, -h*0.1, w, h*0.6);
-    octx.fillStyle = 'rgba(0,0,0,0.16)'; for (let i = 1; i < 6; i++) octx.fillRect(-w/2 + i * w / 6, -h*0.1, 1, h*0.6);
-    octx.fillStyle = '#4a3a2a'; octx.beginPath(); octx.moveTo(-w/2 - 3, -h*0.08); octx.lineTo(0, -h*0.66); octx.lineTo(w/2 + 3, -h*0.08); octx.closePath(); octx.fill();
-    octx.fillStyle = '#2a2018'; octx.fillRect(-w*0.09, h*0.14, w*0.18, h*0.36);
-    octx.fillStyle = '#5a3d22'; octx.fillRect(w*0.26, -h*0.78, 1.6, h*0.7);                                  // banner pole
-    octx.fillStyle = '#b8402e'; octx.fillRect(w*0.26 + 1.6, -h*0.78, 9, 6);
-    octx.fillStyle = '#8b9199'; octx.fillRect(-w*0.42, h*0.18, 2, h*0.3); octx.fillRect(-w*0.34, h*0.22, 2, h*0.26);   // racked spears
+  else if (T === 'barracks'){                                                                     // bunk beds: the SAME top-down bed as the real ones (frame, blanket, pillow), stacked two high with posts and a ladder
+    const bw = 24, bh = 30, z = 6, hi = 15;
+    octx.fillStyle = 'rgba(0,0,0,0.26)'; octx.beginPath(); octx.ellipse(0, h/2 - 4, bw*0.66, 5, 0, 0, 7); octx.fill();
+    const layer = (dy, blanket, pillow) => {
+      octx.save(); octx.translate(0, dy);
+      box3D(bw, bh, z, '#6b4a2c', '#4a3320', '#3a2718');
+      const top = -bh/2 - z;
+      octx.fillStyle = blanket; octx.fillRect(-bw/2 + 2, top + bh*0.30, bw - 4, bh*0.66);
+      octx.fillStyle = 'rgba(255,255,255,0.12)'; octx.fillRect(-bw/2 + 2, top + bh*0.30, bw - 4, 2);
+      octx.fillStyle = blanket; octx.fillRect(-bw/2 + 1, bh/2 - z, bw - 2, 3.5);
+      octx.fillStyle = pillow; octx.fillRect(-bw/2 + 3, top + 2, bw - 6, bh*0.22);
+      octx.fillStyle = 'rgba(0,0,0,0.10)'; octx.fillRect(-bw/2 + 3, top + 2 + bh*0.22 - 1, bw - 6, 1);
+      octx.restore();
+    };
+    const baseY = h/2 - bh/2 - 6;
+    layer(baseY, '#4a6a9a', '#e6e6ee');                                                                    // lower bunk
+    octx.fillStyle = '#4a3220'; for (const x of [-bw/2 - 1, bw/2 - 1]){ octx.fillRect(x, baseY - bh/2 - z - hi - 2, 3, hi + bh + z + 4); }   // corner posts running up to the top bunk
+    layer(baseY - hi, '#7a5a4a', '#f0ece0');                                                               // top bunk, raised and overlapping (stacked)
+    octx.fillStyle = '#5a3d22'; octx.fillRect(bw/2 + 1, baseY - bh/2 - hi - 4, 2, hi + bh*0.7); for (let i = 0; i < 4; i++) octx.fillRect(bw/2 + 1, baseY - bh/2 - hi + i * 7, 7, 1.6);   // ladder on the side
+    octx.fillStyle = '#5a3d22'; octx.fillRect(-bw/2 - 1, baseY - bh/2 - z - hi - 8, 1.8, 10); octx.fillStyle = '#b8402e'; octx.beginPath(); octx.moveTo(-bw/2 + 0.8, baseY - bh/2 - z - hi - 8); octx.lineTo(-bw/2 + 9, baseY - bh/2 - z - hi - 5.5); octx.lineTo(-bw/2 + 0.8, baseY - bh/2 - z - hi - 2); octx.closePath(); octx.fill();   // pennant
   }
-  else if (T === 'watchtower'){
-    octx.fillStyle = 'rgba(0,0,0,0.24)'; octx.beginPath(); octx.ellipse(0, h/2 - 1, w*0.7, 4, 0, 0, 7); octx.fill();
-    octx.fillStyle = '#6a4a2a'; octx.fillRect(-w*0.3, -h*0.5, w*0.15, h); octx.fillRect(w*0.15, -h*0.5, w*0.15, h);   // legs
-    octx.fillStyle = '#5a3d22'; octx.fillRect(-w*0.3, -h*0.05, w*0.6, 2);
-    octx.fillStyle = '#8a6a3a'; octx.fillRect(-w*0.55, -h*0.9, w*1.1, h*0.5);                                 // platform cabin
-    octx.fillStyle = 'rgba(0,0,0,0.2)'; octx.fillRect(-w*0.55, -h*0.9, w*1.1, 2);
-    octx.fillStyle = '#4a3a2a'; octx.beginPath(); octx.moveTo(-w*0.7, -h*0.88); octx.lineTo(0, -h*1.35); octx.lineTo(w*0.7, -h*0.88); octx.closePath(); octx.fill();
-    octx.fillStyle = '#ffce6a'; octx.fillRect(-2, -h*0.72, 4, 4);
+  else if (T === 'watchtower'){                                                                   // stairs drawn in the same oblique view as the walls: raised treads (top faces) + the south-facing risers
+    octx.fillStyle = 'rgba(0,0,0,0.26)'; octx.beginPath(); octx.ellipse(0, h/2 - 1, w*0.56, 4.5, 0, 0, 7); octx.fill();
+    const N = 8, tread = ['#9a7a44', '#8a6a3a'], riser = '#4a3220', rise = 3;
+    if (!p._rot){                                                                                      // climbs to the east (right)
+      const sw2 = w / N;
+      for (let i = 0; i < N; i++){
+        const x = -w/2 + i * sw2, Hi = (i + 1) * rise;
+        octx.fillStyle = riser; octx.fillRect(x, h/2 - Hi, sw2 + 0.5, Hi);                             // south face
+        octx.fillStyle = 'rgba(0,0,0,0.2)'; octx.fillRect(x, h/2 - 1.6, sw2 + 0.5, 1.6);
+        octx.fillStyle = tread[i % 2]; octx.fillRect(x, -h/2 - Hi, sw2 + 0.5, h);                      // top face (tread), full depth
+        octx.fillStyle = 'rgba(255,240,200,0.16)'; octx.fillRect(x, -h/2 - Hi, sw2 + 0.5, 1.2);
+        octx.fillStyle = 'rgba(0,0,0,0.22)'; octx.fillRect(x, -h/2 - Hi, 1, h);                        // the lip between treads
+      }
+      const Ht = N * rise;
+      octx.fillStyle = '#2a1e12'; octx.fillRect(w/2 - sw2 + 1, -h/2 - Ht + 4, sw2 - 2, h - 8);        // hatch on the top step
+      octx.fillStyle = '#5a3d22'; octx.fillRect(-w/2, -h/2 - 4 - rise, 2.4, 4); for (let i = 0; i <= N; i += 2){ const x = -w/2 + i * sw2, Hi = Math.min(N, i + 1) * rise; octx.fillRect(x - 0.8, -h/2 - Hi - 9, 1.8, 9); }   // rail posts along the back
+      octx.strokeStyle = '#4a3220'; octx.lineWidth = 1.6; octx.beginPath(); octx.moveTo(-w/2, -h/2 - rise - 9); octx.lineTo(w/2, -h/2 - Ht - 9); octx.stroke();        // handrail
+    } else {                                                                                            // climbs to the north (up the screen)
+      const sd = h / N;
+      for (let i = N - 1; i >= 0; i--){                                                                 // far (high) steps first so nearer ones overlap them
+        const Hi = (i + 1) * rise, yFront = h/2 - i * sd, yBack = yFront - sd;
+        octx.fillStyle = tread[i % 2]; octx.fillRect(-w/2, yBack - Hi, w, sd + 0.4);                    // tread
+        octx.fillStyle = 'rgba(255,240,200,0.16)'; octx.fillRect(-w/2, yBack - Hi, w, 1);
+        octx.fillStyle = riser; octx.fillRect(-w/2, yFront - Hi, w, rise + 0.4);                        // riser facing us
+        octx.fillStyle = 'rgba(0,0,0,0.22)'; octx.fillRect(-w/2, yFront - Hi + rise - 0.6, w, 1);
+      }
+      octx.fillStyle = '#2a1e12'; octx.fillRect(-w*0.3, -h/2 - N * rise + 1, w*0.6, sd * 0.8);          // hatch at the top
+      octx.fillStyle = '#5a3d22'; for (let i = 0; i <= N; i += 2){ const Hi = Math.min(N, i + 1) * rise, y = h/2 - i * sd - Hi; octx.fillRect(-w/2 - 1.6, y - 9, 1.8, 9); octx.fillRect(w/2 - 0.2, y - 9, 1.8, 9); }   // rail posts either side
+      octx.strokeStyle = '#4a3220'; octx.lineWidth = 1.5; octx.beginPath(); octx.moveTo(-w/2 - 0.7, h/2 - rise - 9); octx.lineTo(-w/2 - 0.7, -h/2 - N * rise - 9); octx.moveTo(w/2 + 0.7, h/2 - rise - 9); octx.lineTo(w/2 + 0.7, -h/2 - N * rise - 9); octx.stroke();
+    }
   }
   else if (T === 'darkshrine'){
     const tn = performance.now(), gl = 0.35 + 0.2 * Math.sin(tn / 350 + p.x);
@@ -25195,14 +25809,17 @@ function drawProp(p){
   else if (T === 'sheaves'){
     for (let i = 0; i < 3; i++){ octx.fillStyle = '#d8b84a'; octx.fillRect(-w*0.4 + i * w*0.28, -h*0.4, w*0.2, h*0.8); octx.fillStyle = '#c8a03a'; octx.fillRect(-w*0.4 + i * w*0.28, h*0.02, w*0.2, 2); octx.fillStyle = '#e8d060'; octx.fillRect(-w*0.4 + i * w*0.28, -h*0.4, w*0.2, 3); }
   }
-  else if (T === 'market'){
-    octx.fillStyle = 'rgba(0,0,0,0.24)'; octx.beginPath(); octx.ellipse(0, h/2 - 1, w*0.56, 4, 0, 0, 7); octx.fill();
-    octx.fillStyle = '#6a4a2a'; octx.fillRect(-w/2, -h*0.05, w, h*0.55);                                  // counter
-    octx.fillStyle = '#8a6a3a'; octx.fillRect(-w/2, -h*0.05, w, 2);
-    const nst = 8, sw = w / nst;
-    for (let i = 0; i < nst; i++){ octx.fillStyle = i % 2 ? '#f0e8d8' : '#c8453a'; octx.fillRect(-w/2 + i * sw, -h*0.62, sw, h*0.34); }   // striped awning
-    octx.fillStyle = '#e8b04a'; octx.fillRect(-w*0.34, -h*0.18, 5, 4); octx.fillStyle = '#8ac05a'; octx.fillRect(-w*0.1, -h*0.2, 6, 5);
-    octx.fillStyle = '#d8543a'; octx.fillRect(w*0.16, -h*0.18, 5, 4); octx.fillStyle = '#c9a24a'; octx.fillRect(w*0.32, -h*0.16, 4, 3);
+  else if (T === 'market'){                                                                       // a proper stall: timber counter, striped canopy on posts, crates and produce
+    octx.fillStyle = 'rgba(0,0,0,0.26)'; octx.beginPath(); octx.ellipse(0, h/2, w*0.58, 5, 0, 0, 7); octx.fill();
+    octx.fillStyle = '#5a3f26'; octx.fillRect(-w/2 + 2, -h*0.85, 3, h*1.35); octx.fillRect(w/2 - 5, -h*0.85, 3, h*1.35);                     // posts
+    octx.fillStyle = '#6a4a2a'; octx.fillRect(-w/2, -h*0.02, w, h*0.5); octx.fillStyle = '#8a6a3a'; octx.fillRect(-w/2, -h*0.02, w, 3);          // counter + lit edge
+    octx.fillStyle = 'rgba(0,0,0,0.22)'; for (let i = 1; i < 7; i++) octx.fillRect(-w/2 + i * w / 7, h*0.06, 1, h*0.4);
+    const nst = 10, sw = w / nst;
+    for (let i = 0; i < nst; i++){ octx.fillStyle = i % 2 ? '#f2eadb' : '#c8453a'; octx.fillRect(-w/2 - 2 + i * (sw + 0.4), -h*1.02, sw + 0.5, h*0.46); octx.fillStyle = i % 2 ? '#f2eadb' : '#c8453a'; octx.beginPath(); octx.arc(-w/2 - 2 + i * (sw + 0.4) + sw / 2, -h*0.56, sw / 2, 0, Math.PI); octx.fill(); }   // scalloped striped canopy
+    octx.fillStyle = 'rgba(0,0,0,0.18)'; octx.fillRect(-w/2 - 2, -h*0.62, w + 4, 2);
+    for (const [x, c] of [[-0.36, '#e8b04a'], [-0.18, '#8ac05a'], [0, '#d8543a'], [0.18, '#c9a24a'], [0.36, '#b070c8']]){ octx.fillStyle = c; octx.beginPath(); octx.ellipse(w * x, -h*0.08, 4.2, 3, 0, 0, 7); octx.fill(); octx.fillStyle = 'rgba(255,255,255,0.35)'; octx.fillRect(w * x - 2, -h*0.14, 2, 1.4); }   // produce heaps
+    octx.fillStyle = '#7a5a34'; octx.fillRect(-w*0.46, h*0.3, 10, 8); octx.fillRect(w*0.32, h*0.32, 10, 7); octx.fillStyle = 'rgba(0,0,0,0.2)'; octx.fillRect(-w*0.46, h*0.3, 10, 1.4);   // crates in front
+    octx.fillStyle = '#e8d8a0'; octx.fillRect(-7, -h*0.54, 14, 5); octx.fillStyle = '#5a3f26'; octx.fillRect(-5.5, -h*0.5, 11, 1);            // hanging sign board
   }
   else if (T === 'scriptorium'){
     octx.fillStyle = 'rgba(0,0,0,0.24)'; octx.beginPath(); octx.ellipse(0, h/2 - 1, w*0.56, 4, 0, 0, 7); octx.fill();
@@ -25213,15 +25830,18 @@ function drawProp(p){
     octx.fillStyle = '#e8e0d0'; octx.fillRect(w*0.2, top - 9, 2, 12); octx.fillStyle = '#2a2a3a'; octx.fillRect(w*0.18, top - 11, 4, 3);   // quill + inkwell
     const tn = performance.now(); octx.fillStyle = 'rgba(255,210,110,' + (0.5 + 0.3 * Math.sin(tn / 300 + p.x)) + ')'; octx.beginPath(); octx.arc(w*0.36, top - 2, 2, 0, 7); octx.fill();   // lamp
   }
-  else if (T === 'temple'){
-    octx.fillStyle = 'rgba(0,0,0,0.26)'; octx.beginPath(); octx.ellipse(0, h/2 - 1, w*0.58, 5, 0, 0, 7); octx.fill();
-    octx.fillStyle = '#9a92a4'; octx.fillRect(-w/2, h*0.32, w, h*0.2);                                       // steps
-    octx.fillStyle = '#b0a8b8'; octx.fillRect(-w/2 + 2, h*0.22, w - 4, h*0.12);
-    for (let i = 0; i < 4; i++){ octx.fillStyle = '#dcd4e4'; octx.fillRect(-w/2 + 5 + i * (w - 14) / 3, -h*0.42, 4, h*0.66); octx.fillStyle = 'rgba(0,0,0,0.15)'; octx.fillRect(-w/2 + 8 + i * (w - 14) / 3, -h*0.42, 1, h*0.66); }   // columns
-    octx.fillStyle = '#c8c0d0'; octx.beginPath(); octx.moveTo(-w/2 - 2, -h*0.42); octx.lineTo(0, -h*0.98); octx.lineTo(w/2 + 2, -h*0.42); octx.closePath(); octx.fill();   // pediment
-    octx.fillStyle = '#7a2f6a'; octx.fillRect(-w*0.1, -h*0.36, w*0.2, h*0.5);                                // hanging cloth in the door
-    const gl = 0.5 + 0.25 * Math.sin(performance.now() / 500 + p.x); octx.fillStyle = 'rgba(255,206,106,' + gl + ')'; octx.beginPath(); octx.arc(0, -h*0.66, 3, 0, 7); octx.fill();
-    if (hasRes('reliquary')){ octx.fillStyle = 'rgba(200,170,255,0.25)'; octx.beginPath(); octx.arc(0, -h*0.5, w*0.5, 0, 7); octx.fill(); }
+  else if (T === 'temple'){                                                                       // a stone font: pedestal, wide basin of still water, a carved pillar and a hanging cloth
+    const tn = performance.now(), gl = 0.5 + 0.25 * Math.sin(tn / 500 + p.x);
+    octx.fillStyle = 'rgba(0,0,0,0.28)'; octx.beginPath(); octx.ellipse(0, h/2, w*0.6, 5.5, 0, 0, 7); octx.fill();
+    octx.fillStyle = '#8a8496'; octx.fillRect(-w*0.42, h*0.3, w*0.84, h*0.2); octx.fillStyle = '#a8a2b4'; octx.fillRect(-w*0.42, h*0.3, w*0.84, 3);          // steps
+    octx.fillStyle = '#9a94a6'; octx.fillRect(-w*0.34, h*0.16, w*0.68, h*0.16);
+    octx.fillStyle = '#b6b0c2'; octx.fillRect(-w*0.08, -h*0.1, w*0.16, h*0.3);                                                                              // stem
+    octx.fillStyle = '#7a748a'; octx.beginPath(); octx.ellipse(0, -h*0.08, w*0.42, h*0.16, 0, 0, 7); octx.fill(); octx.fillStyle = '#c0bacc'; octx.beginPath(); octx.ellipse(0, -h*0.1, w*0.4, h*0.14, 0, 0, 7); octx.fill();   // basin
+    octx.fillStyle = 'rgba(120,170,230,0.9)'; octx.beginPath(); octx.ellipse(0, -h*0.11, w*0.33, h*0.1, 0, 0, 7); octx.fill(); octx.fillStyle = 'rgba(255,255,255,0.4)'; octx.beginPath(); octx.ellipse(-w*0.1, -h*0.13, w*0.1, h*0.03, 0, 0, 7); octx.fill();   // water
+    octx.fillStyle = '#d8d0e4'; octx.fillRect(-w*0.46, -h*0.7, 4, h*0.85); octx.fillRect(w*0.46 - 4, -h*0.7, 4, h*0.85); octx.fillStyle = '#c0b8d0'; octx.fillRect(-w*0.5, -h*0.74, w, 4);   // side pillars + lintel
+    octx.fillStyle = '#7a2f6a'; octx.fillRect(-w*0.12, -h*0.7, w*0.24, h*0.48); octx.fillStyle = '#c8a040'; octx.fillRect(-w*0.12, -h*0.24, w*0.24, 2);         // hanging cloth
+    octx.fillStyle = 'rgba(255,206,106,' + gl + ')'; octx.beginPath(); octx.arc(0, -h*0.5, 3, 0, 7); octx.fill();
+    if (hasRes('reliquary')){ octx.fillStyle = 'rgba(200,170,255,0.25)'; octx.beginPath(); octx.arc(0, -h*0.3, w*0.5, 0, 7); octx.fill(); }
   }
   else if (T === 'mutlab'){
     const tn = performance.now();
@@ -25235,13 +25855,12 @@ function drawProp(p){
     octx.fillStyle = Math.sin(tn / 300) > 0 ? '#7cff5a' : '#2a5a2a'; octx.fillRect(w*0.4, top - 3, 3, 3);
     octx.strokeStyle = '#6a7a6a'; octx.lineWidth = 2; octx.beginPath(); octx.moveTo(-w*0.2, top - 18); octx.lineTo(-w*0.2, top - 26); octx.lineTo(w*0.3, top - 26); octx.lineTo(w*0.3, top - 10); octx.stroke();
   }
-  else if (T === 'granary'){
-    octx.fillStyle = 'rgba(0,0,0,0.24)'; octx.beginPath(); octx.ellipse(0, h/2 - 1, w*0.56, 4, 0, 0, 7); octx.fill();
-    octx.fillStyle = '#8a6a3a'; octx.fillRect(-w*0.4, -h*0.05, w*0.8, h*0.55);
-    octx.fillStyle = 'rgba(0,0,0,0.18)'; for (let i = 1; i < 4; i++) octx.fillRect(-w*0.4 + i * w*0.2, -h*0.05, 1, h*0.55);
-    octx.fillStyle = '#6a4a2a'; octx.beginPath(); octx.moveTo(-w*0.5, -h*0.02); octx.lineTo(0, -h*0.62); octx.lineTo(w*0.5, -h*0.02); octx.closePath(); octx.fill();
-    octx.fillStyle = '#3a2a1a'; octx.fillRect(-w*0.1, h*0.16, w*0.2, h*0.34);
-    octx.fillStyle = '#e8c860'; octx.fillRect(-w*0.34, h*0.4, 4, 3); octx.fillRect(w*0.2, h*0.42, 4, 3);
+  else if (T === 'granary'){                                                                      // grain store: stacked sacks, a barrel, loose grain
+    octx.fillStyle = 'rgba(0,0,0,0.26)'; octx.beginPath(); octx.ellipse(0, h/2 - 1, w*0.6, 5, 0, 0, 7); octx.fill();
+    const sack = (x, y, c) => { octx.fillStyle = 'rgba(0,0,0,0.2)'; octx.beginPath(); octx.ellipse(x + 1, y + 2, 6.4, 4.6, 0, 0, 7); octx.fill(); octx.fillStyle = c; octx.beginPath(); octx.ellipse(x, y, 6.4, 4.6, 0, 0, 7); octx.fill(); octx.fillStyle = 'rgba(255,255,255,0.22)'; octx.beginPath(); octx.ellipse(x - 2, y - 1.6, 3, 1.8, 0, 0, 7); octx.fill(); octx.fillStyle = '#6a5030'; octx.fillRect(x - 1.2, y - 5.6, 2.4, 2); };
+    for (const [x, y, c] of [[-w*0.28, h*0.28, '#c8ae74'], [-w*0.02, h*0.3, '#d2ba80'], [w*0.24, h*0.28, '#c2a56c'], [-w*0.15, h*0.08, '#d8c088'], [w*0.11, h*0.1, '#c8ae74'], [-w*0.02, -h*0.12, '#e0c890']]) sack(x, y, c);
+    octx.fillStyle = '#6a4a2a'; octx.beginPath(); octx.ellipse(w*0.36, h*0.06, 5, 3, 0, 0, 7); octx.fill(); octx.fillRect(w*0.36 - 5, h*0.06, 10, h*0.3); octx.fillStyle = '#8a6a3a'; octx.fillRect(w*0.36 - 5, h*0.06, 3, h*0.3); octx.strokeStyle = '#3a2a1a'; octx.lineWidth = 1; octx.beginPath(); octx.moveTo(w*0.36 - 5, h*0.16); octx.lineTo(w*0.36 + 5, h*0.16); octx.moveTo(w*0.36 - 5, h*0.28); octx.lineTo(w*0.36 + 5, h*0.28); octx.stroke();
+    octx.fillStyle = '#e8c860'; for (const [x, y] of [[-w*0.42, h*0.4], [w*0.05, h*0.42], [w*0.18, h*0.4]]) octx.fillRect(x, y, 2, 1.4);
   }
   else if (T === 'blacksmith'){
     octx.fillStyle = '#4a4650'; octx.fillRect(-w/2, -h*0.05, w*0.55, h*0.3);                  // anvil
@@ -25900,6 +26519,7 @@ function drawProp(p){
     octx.fillStyle = '#ffd24a'; octx.beginPath(); octx.moveTo(0, -9 * f); octx.lineTo(-3.5, 6); octx.lineTo(3.5, 6); octx.closePath(); octx.fill();
     octx.fillStyle = '#fff3c0'; octx.beginPath(); octx.moveTo(0, -4 * f2); octx.lineTo(-1.5, 6); octx.lineTo(1.5, 6); octx.closePath(); octx.fill();
   }
+  else if (T === 'grandshrine'){ octx.translate(0, -10); drawGrandShrine(octx, p._var | 0, performance.now() / 1000, true, p); octx.translate(0, 10); }   // art sits so its platform fills the solid base
   else if (T === 'weaponrack'){
     octx.fillStyle = 'rgba(0,0,0,0.24)'; octx.beginPath(); octx.ellipse(0, h * 0.42, w * 0.5, 3.5, 0, 0, 7); octx.fill();
     // A-frame timber rack — trestle legs + a rail
@@ -26117,7 +26737,7 @@ function syncHUD(){
       if (village && village.cult) $('convCount').textContent = (village.conviction || 0); } }
   { const hm = $('help-muster'); if (hm) hm.style.display = village && village.cult && zone === 'village' ? '' : 'none'; }
   { const ha = $('help-active'); if (ha) ha.style.display = playerActiveTraits().length ? '' : 'none'; }
-  const showHQ = village && village.cult && !inCombat && !(village.hq && village.hq.valid);
+  const showHQ = village && village.cult && !village.hqDone && !inCombat && !(village.hq && village.hq.valid);   // once the hall has been consecrated (hqDone, a one-way flag) the how-to-build-it panel stays gone
   $('hq').classList.toggle('off', !showHQ);
   if (showHQ){
     const miss = (village.hq && village.hq.missing) || ['enclose a hall — walls all round and a door'];
@@ -26314,7 +26934,7 @@ function debugSpawnObject(name){
   const arc = classifyKeepsake(name);
   return { shape: arc.kind, bespoke: KNOWN_KEEPSAKES.has(name.toLowerCase()) };
 }
-const KNOWN_KEEPSAKES = new Set(['teddy bear', 'toaster', 'record player', 'television set', 'armchair',
+const KNOWN_KEEPSAKES = new Set(['teddy bear', 'toaster', 'record player', 'television set', 'armchair', 'couch',
   'grandfather clock', 'chest freezer', 'houseplant', 'desk lamp', 'carriage clock', 'snow globe', 'trophy']);
 // paint a short 3-cell test wall in front of the player using discoverMaterial's pick —
 // unlike the old MAT.PREVIEW scratch slot, this is now a REAL, permanent material: it gets
@@ -26611,7 +27231,7 @@ window.__G = () => ({ player, enemies, props, pickups, bullets, calledShots, par
   _fn: { A, get texFillCacheSize(){ return _texFillCache.size; }, get texFillCacheKeys(){ return [..._texFillCache.keys()]; }, drawWallBlock, drawTexturedFill, get fastGlow(){ return FAST_GLOW; }, set fastGlow(v){ FAST_GLOW = !!v; },
     damageCell, explode, attack, damage, cellSolid, cellMat, spawnEnemy, populateCityStreets, spawnFromSpec,
          killActor, hurtProp, freezeActor, petrifyActor, spawnPuddle, spawnIceStatue, addHazard, weaponFx, breakNearbyErrandItem, explode, get hazards(){ return hazards; },
-         get specialProps(){ return specialProps; }, get warningCars(){ return warningCars; }, get panicCars(){ return panicCars; }, get kennelPets(){ return kennelPets; }, get ambientCars(){ return ambientCars; }, get rollingBarrels(){ return rollingBarrels; }, get weatherObj(){ return weather; }, updatePanicCars, updateKennelPets, hurtKennelPet, forceScenePal(n){ _scenePalForce = n; }, setCell, noteEdit, recomputeRoofs, MAT, openChat, chatAct, chatWorldFacts, updateAmbientTraffic, updateRollingBarrels, updateHazards, findPath, get thrownItems(){ return thrownItems; }, updateThrown, LIFTABLE_PROPS, grantTempTrait, grantRandomTempTrait, clearTempTraits, get quests(){ return quests; }, completeQuest, updateQuestHUD, questTargetPos, questLabel, PLAYER_TRAITS,
+         get specialProps(){ return specialProps; }, get warningCars(){ return warningCars; }, get panicCars(){ return panicCars; }, get kennelPets(){ return kennelPets; }, get ambientCars(){ return ambientCars; }, get rollingBarrels(){ return rollingBarrels; }, get weatherObj(){ return weather; }, updatePanicCars, updateKennelPets, hurtKennelPet, forceScenePal(n){ _scenePalForce = n; }, setCell, noteEdit, recomputeRoofs, MAT, openShrinePick, confirmGrandShrine, BUILD_ITEMS, ICONS, promoteGuard, updateSoldier, openChat, chatAct, chatWorldFacts, updateAmbientTraffic, updateRollingBarrels, updateHazards, findPath, get thrownItems(){ return thrownItems; }, updateThrown, LIFTABLE_PROPS, grantTempTrait, grantRandomTempTrait, clearTempTraits, get quests(){ return quests; }, completeQuest, updateQuestHUD, questTargetPos, questLabel, PLAYER_TRAITS,
          enterCar, exitCar, get drivingCar(){ return drivingCar; }, maybeSpawnTurfWar, lightningStrike, updateSpecialProps,
          get wanted(){ return wanted; }, set wanted(v){ wanted = v; }, wantedTier, keys, updatePlayer,
          tryInteract, updateEnemy, get paused(){ return paused; }, get gameOver(){ return gameOver; }, get winOpenNow(){ return winOpen; },
