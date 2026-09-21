@@ -967,15 +967,18 @@ const PATH_TEX = {
   brick:     { name: 'Brick Path',       col: 'rgba(142,86,70,0.58)',   in: { clay: 2 } },
   flagstone: { name: 'Flagstone Path',   col: 'rgba(136,136,140,0.72)', in: { stone: 1, clay: 1 } },
   paved:     { name: 'Paved Path',       col: 'rgba(172,172,166,0.72)', in: { stone: 2, sand: 1 } },
+  dirt:      { name: 'Dirt Path',        col: 'rgba(112,92,58,0.6)',    in: { dirt: 1 } },   // available from game start (see registerPaths(true)); the researched paths come later
 };
 let _pathsRegistered = false;
-function registerPaths(){
-  if (_pathsRegistered) return;
-  _pathsRegistered = true;
+let _dirtPathRegistered = false;
+function registerPaths(dirtOnly){
+  if (dirtOnly){ if (_dirtPathRegistered) return; _dirtPathRegistered = true; }
+  else { if (_pathsRegistered) return; _pathsRegistered = true; }
   for (const key in PATH_TEX){
+    if (dirtOnly && key !== 'dirt') continue;
     const p = PATH_TEX[key], mat = 'path_' + key;
     if (!RECIPES.some(r => r.id === mat)) RECIPES.push({ id: mat, name: p.name, ico: mat, in: p.in, out: { [mat]: 3 } });   // paths are cheap — a craft lays a good stretch
-    if (!BUILD_ITEMS.some(b => b.mat === mat)) BUILD_ITEMS.push({ mat, cell: 0, name: p.name, ico: '▦', floor: true, texture: key, w: 1, h: 1, cat: key === 'brick' ? 'clay' : 'stone' });
+    if (!BUILD_ITEMS.some(b => b.mat === mat)) BUILD_ITEMS.push({ mat, cell: 0, name: p.name, ico: '▦', floor: true, texture: key, w: 1, h: 1, cat: key === 'brick' ? 'clay' : key === 'dirt' ? 'earth' : 'stone' });
     PIECE_SHORT[mat] = p.name.replace(' Path', '');
     ICONS[mat] = (g, S) => pathIcon(g, S, key);
     BPIC[mat] = mat;
@@ -1029,7 +1032,7 @@ const YARD_BUILDINGS = [
 const TOWN_BUILD_IDS = TOWN_BUILDINGS.map(b => b.id).concat(YARD_BUILDINGS.map(b => b.id)).concat(['mutlab']);
 // the Mutation Lab: unlocked by having a cult OR holding any boss DNA
 function registerMutLab(){
-  if (!village || !(village.cult || village.dna)) return;
+  if (!mutLabUnlocked()) return;
   if (!RECIPES.some(r => r.id === 'mutlab')) RECIPES.push({ id: 'mutlab', name: 'Mutation Lab', ico: 'mutlab', in: { wood: 6, stone: 10 }, out: { mutlab: 1 } });
   if (!BUILD_ITEMS.some(x => x.mat === 'mutlab')) BUILD_ITEMS.push({ mat: 'mutlab', cell: 0, name: 'Mutation Lab', ico: '☣', prop: 'mutlab', w: 2, h: 1, cat: 'home' });
   PIECE_SHORT.mutlab = 'Mutation Lab'; BPIC.mutlab = 'mutlab';
@@ -1048,11 +1051,11 @@ function registerYardBuilds(){
 // feature (ngPlus + 1 >= country). Everything is at 1 while the features are being tested — bump
 // these to stage them (proposed pacing: Temple/Barracks/cult = 2, Watchtower/Town tier = 3).
 const FEATURES = [
-  { id: 'shrine',      name: 'Shrines',       country: 1, blurb: 'small Favor sources' },
-  { id: 'blacksmith',  name: 'Blacksmith',    country: 1, blurb: 'upgrade, infuse and recolour weapons' },
-  { id: 'market',      name: 'Market Stall',  country: 1, blurb: '+8 cash a day' },
-  { id: 'granary',     name: 'Granary',       country: 1, blurb: '+5 food a day' },
-  { id: 'scriptorium', name: 'Scriptorium',   country: 1, blurb: '+4 research a day' },
+  { id: 'shrine',      name: 'Shrines',       country: 1, need: 'the cult (10 villagers)', when: () => !!(village && village.cult), blurb: 'small Favor sources' },
+  { id: 'blacksmith',  name: 'Blacksmith',    country: 1, need: 'take your first city', when: () => firstCityTaken(), blurb: 'upgrade, infuse and recolour weapons' },
+  { id: 'market',      name: 'Market Stall',  country: 1, need: 'Village rank', when: () => ((village && village.tier) || 0) >= 1, blurb: '+8 cash a day' },
+  { id: 'granary',     name: 'Granary',       country: 1, need: 'Village rank', when: () => ((village && village.tier) || 0) >= 1, blurb: '+5 food a day' },
+  { id: 'scriptorium', name: 'Scriptorium',   country: 1, need: 'take your first city', when: () => firstCityTaken(), blurb: '+4 research a day' },
   { id: 'temple',      name: 'Temple',        country: 2, blurb: '+3 favor a day' },
   { id: 'barracks',    name: 'Barracks',      country: 2, blurb: 'bigger muster squad' },
   { id: 'watchtower',  name: 'Watchtower',    country: 3, blurb: 'guards nearby hit harder' },
@@ -1062,7 +1065,9 @@ const FEATURES = [
   { id: 'research',    name: 'Faith & War research', country: 1, blurb: 'the full research tree' },
 ];
 function countryNumber(){ return ((village && village.ngPlus) || 0) + 1; }
-function featureUnlocked(id){ const f = FEATURES.find(x => x.id === id); return !f || countryNumber() >= f.country; }
+function firstCityTaken(){ return !!(village && ((village._firstCity) || (village.country && village.country.nodes.some(n => n.raided)))); }
+function featureUnlocked(id){ const f = FEATURES.find(x => x.id === id); return !f || (countryNumber() >= f.country && (!f.when || f.when())); }
+function mutLabUnlocked(){ return !!(village && ((village.dna && Object.keys(village.dna).length) || countryNumber() >= 2)); }
 const BUILD_LABEL = { altar: 'an altar', weaponrack: 'a weapon rack', shrine: 'shrines', blacksmith: 'a blacksmith', barracks: 'barracks', watchtower: 'a watchtower', temple: 'a temple', market: 'a market stall', scriptorium: 'a scriptorium', granary: 'a granary' };
 function townTier(){ return TOWN_TIERS[Math.min(TOWN_TIERS.length - 1, (village && village.tier) || 0)]; }
 function villagerCap(){ return townTier().cap; }
@@ -1081,13 +1086,15 @@ function townMissing(){
   return miss;
 }
 function checkTownTier(){
-  registerYardBuilds(); registerMutLab();
+  checkUnlocks();
+  registerYardBuilds(); registerMutLab(); registerBlacksmith();
   if (village && village.cult) registerTownBuilds();
   if (!village || zone !== 'village') return;
   village.tier ||= 0;
   let miss;
   while ((miss = townMissing()) && !miss.length){
     village.tier++;
+    checkUnlocks(); if (village.cult) registerTownBuilds();          // a new rank can open new buildings straight away
     const t = TOWN_TIERS[village.tier];
     saveVillage(true);
     setTimeout(() => flash('You are now a ' + t.name, '#ffe6a0', 'room for ' + t.cap + ' souls'), 900);
@@ -1123,12 +1130,28 @@ function registerCultBuild(){
     BUILD_ITEMS.push({ mat: 'shrine', cell: 0, name: 'Shrine', ico: '✦', prop: 'shrine', w: 1, h: 1, cat: 'home' });
   PIECE_SHORT.shrine = 'Shrine';
   BPIC.shrine = 'shrine';
+}
+function registerBlacksmith(){
+  if (!village || !featureUnlocked('blacksmith')) return;
   if (!RECIPES.some(r => r.id === 'blacksmith'))
     RECIPES.push({ id: 'blacksmith', name: 'Blacksmith', ico: 'blacksmith', in: { wood: 4, stone: 10 }, out: { blacksmith: 1 } });
   if (!BUILD_ITEMS.some(b => b.mat === 'blacksmith'))
     BUILD_ITEMS.push({ mat: 'blacksmith', cell: 0, name: 'Blacksmith', ico: '⚒', prop: 'blacksmith', w: 2, h: 1, cat: 'home' });
   PIECE_SHORT.blacksmith = 'Smithy';
   BPIC.blacksmith = 'blacksmith';
+}
+// announce each unlock the first time it opens up (existing saves are seeded silently so they don't get a wall of messages)
+const UNLOCK_WATCH = [['shrine', 'Shrines'], ['blacksmith', 'Blacksmith'], ['market', 'Market Stall'], ['granary', 'Granary'], ['scriptorium', 'Scriptorium'], ['temple', 'Temple'], ['barracks', 'Barracks'], ['watchtower', 'Watchtower'], ['mutlab', 'Mutation Lab']];
+function checkUnlocks(){
+  if (!village) return;
+  if (!village._firstCity && village.country && village.country.nodes.some(n => n.raided)) village._firstCity = true;   // a ratchet: it stays unlocked even if the city is lost
+  const seen = village._ufSeen, first = !seen, now = {};
+  for (const [id, name] of UNLOCK_WATCH){
+    const on = id === 'mutlab' ? mutLabUnlocked() : featureUnlocked(id);
+    now[id] = on;
+    if (on && seen && !seen[id]) setTimeout(() => flash('New: ' + name, '#9ad46a', 'now available to build'), 1100);
+  }
+  if (first || UNLOCK_WATCH.some(([id]) => now[id] && !(seen && seen[id]))){ village._ufSeen = Object.assign({}, seen || {}, now); saveVillage(); }
 }
 // town buildings (user: "an excuse to build more buildings and have the village look more like a
 // town") — each one is a real daily yield, capped at TOWN_BUILD_CAP of a kind so spamming one
@@ -1157,14 +1180,73 @@ function checkCult(){
       'ten souls now — raise a hall for the faith (B, then the Altar)'), 800);
 }
 // re-derive HQ validity from current roofs + furniture. Cheap; called on build / prop edits.
+// is a world point inside this room's floor? (irregular buildings carry their exact interior cells; plain rectangles just use the box)
+function inRoom(r, x, y){
+  if (!(x > r.ix0 && x < r.ix1 && y > r.iy0 && y < r.iy1)) return false;
+  return !r.cells || r.cells.has(Math.floor(x / CELL) + ',' + Math.floor(y / CELL));
+}
+// each enclosed room gets a rooftop feature that shows what's inside it, so you can read the village from a distance.
+// re-derived whenever roofs are rebuilt / furniture changes (checkHQ) and every morning.
+const ROOF_ROLE_ORDER = [
+  ['church',  ['altar', 'temple']],
+  ['lab',     ['mutlab']],
+  ['library', ['study', 'scriptorium']],
+  ['forge',   ['blacksmith']],
+  ['barracks', ['weaponrack', 'barracks', 'watchtower']],
+  ['market',  ['market']],
+  ['granary', ['granary']],
+  ['hall',    ['longtable', 'sidetable']],
+  ['house',   ['bed']],
+];
+function classifyRoofs(){
+  if (!village || !village.roofs || zone !== 'village') return;
+  for (const r of village.roofs){
+    const inside = new Set();
+    for (const p of props) if (!p.dead && inRoom(r, p.x, p.y)) inside.add(p.t);
+    const hq = village.hq && village.hq.valid && village.hq.room && Math.abs(village.hq.room.x0 - r.ix0) < 2 && Math.abs(village.hq.room.y0 - r.iy0) < 2;
+    let role = hq ? 'church' : null;
+    if (!role) for (const [name, types] of ROOF_ROLE_ORDER) if (types.some(t => inside.has(t))){ role = name; break; }
+    r.role = role;
+    if (!r._col0) r._col0 = r.col.slice();
+    r.col = role === 'church' ? [78, 88, 114] : r._col0.slice();                       // slate blue for a church, the building's own tone otherwise
+  }
+}
+// is this wall cell part of a church? (its windows become stained glass)
+function isChurchCell(cx, cy){
+  if (!village || !village.roofs) return false;
+  for (const r of village.roofs){
+    if (r.role !== 'church') continue;
+    if (r.fp) { if (r.fp.has(cx + ',' + cy)) return true; continue; }                        // irregular building: its exact footprint
+    if (cx * CELL >= r.ix0 - CELL && cx * CELL < r.ix1 + CELL && cy * CELL >= r.iy0 - CELL && cy * CELL < r.iy1 + CELL) return true;   // interior + the one-cell wall ring, all four sides
+  }
+  return false;
+}
+// coloured leaded panes for church windows
+function stainedGlass(g, x, y, w, h, seed, a){
+  const pal = ['#c8383a', '#3a68c8', '#e2b030', '#3a9a58', '#8a44b8', '#d8702a'], cols = 2, rows = 4, cw = w / cols, ch = h / rows;
+  const peak = clamp(h * 0.42, 2.5, 5);
+  const arch = () => { g.beginPath(); g.moveTo(x, y + h); g.lineTo(x, y + h * 0.3); g.quadraticCurveTo(x, y + h * 0.04, x + w / 2, y - peak); g.quadraticCurveTo(x + w, y + h * 0.04, x + w, y + h * 0.3); g.lineTo(x + w, y + h); g.closePath(); };   // a gothic pointed arch
+  g.save(); arch(); g.clip();
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++){
+    const hv = ((seed * 31 + r * 7 + c * 13) >>> 0) % pal.length;
+    g.globalAlpha = a; g.fillStyle = pal[(hv + (r + c) % 2 * 2) % pal.length]; g.fillRect(x + c * cw, y - peak + r * (ch + peak / rows), cw, ch + peak / rows + 0.5);
+  }
+  g.globalAlpha = 1; g.strokeStyle = 'rgba(20,16,26,0.85)'; g.lineWidth = 0.9; g.beginPath();
+  for (let c = 1; c < cols; c++){ g.moveTo(x + c * cw, y - peak); g.lineTo(x + c * cw, y + h); }
+  for (let r = 1; r < rows; r++){ g.moveTo(x, y - peak + r * (ch + peak / rows)); g.lineTo(x + w, y - peak + r * (ch + peak / rows)); }
+  g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.2)'; g.fillRect(x + 1, y + h * 0.25, 1.2, h * 0.55);
+  g.restore();
+  g.strokeStyle = 'rgba(24,20,30,0.95)'; g.lineWidth = 1.3; arch(); g.stroke();   // dark leaded frame following the arch
+}
 function checkHQ(){
+  if (village && zone === 'village') classifyRoofs();
   if (!village || !village.cult || zone !== 'village') return;
   const rooms = village.roofs || [];
   let ok = null, bestMiss = null;
   for (const r of rooms){
-    const tiles = Math.round((r.ix1 - r.ix0) / CELL) * Math.round((r.iy1 - r.iy0) / CELL);
-    const has = t => props.filter(p => !p.dead && p.t === t &&
-      p.x > r.ix0 && p.x < r.ix1 && p.y > r.iy0 && p.y < r.iy1).length;
+    const tiles = r.cells ? r.cells.size : Math.round((r.ix1 - r.ix0) / CELL) * Math.round((r.iy1 - r.iy0) / CELL);
+    const has = t => props.filter(p => !p.dead && p.t === t && inRoom(r, p.x, p.y)).length;
     const miss = [];
     if (tiles < HQ_MIN_TILES) miss.push('bigger hall — ' + tiles + '/' + HQ_MIN_TILES + ' floor tiles');
     for (const q of HQ_REQ){ const n = has(q.prop); if (n < q.n) miss.push(q.n > 1 ? q.label + ' (' + n + '/' + q.n + ')' : q.label); }
@@ -1357,12 +1439,15 @@ function revealName(rec){
   if (!rec) return; rec.met = true;
   for (const e of enemies) if (e.villager && e._vid === rec.id) e._met = true;
 }
-function gossipLine(speakerRec){
-  const spk = enemies.find(o => o.villager && o._vid === speakerRec.id);
-  if (!spk) return null;
-  const near = enemies.filter(o => o.villager && !o.dead && o._vid !== speakerRec.id && dist2(o.x, o.y, spk.x, spk.y) < 82 * 82);
-  if (!near.length) return null;
-  const oRec = village.villagers.find(v => v.id === pick(near)._vid);
+function gossipLine(speakerRec, forced){
+  let oRec = forced || null;
+  if (!oRec){
+    const spk = enemies.find(o => o.villager && o._vid === speakerRec.id);
+    if (!spk) return null;
+    const near = enemies.filter(o => o.villager && !o.dead && o._vid !== speakerRec.id && dist2(o.x, o.y, spk.x, spk.y) < 82 * 82);
+    if (!near.length) return null;
+    oRec = village.villagers.find(v => v.id === pick(near)._vid);
+  }
   if (!oRec) return null;
   const od = dossierFor(oRec); if (!od) return null;
   const realW = WOUNDS[ensureWound(oRec)];
@@ -1494,7 +1579,7 @@ function villagerIndoors(v){
   if (!village || !village.roofs) return false;
   const e = enemies.find(a => a.villager && a._vid === v.id);
   const px = e ? e.x : (v.bed ? v.bed.x : 1e9), py = e ? e.y : (v.bed ? v.bed.y : 1e9);
-  return village.roofs.some(r => px > r.ix0 && px < r.ix1 && py > r.iy0 && py < r.iy1);
+  return village.roofs.some(r => inRoom(r, px, py));
 }
 function knowsWound(v){
   const d = dossierFor(v); if (!d) return false;
@@ -1561,14 +1646,15 @@ function _sceneCanvasStart(){
   sermonOpen = true; paused = true;
   for (const k in keys) keys[k] = false;
   const cv2 = $('sermoncv');
-  SW = cv2.width = Math.max(640, Math.min(1120, innerWidth));
-  SH = cv2.height = Math.max(480, Math.min(760, innerHeight));
-  sctx = cv2.getContext('2d');
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  SW = Math.max(640, innerWidth); SH = Math.max(480, innerHeight);
+  cv2.width = Math.round(SW * dpr); cv2.height = Math.round(SH * dpr);
+  sctx = cv2.getContext('2d'); sctx.setTransform(dpr, 0, 0, dpr, 0, 0); sctx.imageSmoothingEnabled = true;
   $('sermon').classList.add('open');
   cancelAnimationFrame(_sermonRAF);
   const loop = () => {
     if (!sermonOpen) return;
-    try { if (_sermon) sermonFrame(); else if (_gift) giftFrame(); } catch (e) { console.error(e); }
+    try { if (_sermon) sermonFrame(); else if (_gift) giftFrame(); else if (_chatS) chatFrame(); } catch (e) { console.error(e); }
     _sermonRAF = requestAnimationFrame(loop);
   };
   _sermonRAF = requestAnimationFrame(loop);
@@ -1577,7 +1663,7 @@ function closeSermon(){
   sermonOpen = false; paused = false;
   cancelAnimationFrame(_sermonRAF);
   $('sermon').classList.remove('open');
-  _sermon = null; _gift = null; _sermonRects.length = 0;
+  _sermon = null; _gift = null; _chatS = null; _sermonRects.length = 0;
 }
 function sermonSay(txt){
   if (!_sermon) return;
@@ -1866,6 +1952,80 @@ function giftFrame(){
   }
   g0.restore();
 }
+// per-biome look of the outdoor face scenes (chat / sit-down): sky, far + near layers, ground, and what the landscape is made of
+const SCENE_PAL_DEFAULT = { sky: ['#4f7db2', '#a6c6de'], far: '#1c3a22', near: '#2b542f', ground: ['#437037', '#2d4f25'], trunk: '#22160e', shape: 'round' };
+const SCENE_PAL = {
+  'Golden Autumn':  { sky: ['#6a8fb8', '#ecc890'], far: '#6a3e1c', near: '#c0741c', ground: ['#8a6a2a', '#5a4018'], trunk: '#3a2412', shape: 'round' },
+  'Dry Plains':     { sky: ['#6e94bc', '#ecd8a8'], far: '#8a7a4a', near: '#a89658', ground: ['#b89a58', '#8a7440'], trunk: '#5a4020', shape: 'dune' },
+  'Cool Highlands': { sky: ['#7a94a8', '#c4d0d8'], far: '#3a4a52', near: '#4e6a58', ground: ['#5a7a5a', '#3a5240'], trunk: '#2a2018', shape: 'hill' },
+  'Misty Moors':    { sky: ['#8a949c', '#c6ccce'], far: '#4a545a', near: '#5a6a58', ground: ['#5a6a4a', '#3a4634'], trunk: '#2a2018', shape: 'hill' },
+  'Warm Dusk':      { sky: ['#5a4a8a', '#f0a070'], far: '#3a2a4a', near: '#6a4a5a', ground: ['#5a4a4a', '#3a2c34'], trunk: '#2a1a1a', shape: 'round' },
+  'Lush Wetlands':  { sky: ['#6a9aa8', '#bcd8c8'], far: '#1a4a3a', near: '#2a6a4a', ground: ['#2e6a4a', '#1c4a34'], trunk: '#2a2a1a', shape: 'willow' },
+  'Cursed Wasteland': { sky: ['#3a3a2a', '#8a9a4a'], far: '#22221a', near: '#34341e', ground: ['#3a4020', '#242810'], trunk: '#1a1a10', shape: 'dead' },
+  'Haunted Marsh':  { sky: ['#3a4a4a', '#8a9a8a'], far: '#1a2a24', near: '#2a3a30', ground: ['#2a3a2c', '#182620'], trunk: '#1a1c14', shape: 'willow' },
+  'Crystal Caverns': { sky: ['#1a1a3a', '#4a3a7a'], far: '#2a2a5a', near: '#4a5a9a', ground: ['#2a2a4a', '#181830'], trunk: '#20203a', shape: 'crystal' },
+  'Faded Frontier': { sky: ['#8aa0b0', '#e8d4b0'], far: '#7a6a4a', near: '#8a7a50', ground: ['#9a8256', '#6a5a3a'], trunk: '#4a3a20', shape: 'dune' },
+  'Snowfields':     { sky: ['#8aa8c8', '#e4eef8'], far: '#6a7f92', near: '#2e5a48', ground: ['#e8f0f8', '#c0d0e0'], trunk: '#2a1e14', shape: 'pine', snow: true },
+  'Endless Desert': { sky: ['#5a90c8', '#f4dca0'], far: '#c8a060', near: '#d8b070', ground: ['#e0c080', '#b8964e'], trunk: '#3a5a2a', shape: 'dune', cacti: true },
+  'Steaming Jungle': { sky: ['#5a9a8a', '#b8d8a8'], far: '#0e3a24', near: '#1a6a3a', ground: ['#245a2a', '#123a1a'], trunk: '#3a2a14', shape: 'palm' },
+  'Bamboo Vale':    { sky: ['#7aa8a0', '#d0e4d0'], far: '#3a6a4a', near: '#5a9a5a', ground: ['#5a8a4a', '#3a5a30'], trunk: '#7a9a4a', shape: 'bamboo' },
+  'Ashlands':       { sky: ['#2a1a1a', '#8a3a1a'], far: '#1a1414', near: '#2a1e1c', ground: ['#2a2220', '#161010'], trunk: '#120c0a', shape: 'dead', lava: true },
+  'Blossom Grove':  { sky: ['#8ab0d8', '#f4d8e4'], far: '#6a8a5a', near: '#e6a4be', ground: ['#6aa05a', '#3f7a3a'], trunk: '#4a2e22', shape: 'round' },
+};
+let _scenePalForce = null;   // debug: force a palette by biome name
+function scenePal(){
+  if (_scenePalForce) return SCENE_PAL[_scenePalForce] || SCENE_PAL_DEFAULT;
+  const k = (typeof biomeKit === 'function') ? biomeKit() : null;
+  return (k && SCENE_PAL[countryStyle().name]) || SCENE_PAL_DEFAULT;
+}
+function sceneLandscape(g0, pal, night, tt, gust){
+  const dk = c => night > 0.5 ? _tone(c, -0.55) : c, far = dk(pal.far), near = dk(pal.near), trunk = dk(pal.trunk), sh = pal.shape;
+  const wave = (col, base, amp, f1, f2, ph) => { g0.fillStyle = col; g0.beginPath(); g0.moveTo(0, SH); for (let x = 0; x <= SW; x += 12) g0.lineTo(x, base - amp * (0.6 + 0.4 * Math.sin(x * f1 + ph)) - amp * 0.5 * Math.sin(x * f2 + ph * 1.7)); g0.lineTo(SW, SH); g0.closePath(); g0.fill(); };
+  // ---- far layer
+  g0.fillStyle = far;
+  if (sh === 'dune' || sh === 'hill'){ wave(far, SH * 0.5, SH * (sh === 'hill' ? 0.1 : 0.06), 0.006, 0.013, 1.3); }
+  else if (sh === 'pine'){ for (let i = 0; i < 16; i++){ const x = (i / 15) * SW, hh = SH * (0.13 + (i % 3) * 0.04); g0.beginPath(); g0.moveTo(x - SW * 0.04, SH * 0.5); g0.lineTo(x, SH * 0.5 - hh); g0.lineTo(x + SW * 0.04, SH * 0.5); g0.fill(); } }
+  else if (sh === 'bamboo'){ g0.fillStyle = far; for (let i = 0; i < 40; i++){ const x = (i / 40) * SW + ((i * 31) % 9), sw = Math.sin(tt * 0.9 + i) * 3 * gust; g0.fillRect(x + sw * 0.4, SH * 0.2 + (i % 5) * SH * 0.03, 5, SH * 0.32); } }
+  else if (sh === 'crystal'){ for (let i = 0; i < 14; i++){ const x = (i / 13) * SW, hh = SH * (0.16 + (i % 4) * 0.05); g0.beginPath(); g0.moveTo(x - SW * 0.03, SH * 0.52); g0.lineTo(x - SW * 0.008, SH * 0.52 - hh); g0.lineTo(x + SW * 0.012, SH * 0.52 - hh * 0.8); g0.lineTo(x + SW * 0.035, SH * 0.52); g0.fill(); } }
+  else if (sh === 'dead'){ wave(far, SH * 0.5, SH * 0.07, 0.009, 0.02, 0.4); }
+  else { for (let i = 0; i < 8; i++){ const cx = (i * 0.145 - 0.03) * SW + Math.sin(i * 2.3) * 24 + Math.sin(tt * 0.9 + i * 1.7) * SW * 0.003 * gust, r = SW * (0.1 + (i % 3) * 0.02); g0.beginPath(); g0.ellipse(cx, SH * 0.46, r, r * 1.05, 0, 0, 7); g0.fill(); } }
+  // ---- near layer
+  if (sh === 'dune'){
+    wave(near, SH * 0.66, SH * 0.07, 0.005, 0.011, 4.1);
+    if (pal.cacti) for (let i = 0; i < 3; i++){ const x = SW * (0.12 + i * 0.36), h = SH * (0.16 + (i % 2) * 0.05), sw = Math.sin(tt * 0.6 + i) * 1.2; g0.fillStyle = dk('#3f6a34'); g0.fillRect(x - 7, SH * 0.68 - h, 14, h); g0.fillRect(x - 26 + sw, SH * 0.68 - h * 0.6, 8, h * 0.4); g0.fillRect(x - 26 + sw, SH * 0.68 - h * 0.62, 26, 8); g0.fillRect(x + 18 - sw, SH * 0.68 - h * 0.75, 8, h * 0.45); g0.fillRect(x + 4, SH * 0.68 - h * 0.77, 22, 8); }
+  } else if (sh === 'hill'){
+    wave(near, SH * 0.64, SH * 0.085, 0.004, 0.009, 2.2);
+    g0.fillStyle = dk('#243a30'); for (let i = 0; i < 5; i++){ const x = SW * (0.1 + i * 0.2), sw = Math.sin(tt * 1.1 + i) * 2 * gust; g0.beginPath(); g0.moveTo(x - 22, SH * 0.66); g0.lineTo(x + sw, SH * 0.66 - SH * 0.14); g0.lineTo(x + 22, SH * 0.66); g0.fill(); }
+  } else if (sh === 'crystal'){
+    for (let i = 0; i < 8; i++){
+      const x = (i * 0.15 + 0.03) * SW, hh = SH * (0.14 + (i % 3) * 0.05), glow = 0.5 + 0.5 * Math.sin(tt * 1.6 + i * 1.3);
+      const gr = g0.createRadialGradient(x, SH * 0.66, 4, x, SH * 0.6, hh * 1.4); gr.addColorStop(0, 'rgba(140,200,255,' + (0.28 * glow) + ')'); gr.addColorStop(1, 'rgba(140,200,255,0)'); g0.fillStyle = gr; g0.fillRect(x - hh * 1.4, SH * 0.5 - hh, hh * 2.8, hh * 2.4);
+      g0.fillStyle = near; g0.beginPath(); g0.moveTo(x - SW * 0.04, SH * 0.72); g0.lineTo(x - SW * 0.01, SH * 0.72 - hh); g0.lineTo(x + SW * 0.014, SH * 0.72 - hh * 0.75); g0.lineTo(x + SW * 0.045, SH * 0.72); g0.fill();
+      g0.fillStyle = 'rgba(190,230,255,' + (0.18 + 0.2 * glow) + ')'; g0.beginPath(); g0.moveTo(x - SW * 0.01, SH * 0.72); g0.lineTo(x - SW * 0.01, SH * 0.72 - hh); g0.lineTo(x + SW * 0.014, SH * 0.72 - hh * 0.75); g0.lineTo(x + SW * 0.01, SH * 0.72); g0.fill();
+    }
+  } else {
+    for (let i = 0; i < 7; i++){
+      const cx = (i * 0.17 + 0.02) * SW, sw = Math.sin(tt * 1.3 + i * 2.1) * SW * 0.009 * gust, sw2 = Math.sin(tt * 2.1 + i) * SW * 0.002;
+      if (sh === 'pine'){
+        g0.fillStyle = trunk; g0.fillRect(cx - 5, SH * 0.6, 10, SH * 0.16);
+        for (let k = 0; k < 4; k++){ const y = SH * (0.62 - k * 0.085), w = SW * (0.085 - k * 0.014), s2 = sw * (0.4 + k * 0.25); g0.fillStyle = near; g0.beginPath(); g0.moveTo(cx - w + s2 * 0.3, y); g0.lineTo(cx + s2, y - SH * 0.11); g0.lineTo(cx + w + s2 * 0.3, y); g0.fill(); if (pal.snow){ g0.fillStyle = dk('#f2f8ff'); g0.beginPath(); g0.moveTo(cx - w * 0.55 + s2 * 0.3, y - SH * 0.045); g0.lineTo(cx + s2, y - SH * 0.11); g0.lineTo(cx + w * 0.55 + s2 * 0.3, y - SH * 0.045); g0.fill(); } }
+      } else if (sh === 'dead'){
+        g0.strokeStyle = trunk; g0.lineWidth = 7; g0.lineCap = 'round'; const tx = cx + sw * 0.3; g0.beginPath(); g0.moveTo(cx, SH * 0.76); g0.lineTo(tx, SH * 0.46); g0.stroke();
+        g0.lineWidth = 4; for (const [dx, dy, ex, ey] of [[0, -0.1, -46, -0.16], [0, -0.16, 52, -0.24], [0, -0.22, -30, -0.3], [0, -0.26, 26, -0.34]]){ g0.beginPath(); g0.moveTo(tx, SH * (0.62 + dy * 0.6)); g0.lineTo(tx + ex + sw * 0.8, SH * (0.62 + ey * 0.6)); g0.stroke(); }
+      } else if (sh === 'palm'){
+        g0.strokeStyle = trunk; g0.lineWidth = 9; g0.lineCap = 'round'; const tx = cx + 26 + sw * 0.4; g0.beginPath(); g0.moveTo(cx, SH * 0.78); g0.quadraticCurveTo(cx + 6, SH * 0.55, tx, SH * 0.36); g0.stroke();
+        g0.fillStyle = near; for (let k = 0; k < 6; k++){ const a = -Math.PI / 2 + (k - 2.5) * 0.62 + Math.sin(tt * 1.5 + k + i) * 0.05 * gust; g0.save(); g0.translate(tx, SH * 0.36); g0.rotate(a); g0.beginPath(); g0.ellipse(SW * 0.06, 0, SW * 0.075, SH * 0.024, 0, 0, 7); g0.fill(); g0.restore(); }
+      } else if (sh === 'bamboo'){
+        for (let k = 0; k < 3; k++){ const x = cx + (k - 1) * 22, top = SH * (0.16 + k * 0.03), s2 = sw * 0.9; g0.strokeStyle = trunk; g0.lineWidth = 9; g0.beginPath(); g0.moveTo(x, SH * 0.78); g0.lineTo(x + s2, top); g0.stroke(); g0.strokeStyle = dk('#2a4a22'); g0.lineWidth = 2; for (let m = 1; m < 7; m++){ const yy = SH * 0.78 - (SH * 0.78 - top) * m / 7; g0.beginPath(); g0.moveTo(x + s2 * m / 7 - 6, yy); g0.lineTo(x + s2 * m / 7 + 6, yy); g0.stroke(); } g0.fillStyle = near; for (let m = 0; m < 3; m++){ g0.save(); g0.translate(x + s2, top + m * SH * 0.05); g0.rotate((m % 2 ? 0.6 : -0.6) + Math.sin(tt * 1.6 + k + m) * 0.08 * gust); g0.beginPath(); g0.ellipse(22, 0, 26, 6, 0, 0, 7); g0.fill(); g0.restore(); } }
+      } else {
+        g0.fillStyle = trunk; g0.fillRect(cx - 5, SH * 0.58, 10, SH * 0.18); g0.fillStyle = near;
+        g0.beginPath(); g0.ellipse(cx + sw, SH * 0.62 + Math.abs(sw) * 0.15, SW * 0.14, SH * 0.19, sw / SW * 1.2, 0, 7); g0.fill();
+        g0.fillStyle = 'rgba(255,255,255,0.05)'; g0.beginPath(); g0.ellipse(cx + sw + sw2 + SW * 0.03, SH * 0.55, SW * 0.06, SH * 0.07, 0, 0, 7); g0.fill();
+        if (sh === 'willow'){ g0.strokeStyle = near; g0.lineWidth = 2; for (let k = 0; k < 14; k++){ const x = cx + sw + (k - 7) * SW * 0.017, len = SH * (0.14 + (k % 3) * 0.05); g0.beginPath(); g0.moveTo(x, SH * 0.66); g0.quadraticCurveTo(x + Math.sin(tt * 1.4 + k + i) * 5 * gust, SH * 0.66 + len * 0.5, x + Math.sin(tt * 1.4 + k + i) * 9 * gust, SH * 0.66 + len); g0.stroke(); } }
+      }
+    }
+  }
+}
 function sermonBackdrop(scene, a){
   const g0 = sctx;
   const tl = (village && village.tod != null) ? todLerp() : { night: 0.12, warm: 0 };
@@ -1901,35 +2061,60 @@ function sermonBackdrop(scene, a){
     g0.fillStyle = lamp; g0.fillRect(0, 0, SW, SH);
   } else {
     // --- outdoors: sky, a treeline, grass ---
-    const sky = g0.createLinearGradient(0, 0, 0, SH * 0.74);
-    if (night > 0.55){ sky.addColorStop(0, '#0c1430'); sky.addColorStop(1, '#22345c'); }
-    else if (warm > 0.2){ sky.addColorStop(0, '#3c4c7c'); sky.addColorStop(0.6, '#8a6a8a'); sky.addColorStop(1, '#d0925a'); }
-    else { sky.addColorStop(0, '#4f7db2'); sky.addColorStop(1, '#a6c6de'); }
+    const pal = scenePal(), sky = g0.createLinearGradient(0, 0, 0, SH * 0.74);
+    if (night > 0.55){ sky.addColorStop(0, _tone(pal.sky[0], -0.78)); sky.addColorStop(1, _tone(pal.sky[1], -0.62)); }
+    else if (warm > 0.2){ sky.addColorStop(0, _tone(pal.sky[0], -0.32)); sky.addColorStop(0.6, '#8a6a8a'); sky.addColorStop(1, '#d0925a'); }
+    else { sky.addColorStop(0, pal.sky[0]); sky.addColorStop(1, pal.sky[1]); }
     g0.fillStyle = sky; g0.fillRect(0, 0, SW, SH * 0.74);
     if (night > 0.5){ g0.fillStyle = 'rgba(255,255,255,0.65)'; for (let i = 0; i < 44; i++) g0.fillRect((i * 173) % SW, (i * 97) % (SH * 0.52) + 8, 1.5, 1.5); }
-    g0.fillStyle = night > 0.5 ? 'rgba(222,226,242,0.82)' : 'rgba(255,242,205,0.85)';   // moon / sun
-    g0.beginPath(); g0.arc(SW * 0.82, SH * 0.14, SH * 0.048, 0, 7); g0.fill();
-    const far = night > 0.5 ? '#0f2018' : '#1c3a22';                                   // far treeline (tall, behind the head)
-    g0.fillStyle = far;
-    for (let i = 0; i < 8; i++){
-      const cx = (i * 0.145 - 0.03) * SW + Math.sin(i * 2.3) * 24, r = SW * (0.1 + (i % 3) * 0.02);
-      g0.beginPath(); g0.ellipse(cx, SH * 0.46, r, r * 1.05, 0, 0, 7); g0.fill();
+    {   // sun by day, moon by night — each travels across the sky as the hours pass (village.tod: sun 0.24-0.60, moon the rest)
+      const td = (village && village.tod != null) ? village.tod : 0.3, isSun = td >= 0.24 && td < 0.6;
+      const u = isSun ? (td - 0.24) / 0.36 : ((td >= 0.6 ? td - 0.6 : td + 0.4) / 0.64), ax = SW * (0.1 + 0.8 * u), ay = SH * (0.42 - 0.34 * Math.sin(Math.PI * u)), rad = SH * (isSun ? 0.05 : 0.042);
+      const halo = g0.createRadialGradient(ax, ay, rad * 0.6, ax, ay, rad * 3.4);
+      halo.addColorStop(0, isSun ? 'rgba(255,236,180,0.5)' : 'rgba(200,214,255,0.28)'); halo.addColorStop(1, 'rgba(255,255,255,0)');
+      g0.fillStyle = halo; g0.fillRect(ax - rad * 4, ay - rad * 4, rad * 8, rad * 8);
+      g0.fillStyle = isSun ? 'rgba(255,244,205,0.95)' : 'rgba(226,230,246,0.9)'; g0.beginPath(); g0.arc(ax, ay, rad, 0, 7); g0.fill();
+      if (!isSun){ g0.fillStyle = 'rgba(150,158,190,0.35)'; g0.beginPath(); g0.arc(ax - rad * 0.3, ay - rad * 0.1, rad * 0.22, 0, 7); g0.arc(ax + rad * 0.25, ay + rad * 0.3, rad * 0.16, 0, 7); g0.fill(); }
     }
-    const near = night > 0.5 ? '#173021' : '#2b542f';                                  // near canopy layer
-    g0.fillStyle = near;
-    for (let i = 0; i < 7; i++){
-      const cx = (i * 0.17 + 0.02) * SW;
-      g0.fillStyle = night > 0.5 ? '#120b07' : '#22160e'; g0.fillRect(cx - 5, SH * 0.58, 10, SH * 0.18);   // trunk
-      g0.fillStyle = near;
-      g0.beginPath(); g0.ellipse(cx, SH * 0.62, SW * 0.14, SH * 0.19, 0, 0, 7); g0.fill();
+    const tt = performance.now() / 1000, gust = 0.6 + 0.4 * Math.sin(tt * 0.31), kitB = (typeof biomeKit === 'function') ? biomeKit() : null;
+    {   // drifting clouds: one steady direction, each at its own speed; layered puffs with a lit top and a shaded, flat base
+      const rainy = weather && (weather.mode === 'rain' || weather.rain > 0.3), cn = scenePal().shape === 'crystal' ? 0 : rainy ? 8 : 5;   // no clouds inside the crystal caverns
+      const top = rainy ? (night > 0.5 ? '#5a6078' : '#a4adba') : (night > 0.5 ? '#6a7498' : '#ffffff'), mid = rainy ? (night > 0.5 ? '#454b62' : '#828b9a') : (night > 0.5 ? '#4a5378' : '#e4ebf5'), base = rainy ? (night > 0.5 ? '#343a50' : '#66707f') : (night > 0.5 ? '#343b5c' : '#b9c6da');
+      for (let i = 0; i < cn; i++){
+        const w = SW * (0.13 + ((i * 7) % 5) * 0.03), sp = 5 + (i % 4) * 2.2 + i * 0.4, span = SW + w * 2.4;
+        const x = (((i * 0.37 * SW) + tt * sp) % span + span) % span - w * 1.2, y = SH * (0.1 + ((i * 53) % 37) / 100 * 0.42);
+        const puffs = [[-0.42, 0.55, 0.11], [-0.28, 0.8, 0.15], [-0.08, 1.05, 0.19], [0.14, 0.9, 0.16], [0.3, 0.7, 0.13], [0.44, 0.5, 0.1]];
+        g0.save(); g0.globalAlpha = rainy ? 0.92 : 0.86;
+        for (const layer of [[base, 0.05], [mid, -0.0], [top, -0.06]]){
+          g0.fillStyle = layer[0];
+          for (const [px, ph, pr] of puffs){ g0.beginPath(); g0.arc(x + w * px, y - w * pr * ph * 0.9 + w * layer[1], w * pr * (layer[1] < 0 ? (layer[1] < -0.05 ? 0.78 : 0.9) : 1), 0, 7); g0.fill(); }
+          g0.beginPath(); g0.ellipse(x, y + w * layer[1] * 0.4, w * 0.5, w * 0.06, 0, 0, 7); g0.fill();
+        }
+        g0.restore();
+      }
     }
+    sceneLandscape(g0, pal, night, tt, gust);
     const grd = g0.createLinearGradient(0, SH * 0.7, 0, SH);
-    grd.addColorStop(0, night > 0.5 ? '#183420' : '#437037'); grd.addColorStop(1, night > 0.5 ? '#0b1a10' : '#2d4f25');
+    grd.addColorStop(0, night > 0.5 ? _tone(pal.ground[0], -0.6) : pal.ground[0]); grd.addColorStop(1, night > 0.5 ? _tone(pal.ground[1], -0.6) : pal.ground[1]);
     g0.fillStyle = grd; g0.fillRect(0, SH * 0.72, SW, SH * 0.28);
+    if (pal.lava){ const lg = g0.createLinearGradient(0, SH * 0.72, 0, SH); lg.addColorStop(0, 'rgba(255,110,30,0.28)'); lg.addColorStop(1, 'rgba(255,60,10,0)'); g0.fillStyle = lg; g0.fillRect(0, SH * 0.72, SW, SH * 0.28); }
     if (night > 0.4){                                                                 // fire glow — sat by the campfire
       const fire = g0.createRadialGradient(SW * 0.5, SH * 0.84, 10, SW * 0.5, SH * 0.62, SH * 0.72);
       fire.addColorStop(0, `rgba(255,150,70,${0.24 * night})`); fire.addColorStop(1, 'rgba(255,150,70,0)');
       g0.fillStyle = fire; g0.fillRect(0, 0, SW, SH);
+    }
+    {   // the local weather / biome atmosphere drifting across the scene
+      const drift = (n, sx, sy, fn) => { for (let i = 0; i < n; i++){ const ph = (i * 0.6180339) % 1, x = ((ph * SW + tt * sx * (0.7 + (i % 5) * 0.15) + Math.sin(tt * 0.7 + i) * 8) % SW + SW) % SW, y = (((i * 0.37 + ph) * SH + tt * sy * (0.7 + (i % 4) * 0.2)) % SH + SH) % SH; fn(x, y, i); } };
+      if (weather && (weather.mode === 'rain' || weather.rain > 0.3)){ g0.strokeStyle = 'rgba(190,210,235,0.45)'; g0.lineWidth = 1.2; drift(110, -40, 620, (x, y) => { g0.beginPath(); g0.moveTo(x, y); g0.lineTo(x - 4, y + 14); g0.stroke(); }); }
+      if (kitB){
+        if (kitB.snow){ g0.fillStyle = 'rgba(255,255,255,0.85)'; drift(90, -22, 70, (x, y, i) => { g0.beginPath(); g0.arc(x, y, 1.2 + (i % 3) * 0.6, 0, 7); g0.fill(); }); }
+        if (kitB.petals){ drift(46, 40, 34, (x, y, i) => { g0.fillStyle = i % 2 ? 'rgba(255,196,218,0.85)' : 'rgba(255,228,238,0.85)'; g0.beginPath(); g0.ellipse(x, y, 3, 1.7, tt + i, 0, 7); g0.fill(); }); }
+        if (kitB.embers){ drift(60, 12, -46, (x, y, i) => { g0.fillStyle = i % 3 ? 'rgba(255,140,40,0.9)' : 'rgba(255,205,90,0.9)'; g0.fillRect(x, y, 2, 2); }); g0.fillStyle = 'rgba(70,64,70,0.35)'; drift(18, -10, 24, (x, y, i) => { g0.beginPath(); g0.arc(x, y, 3 + i % 3, 0, 7); g0.fill(); }); }
+        if (kitB.dust){ g0.fillStyle = 'rgba(224,196,140,0.35)'; drift(70, 260, 8, (x, y) => g0.fillRect(x, y, 8, 1.2)); }
+        if (kitB.spores){ drift(40, 6, -22, (x, y, i) => { g0.fillStyle = i % 2 ? 'rgba(150,240,70,0.75)' : 'rgba(190,120,240,0.7)'; g0.beginPath(); g0.arc(x, y, 1.6, 0, 7); g0.fill(); }); }
+        if (kitB.glint){ drift(40, 4, -8, (x, y, i) => { g0.fillStyle = i % 2 ? 'rgba(150,235,255,' + (0.4 + 0.5 * Math.abs(Math.sin(tt * 2 + i))) + ')' : 'rgba(210,170,255,0.7)'; g0.fillRect(x, y, 2, 2); }); }
+        if (kitB.mist){ drift(9, 18, 0, (x, y, i) => { const gr = g0.createRadialGradient(x, SH * 0.72 + (i % 3) * 30, 4, x, SH * 0.72 + (i % 3) * 30, SW * 0.26); gr.addColorStop(0, 'rgba(226,236,240,' + (kitB.fog ? 0.26 : 0.14) + ')'); gr.addColorStop(1, 'rgba(226,236,240,0)'); g0.fillStyle = gr; g0.fillRect(x - SW * 0.3, SH * 0.5, SW * 0.6, SH * 0.5); }); }
+      } else { g0.fillStyle = 'rgba(120,170,80,0.7)'; drift(14, 30, -6, (x, y, i) => { g0.beginPath(); g0.ellipse(x, y, 2.4, 1.2, tt * 2 + i, 0, 7); g0.fill(); }); }   // home country: a few leaves on the breeze
     }
   }
   g0.restore();
@@ -2555,12 +2740,13 @@ cv.addEventListener('mousemove', e => {
   }
 });
 document.getElementById('sermoncv').addEventListener('mousedown', e => {
-  if (e.button !== 0 || (!_sermon && !_gift)) return;
+  if (e.button !== 0 || (!_sermon && !_gift && !_chatS)) return;
   const r = e.currentTarget.getBoundingClientRect();
   const mx = (e.clientX - r.left) * (SW / r.width), my = (e.clientY - r.top) * (SH / r.height);
   const rc = _sermonRects.find(x => mx >= x.sx && mx <= x.sx + x.sw && my >= x.sy && my <= x.sy + x.sh);
   if (rc){
     if (rc.act === 'close') closeSermon();
+    else if (rc.act.startsWith('chat_')) chatAct(rc.act.slice(5));
     else if (rc.act === 'card') sermonPlay(rc.i);
     else if (rc.act === 'give') giftGive();
     else if (rc.act === 'withdraw') sermonWithdraw();
@@ -2954,7 +3140,7 @@ function helpSections(){
     <ul><li><b>Legacy Points</b> are earned from taking cities (more for the capital, rival strongholds, and wagered runs). Spend them on <b>perks</b> (traits/mutators) and extra <b>slots</b> from the title screen's Legacy button — or at the end of a campaign.</li>
     <li>Equipped perks show in the pause menu under Active Traits / Mutators, and some grant Q/F active abilities.</li>
     <li>Each <b>country</b> can unlock village features. The Legacy screen shows which are unlocked and which country unlocks the rest:</li></ul>
-    <ul>${(typeof FEATURES !== 'undefined' ? FEATURES.map(f => '<li>' + (featureUnlocked(f.id) ? '✓' : '🔒') + ' <b>' + f.name + '</b> <span class="dim">(country ' + f.country + ')</span> — ' + f.blurb + '</li>').join('') : '')}</ul>`);
+    <ul>${(typeof FEATURES !== 'undefined' ? FEATURES.map(f => '<li>' + (featureUnlocked(f.id) ? '✓' : '🔒') + ' <b>' + f.name + '</b> <span class="dim">(' + (f.need || 'country ' + f.country) + ')</span> — ' + f.blurb + '</li>').join('') : '')}</ul>`);
   return S;
 }
 function buildHelpUI(){
@@ -3106,7 +3292,7 @@ const RECIPES = [
   { id:'axe',        name:'Axe',          ico:'axe',    in:{ stick:2, stone:2 }, out:{ axe:1 },     tool:'axe' },
   { id:'pickaxe',    name:'Pickaxe',      ico:'pickaxe',in:{ stick:2, stone:3 }, out:{ pickaxe:1 }, tool:'pickaxe' },
   { id:'shovel',     name:'Shovel',       ico:'shovel', in:{ stick:2, stone:1 }, out:{ shovel:1 },  tool:'shovel' },
-  { id:'plot',       name:'Plot',         ico:'plot',   in:{ wood:1 }, out:{ plot:2 } },
+  { id:'plot',       name:'Plot',         ico:'plot',   in:{ dirt:2 }, out:{ plot:2 } },
   { id:'bed',        name:'Bed',          ico:'bed',    in:{ wood:3 }, out:{ bed:1 } },
   { id:'study',      name:'Study',        ico:'study',  in:{ wood:4, stone:2 }, out:{ study:1 } },
   { id:'sidetable',  name:'Side Table',   ico:'sidetable', in:{ wood:4 }, out:{ sidetable:1 } },
@@ -3116,7 +3302,7 @@ const RECIPES = [
   { id:'displayspot',name:'Display Spot', ico:'displayspot', in:{ wood:3 }, out:{ displayspot:1 } },
   { id:'stick_wall',      name:'Stick Wall',      ico:'stick_wall',      in:{ stick:2 }, out:{ stick_wall:3 } },
   { id:'fieldstone_wall', name:'Fieldstone Wall', ico:'fieldstone_wall', in:{ stone:2 }, out:{ fieldstone_wall:3 } },
-  { id:'earth_floor',     name:'Packed Earth',    ico:'earth_floor',     in:{ stick:1 }, out:{ earth_floor:4 } },
+  { id:'earth_floor',     name:'Packed Earth',    ico:'earth_floor',     in:{ dirt:1 }, out:{ earth_floor:4 } },
   { id:'bridge',          name:'Bridge Deck',     ico:'floor',           in:{ wood:2 },  out:{ bridge:4 } },   // lay it over deep water to cross
 ];
 const MAT_NAME = { wood:'Wood', stone:'Stone', stick:'Stick', dirt:'Dirt', sand:'Sand', clay:'Clay', plank_wall:'Plank Wall', door:'Door', window:'Window', floor:'Floor Boards', fence:'Fence', plot:'Plot', bed:'Bed', study:'Study',
@@ -3131,6 +3317,13 @@ const ICONS = {
     g.lineTo(S*0.4,S*0.2); g.lineTo(S*0.72,S*0.26); g.lineTo(S*0.84,S*0.56); g.lineTo(S*0.58,S*0.82); g.closePath(); g.fill();
     g.fillStyle='rgba(255,255,255,0.2)'; g.fillRect(S*0.3,S*0.3,S*0.24,S*0.07);
     g.fillStyle='rgba(0,0,0,0.22)'; g.fillRect(S*0.42,S*0.58,S*0.28,S*0.06); },
+  dirt(g,S){ g.fillStyle='#5a4128'; g.beginPath(); g.moveTo(S*0.12,S*0.78); g.quadraticCurveTo(S*0.2,S*0.3,S*0.5,S*0.26); g.quadraticCurveTo(S*0.8,S*0.3,S*0.88,S*0.78); g.closePath(); g.fill();
+    g.fillStyle='#7a5a38'; g.beginPath(); g.moveTo(S*0.24,S*0.6); g.quadraticCurveTo(S*0.34,S*0.36,S*0.5,S*0.34); g.quadraticCurveTo(S*0.62,S*0.4,S*0.6,S*0.62); g.closePath(); g.fill();
+    g.fillStyle='rgba(0,0,0,0.3)'; for (const [x,y] of [[.3,.7],[.5,.66],[.68,.72],[.42,.5]]) g.fillRect(S*x,S*y,S*0.05,S*0.05); },
+  sand(g,S){ g.fillStyle='#c9b47a'; g.beginPath(); g.moveTo(S*0.1,S*0.78); g.quadraticCurveTo(S*0.25,S*0.32,S*0.5,S*0.3); g.quadraticCurveTo(S*0.75,S*0.32,S*0.9,S*0.78); g.closePath(); g.fill();
+    g.fillStyle='#e0cd94'; g.beginPath(); g.moveTo(S*0.28,S*0.6); g.quadraticCurveTo(S*0.4,S*0.38,S*0.52,S*0.38); g.quadraticCurveTo(S*0.6,S*0.44,S*0.58,S*0.62); g.closePath(); g.fill(); },
+  clay(g,S){ g.fillStyle='#a8623f'; g.beginPath(); g.moveTo(S*0.12,S*0.76); g.quadraticCurveTo(S*0.14,S*0.34,S*0.5,S*0.3); g.quadraticCurveTo(S*0.86,S*0.34,S*0.88,S*0.76); g.closePath(); g.fill();
+    g.fillStyle='#c98058'; g.beginPath(); g.moveTo(S*0.26,S*0.58); g.quadraticCurveTo(S*0.34,S*0.4,S*0.5,S*0.38); g.quadraticCurveTo(S*0.6,S*0.42,S*0.58,S*0.6); g.closePath(); g.fill(); },
   stick(g,S){ g.strokeStyle='#7a5228'; g.lineCap='round';
     g.lineWidth=Math.max(2,S*0.11); g.beginPath(); g.moveTo(S*0.16,S*0.74); g.lineTo(S*0.82,S*0.26); g.stroke();
     g.lineWidth=Math.max(2,S*0.09); g.strokeStyle='#8f6437'; g.beginPath(); g.moveTo(S*0.2,S*0.32); g.lineTo(S*0.8,S*0.7); g.stroke();
@@ -3403,7 +3596,7 @@ function toggleCraft(force){
     // paused clears in draw() once the zoom has settled back
   }
 }
-const RAW_MATS = ['wood', 'stick', 'stone'];
+const RAW_MATS = ['wood', 'stick', 'stone', 'dirt', 'sand', 'clay'];   // dirt / sand / clay only show as craft bubbles once you've dug some up
 // nudge a drop point out from under the player so nothing lands on him
 function clearOfPlayer(x, y){
   const dx = x - player.x, dy = y - player.y, d = Math.hypot(dx, dy), keep = player.r + 12;
@@ -3453,6 +3646,7 @@ function buildCraftStrip(){
   const bar = $('craftbar');
   bar.innerHTML = '';
   for (const m of RAW_MATS){
+    if ((m === 'dirt' || m === 'sand' || m === 'clay') && !(player.res[m] > 0)) continue;
     const n = pocketCount(m);
     const b = document.createElement('div');
     b.className = 'cbub' + (n <= 0 ? ' empty' : '');
@@ -3628,6 +3822,15 @@ function pieceInfo(id, name){
     if (tb) text = (tb.name === 'Well' ? 'A stone well. ' : '') + tb.blurb.charAt(0).toUpperCase() + tb.blurb.slice(1) + '.';
   }
   if (!text && /^wpn-/.test(id)){ const w = WEAPONS[id]; if (w) text = 'A ' + (w.kind || 'weapon') + ' you can wield. Damage ' + (w.dmg || '?') + (w.reach ? ', reach ' + w.reach : '') + '.'; }
+  if (!text && /^path_/.test(id)){
+    const PD = { dirt: 'A trodden dirt track, like the trails worn across the land. Drag to trace a path — it shows a preview, click to lay it. Cheap, and it looks right anywhere.',
+      gravel: 'Loose gravel. Drag to trace a path and click to lay it — a tidy, hard-wearing track.',
+      cobble: 'Chunky cobblestones. Drag to trace a path and click to lay it — sturdy and handsome.',
+      brick: 'Fired red brick. Drag to trace a path and click to lay it — warm and formal.',
+      flagstone: 'Flat cut flagstones. Drag to trace a path and click to lay it.',
+      paved: 'Smooth paving slabs. Drag to trace a path and click to lay it — the finest surface you can make.' };
+    text = PD[id.slice(5)];
+  }
   if (!text && /^(mat_|matf_|matd_|path_)/.test(id)) text = 'A ground / wall material. Drag across the ground to lay it as a path, floor or wall.';
   return { title: name || id, text: text || 'Something you can make and use around the village.' };
 }
@@ -4394,7 +4597,7 @@ function buildLegacyUI(){
       ${slotCost != null ? `<button class="slotbtn" id="lg-slot" ${L.points >= slotCost ? '' : 'disabled'}>+1 slot — ${slotCost} pts</button>` : '<span style="font-size:10px;color:#8a7ab0">slots maxed</span>'}</div>
     <div class="grid">${cards}</div>
     <h3 style="margin:14px 0 6px;font-size:13px;color:#c9b8f0">Village features unlocked</h3>
-    <div class="grid">${FEATURES.map(f => { const on = featureUnlocked(f.id); return `<div class="card ${on ? '' : 'locked'}"><div class="head"><span class="name">${on ? '✓' : '🔒'} ${f.name}</span>${on ? '' : `<span class="cost">country ${f.country}</span>`}</div><div class="desc">${f.blurb}</div></div>`; }).join('')}</div>
+    <div class="grid">${FEATURES.map(f => { const on = featureUnlocked(f.id); return `<div class="card ${on ? '' : 'locked'}"><div class="head"><span class="name">${on ? '✓' : '🔒'} ${f.name}</span>${on ? '' : `<span class="cost">${f.need || 'country ' + f.country}</span>`}</div><div class="desc">${f.blurb}</div></div>`; }).join('')}</div>
     <h3 style="margin:14px 0 6px;font-size:13px;color:#c9b8f0">Unique weapons ${ownedUniqueCount()}/${Object.keys(UNIQUES).length}</h3>
     <div class="grid">${Object.keys(UNIQUES).map(id => { const u = UNIQUES[id], have = ownedUniques()[id]; return `<div class="card ${have ? '' : 'locked'}"><div class="head"><span class="name">${have ? u.icon : '❔'} ${have ? u.name : '???'}</span></div><div class="desc">${have ? u.blurb : 'earned by ' + (UNIQUE_SOURCE[u.from] || u.from)}</div></div>`; }).join('')}</div>
     <div class="foot"><button id="lg-close">${legacyForced ? 'Continue' : 'Close'}</button></div>
@@ -5638,7 +5841,7 @@ function researchAffordable(n){ return (village.stores.research | 0) >= n.cost &
 const plotCount = () => (village ? village.floors.filter(f => f.col === PLOT_COL).length : 0);
 const bedProps = () => props.filter(p => !p.dead && p.t === 'bed');
 const bedTaken = (b) => village && village.villagers.some(v => v.bed && Math.hypot(v.bed.x - b.x, v.bed.y - b.y) < 8);
-const bedInHouse = (b) => village && (village.roofs || []).some(r => b.x > r.ix0 && b.x < r.ix1 && b.y > r.iy0 && b.y < r.iy1);
+const bedInHouse = (b) => village && (village.roofs || []).some(r => inRoom(r, b.x, b.y));
 const freeHouseBed = () => bedProps().find(b => bedInHouse(b) && !bedTaken(b)) || bedProps().find(b => !bedTaken(b));
 const housedCount = () => village ? village.villagers.filter(v => v.bed).length : 0;
 
@@ -6011,6 +6214,7 @@ function drawAssign(){
   ctx.fillStyle = 'rgba(6,8,10,0.5)'; ctx.fillRect(0, 0, W, H);
   const rows = JOBS.map(id => ({ act: 'job', id, label: JOB_META[id].label, ico: JOB_META[id].ico, sel: v.job === id,
     sub: id === 'hunter' ? (v.job === 'hunter' ? 'today — ' + FORAGE_META[forageRole(v)].verb : 'hunts · fishes · forages') : '' }));
+  rows.unshift({ act: 'chat', label: 'Chat', ico: 'study', sub: 'news, gossip, how they are' });
   const fb = freeHouseBed();
   rows.push(v.bed ? { act: 'unbed', label: 'Back to the fire', ico: 'idle', sub: 'give up the bed' }
     : fb ? { act: 'bed', label: 'Give a bed', ico: 'bed', sub: bedInHouse(fb) ? 'in a house' : 'no roof yet' }
@@ -6077,6 +6281,7 @@ function doAssign(rc){
     toggleGuardZoneMode(true, vid, rc.act === 'guardroute');
     return;
   }
+  if (rc.act === 'chat'){ const vid = v.id; closeAssign(); openChat(vid); return; }
   if (rc.act === 'preach'){
     if (!canPreachTo(v)){ popText(player.x, player.y - 26, 'not now', '#ff8f8f'); return; }
     const vid = v.id; closeAssign(); openSermon(vid); return;
@@ -6098,6 +6303,216 @@ function doAssign(rc){
   else if (rc.act === 'unbed'){ v.bed = null; }
   saveVillage(true); syncHUD();
   closeAssign();
+}
+
+// ================= VILLAGER CHAT =================
+// Talk to a villager: news (how the wider world is reacting to what YOU have done), gossip about other villagers, how they are, what they need.
+// Every line is authored from live world state — cities held, revolts, the rival, the cult, the wild, mutations — so the mood of the village doubles as a readout of your impact.
+// The chat is the same close-up face scene as the sit-down / gift handover (shared canvas, see _sceneCanvasStart), so you read their expression as they talk.
+let _chatS = null;
+function openChat(vid){
+  const v = village && village.villagers.find(x => x.id === vid); if (!v) return;
+  revealName(v);
+  _chatS = { vid, v, scene: villagerIndoors(v) ? 'indoor' : 'outdoor', face: makeFace('guarded'), phase: 'talk', line: '', lineFull: '', typeT: 0, pushT: 0, _t: 0, asked: '' };
+  _sceneCanvasStart();
+  chatSet(chatGreeting(v), '', v.hungry > 0 ? 'pleading' : 'neutral');
+}
+function chatSet(text, asked, mood){
+  const s = _chatS; if (!s) return;
+  s.lineFull = String(text || '').replace(/^["'“”\s]+|["'“”\s]+$/g, '').replace(/"\s+"/g, ' '); s.line = ''; s.typeT = 0; s.asked = asked || '';
+  if (mood) faceTo(s.face, mood);
+}
+// pick a line not said yet in this conversation (or at all recently for this villager)
+function chatPick(v, pool){
+  const mem = v._chatMem || (v._chatMem = {});
+  const fresh = pool.filter(l => !mem[l]);
+  const line = pick(fresh.length ? fresh : pool);
+  mem[line] = 1; if (Object.keys(mem).length > 40) v._chatMem = {};
+  return line;
+}
+function chatGreeting(v){
+  const first = !v._chatDone; v._chatDone = true;
+  const night = village && village.tod != null && todLerp().night > 0.5;
+  const pool = [];
+  if (first) pool.push('"Oh — hello. Yes? You wanted something?"', '"Didn\'t think you\'d stop and talk to us."');
+  if (night) pool.push('"Bit late for a chat, isn\'t it? …Fine. I\'m listening."');
+  if (v.hungry > 0) pool.push('"Sorry — can\'t think straight. Haven\'t eaten properly."');
+  if (weather.mode === 'rain' || weather.rain > 0.3) pool.push('"Come in out of the wet, at least."');
+  pool.push('"Hm? Something on your mind?"', '"Got a minute. What is it?"', '"Go on, I\'m listening."');
+  return chatPick(v, pool);
+}
+// what the wider world looks like right now, from the villagers' point of view
+function chatWorldFacts(v){
+  const V = village, out = [], nm = firstName(v);
+  const C = V.country, nodes = C ? C.nodes : [], held = heldCities(), rival = V.rival;
+  const devo = V.cult ? villagerDevotion(v) : null, fond = devo != null && devo > 0.6, wary = devo != null && devo < 0.3;
+  const pop = V.villagers.length, hungryN = V.villagers.filter(x => x.hungry > 0).length;
+  const mutN = V.villagers.filter(x => x.mut && x.mut.length).length;
+  const cname = C ? C.name : 'the country';
+  const lastRaided = held.slice().sort((a, b) => (b.raidedDay || 0) - (a.raidedDay || 0))[0];
+  const revolt = nodes.filter(n => n.revolt), rNodes = nodes.filter(n => n.rival);
+  const restless = held.filter(n => !n.capital && (n.order ?? 56) < 40), calm = held.filter(n => !n.capital && (n.order ?? 56) >= 70 && n.governor);
+  // --- your conquests
+  if (!held.length && !nodes.some(n => n.raided)){
+    out.push('"Nobody outside these trees knows our name yet. ' + cname + ' hasn\'t felt you — not yet."');
+    out.push('"Travellers say the border towns are watching the road. Waiting to see what we are."');
+  } else {
+    const c = lastRaided || held[0];
+    out.push('"Everyone\'s still talking about ' + c.name + '. ' + (fond ? 'Proud, they are — I am too.' : wary ? 'Half of them cheer, the other half won\'t say what they think.' : 'Some cheer. Some bolt their doors.') + '"');
+    if (c.faction) out.push('"' + c.faction.name.replace(/^the /, 'The ').replace(/^The/, 'The') + ' ruled ' + c.name + ' for years. Now they\'re ash and rumour — and every city around it is deciding whether you\'re next door or the end of the world."');
+    if (held.length >= 2) out.push('"That\'s ' + held.length + ' cities flying your banner. Traders say the roads feel different — quieter. Like everyone\'s holding their breath."');
+    if (held.length >= 4) out.push('"Half of ' + cname + ' is yours, they say. A stranger asked me if you\'d ever stop. I didn\'t know what to tell them."');
+  }
+  if (V.conquered) out.push('"The Capital\'s fallen. The whole country is a different place. Nobody knows who\'s in charge, and that\'s the frightening part."');
+  else if (nodes.some(n => n.capital && n.raided)) out.push('"They say the Capital\'s ours. I don\'t think anyone has worked out what that means yet."');
+  for (const n of restless.slice(0, 2)) out.push('"' + n.name + ' is restless. Word is nobody\'s minding it — and unminded cities don\'t stay quiet long. That\'s a fire waiting for a match."');
+  for (const n of calm.slice(0, 2)) out.push('"Your governor in ' + n.name + ' is keeping the peace. Tribute wagons come through regularly now — I helped unload one."');
+  for (const n of revolt.slice(0, 2)) out.push('"' + n.name + ' is in open revolt. Nobody left to keep order there — that\'s what happens when you take a place and walk away."');
+  if (held.length > 1 && !nodes.some(n => n.governor)) out.push('"You\'ve got all those cities and not one governor. The rot sets in faster than you think — I\'ve seen it in a town smaller than ours."');
+  // --- the rival
+  if (rival){
+    out.push('"' + rival.name + ' are stirring. Every city you take, they take one back — like a tide."');
+    if (rival.power >= 3) out.push('"Their warbands come at night now. The sentries jump at shadows. That started when you started winning."');
+    if (rNodes.length) out.push('"' + rNodes[0].name + ' flies ' + rival.name + '\'s colours now. You cleared the old masters out and someone worse moved in."');
+  }
+  // --- the cult / the village itself
+  if (V.cult){
+    const conv = V.conviction || 0;
+    out.push(fond ? '"More people arrive each week already talking about you like a saint. Outside the walls, they whisper other names."'
+      : wary ? '"Not everyone\'s sold on what we\'re becoming. I keep my head down, that\'s all I\'ll say."'
+      : '"People keep drifting in from the roads. Some say you\'re a hero. Some say you\'re the reason the sky\'s gone quiet."');
+    if (conv >= 3) out.push('"You\'ve got a way of making folk believe things. It\'s… a lot of responsibility, is what I\'d say."');
+  }
+  if (pop >= 12) out.push('"There are ' + pop + ' of us now. Travellers call us \'the place that doesn\'t sleep\'. I don\'t know if that\'s a compliment."');
+  if (hungryN > 0) out.push('"' + hungryN + ' of us went hungry this week. You\'re out conquering and our bowls are empty — that\'s how your impact reads from here."');
+  if (mutN > 0) out.push('"Folk on the road heard about the lab. Some queue up to be changed; some cross the road to avoid us. That\'s what your experiments have done to our name."');
+  // --- the wild + the land
+  if ((V._wildKills || 0) >= 3) out.push('"You\'ve been killing the wild things and leaving them where they fall. The animals have noticed — fewer come near the village now."');
+  if ((V.ngPlus || 0) > 0){
+    const b = countryStyle().name;
+    out.push('"This land — ' + b + ' — changes people. It\'s not the country it was before we came. Every place you touch leaves a mark on it."');
+  } else out.push('"Nice valley, really. I\'d hate for what\'s coming to ruin it."');
+  if (weather.mode === 'rain' || weather.rain > 0.3) out.push('"Wet out. Storms keep rolling in over the border. Makes you wonder what the rest of ' + cname + ' looks like right now."');
+  out.push('"Day ' + (V.day || 1) + '. I\'d say it feels like a year, but honestly? A year ago, none of this existed."');
+  return out;
+}
+function chatNews(v){
+  const facts = chatWorldFacts(v);
+  // lead with a specific fact; add a second, different one when there's room — reads like someone thinking aloud
+  const a = chatPick(v, facts), rest = facts.filter(f => f !== a), b = rest.length && Math.random() < 0.55 ? chatPick(v, rest) : null;
+  return b ? [a, b] : [a];
+}
+function chatGossip(v){
+  const others = village.villagers.filter(o => o.id !== v.id);
+  if (!others.length) return '"It\'s just me out here, isn\'t it."';
+  const o = pick(others);
+  const line = (dossierFor(o) ? gossipLine(v, o) : null);
+  if (line){ revealName(o); return line; }
+  revealName(o);
+  const jobLine = o.job && o.job !== 'idle' ? '"' + firstName(o) + ' works as a ' + JOB_META[o.job].label.toLowerCase() + ' now — and takes it far too seriously."' : '"' + firstName(o) + ' has done nothing but sit by the fire since they got here. Not that I\'m judging."';
+  return chatPick(v, [jobLine, '"Don\'t tell ' + firstName(o) + ' I said so, but they\'ve been muttering about you."', '"' + firstName(o) + '? Good sort. A bit jumpy since the raids started, that\'s all."']);
+}
+function chatSelf(v){
+  const pool = [];
+  const meta = JOB_META[v.job || 'idle'];
+  if (meta && meta.barks) pool.push(...meta.barks);
+  if (v.job && v.job !== 'idle') pool.push('"Being a ' + meta.label.toLowerCase() + ' is honest work. Keeps my mind off the rest."');
+  if (v.hungry > 0) pool.push('"Honestly? Hungry. It\'s hard to care about anything else."');
+  if (!v.bed) pool.push('"Sleeping by the fire again. It\'s warm, I\'ll give it that. A real bed, though…"');
+  else pool.push('"That bed of mine — best thing that\'s happened to me since I got here."');
+  if (v.mut && v.mut.length) pool.push('"The changes? I don\'t know what I am now. Stronger, though. That\'s something."', '"People stare. I\'ve stopped minding. Mostly."');
+  if (v.quirk && v.quirk.type === 'crush'){ const t = village.villagers.find(x => x.id === v.quirk.value); if (t) pool.push('"Do you ever… no. Never mind. Forget I said anything about ' + firstName(t) + '."'); }
+  if (v.quirk && v.quirk.type === 'rival'){ const t = village.villagers.find(x => x.id === v.quirk.value); if (t) pool.push('"' + firstName(t) + ' and I have a difference of opinion. We\'ve had it for a while. It\'ll keep."'); }
+  if (v.narrative && NARRATIVE_POOL[v.narrative]) pool.push(...NARRATIVE_POOL[v.narrative]);
+  pool.push(...VILLAGER_BARKS);
+  return chatPick(v, pool);
+}
+function chatNeeds(v){
+  const out = [];
+  if (v.hungry > 0) out.push('"Food. Just food. There isn\'t enough to go round and I\'m not the only one going without."');
+  if (!v.bed) out.push('"A roof, when you get the chance. Somewhere the wind doesn\'t find me at night."');
+  if (v.want) out.push('"I keep thinking about a ' + v.want.obj + '. Silly, I know. But if you ever came across one…"');
+  if (!out.length) out.push('"Nothing I can\'t handle. You\'ve looked after us — mostly — so thank you."', '"I\'m fine. Really. Save it for someone who isn\'t."');
+  const nm = firstName(v);
+  return chatPick(v, out) + (v.hungry > 0 && village.stores.food >= 1 ? '' : '');
+}
+function chatMoodFor(text){
+  if (/revolt|fallen|restless|hungry|warband|tide|frightening|empty|rot sets|fire waiting|jump at|worse moved|lab|stare/i.test(text)) return 'rattled';
+  if (/proud|governor|peace|saint|thank|best thing|honest work/i.test(text)) return 'serene';
+  if (/muttering|nobody ever came|difference of opinion/i.test(text)) return 'contempt';
+  return 'guarded';
+}
+function chatAct(act){
+  const s = _chatS, v = s && s.v; if (!v) return;
+  if (act === 'bye'){ closeSermon(); return; }
+  if (act === 'news'){ const t = chatNews(v).join(' '); chatSet(t, 'Any news from beyond the village?', chatMoodFor(t)); }
+  else if (act === 'gossip'){ const t = chatGossip(v); chatSet(t, 'Heard anything about the others?', chatMoodFor(t)); }
+  else if (act === 'self'){ const t = chatSelf(v); chatSet(t, 'How are you doing?', v.hungry > 0 ? 'pleading' : chatMoodFor(t)); }
+  else if (act === 'needs'){ const t = chatNeeds(v); chatSet(t, 'Need anything?', v.hungry > 0 ? 'pleading' : 'serene'); }
+  else if (act === 'feed'){
+    if ((village.stores.food || 0) >= 1 && v.hungry > 0){
+      village.stores.food -= 1; v.hungry = 0; v.mood = Math.min(1.5, (v.mood || 1) + 0.2);
+      chatSet(chatPick(v, ['"Thank you. Really. I won\'t forget it."', '"…That\'s the first proper meal in days."']), '(you hand them some food)', 'weeping');
+      saveVillage(true); syncHUD(); A.S.thud && A.S.thud();
+    }
+  }
+}
+function chatFrame(){
+  const s = _chatS; if (!s || !sctx) return;
+  const v = s.v, g0 = sctx, now = performance.now();
+  const dt = Math.min(0.05, (now - (s._t || now)) / 1000); s._t = now;
+  faceTick(s.face, dt);
+  s.pushT = Math.min(1, s.pushT + dt / 0.7); s.typeT += dt;
+  s.line = s.lineFull.slice(0, Math.max(0, Math.floor(s.typeT / 0.006)));
+  const ease = s.pushT * s.pushT * (3 - 2 * s.pushT);
+  g0.fillStyle = '#0a0710'; g0.fillRect(0, 0, SW, SH);
+  sermonBackdrop(s.scene, ease);
+  const fx = SW / 2, fy = SH * 0.30 + (1 - ease) * SH * 0.14, fr = SH * 0.035 + ease * SH * 0.078;
+  {   // the rest of the body: torso, shoulders and hanging arms down to the bottom of the scene (the face scene only draws a chest block)
+    const R = fr, chinY = fy + R * 1.28 * 1.06, sh = _tone(v.shirt || '#45454f', -0.16), shD = _tone(v.shirt || '#45454f', -0.34), sk = v.skin || '#e8b58c';
+    g0.save(); g0.globalAlpha = 0.55 + ease * 0.45;
+    g0.fillStyle = sh; g0.beginPath(); g0.moveTo(fx - R * 1.7, chinY - R * 0.1); g0.lineTo(fx + R * 1.7, chinY - R * 0.1); g0.lineTo(fx + R * 2.25, SH + 4); g0.lineTo(fx - R * 2.25, SH + 4); g0.closePath(); g0.fill();
+    g0.fillStyle = shD; g0.fillRect(fx - R * 0.02, chinY + R * 0.5, Math.max(2, R * 0.05), SH);                          // centre seam
+    g0.fillStyle = 'rgba(0,0,0,0.16)'; g0.beginPath(); g0.moveTo(fx - R * 1.7, chinY - R * 0.1); g0.lineTo(fx - R * 1.2, chinY - R * 0.1); g0.lineTo(fx - R * 1.55, SH + 4); g0.lineTo(fx - R * 2.25, SH + 4); g0.closePath(); g0.fill();   // arm shadow, left
+    g0.beginPath(); g0.moveTo(fx + R * 1.7, chinY - R * 0.1); g0.lineTo(fx + R * 1.2, chinY - R * 0.1); g0.lineTo(fx + R * 1.55, SH + 4); g0.lineTo(fx + R * 2.25, SH + 4); g0.closePath(); g0.fill();
+    g0.fillStyle = shD; g0.beginPath(); g0.moveTo(fx - R * 0.62, chinY - R * 0.1); g0.lineTo(fx, chinY + R * 0.75); g0.lineTo(fx + R * 0.62, chinY - R * 0.1); g0.closePath(); g0.fill();   // collar V
+    g0.fillStyle = sk; g0.beginPath(); g0.moveTo(fx - R * 0.46, chinY - R * 0.1); g0.lineTo(fx, chinY + R * 0.5); g0.lineTo(fx + R * 0.46, chinY - R * 0.1); g0.closePath(); g0.fill();
+    g0.restore();
+  }
+  try { drawFace(g0, fx, fy, fr, { skin: v.skin, hair: v.hair, shirt: v.shirt, gender: villagerGender(v) }, s.face, now / 1000); } catch (e) {}
+  const vg = g0.createRadialGradient(SW / 2, fy, fr * 2.0, SW / 2, fy + fr, SH * 0.95);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(6,5,12,0.5)');
+  g0.fillStyle = vg; g0.fillRect(0, 0, SW, SH);
+  g0.save(); g0.globalAlpha = ease; g0.textAlign = 'center';
+  g0.fillStyle = '#e6dcf0'; g0.font = 'bold 17px "Courier New",monospace'; g0.fillText(v.name, SW / 2, 34);
+  g0.fillStyle = '#8a7e6a'; g0.font = '10px "Courier New",monospace';
+  g0.fillText([JOB_META[v.job || 'idle'].label, v.hungry > 0 ? 'hungry' : null, v.bed ? 'housed' : 'no bed', v.mut && v.mut.length ? 'mutated' : null].filter(Boolean).join('  ·  '), SW / 2, 52);
+  let ty = fy + fr * 2.55;
+  g0.font = '17px "Courier New",monospace';
+  const closed = s.line === s.lineFull, tlines = _wrapLines(g0, '“' + s.lineFull + '”', Math.min(SW * 0.8, 780));
+  const panelH = (s.asked ? 26 : 0) + tlines.length * 24 + 22, panelW = Math.min(SW * 0.86, 820);
+  g0.fillStyle = 'rgba(8,6,14,0.72)'; g0.fillRect(SW / 2 - panelW / 2, ty - 22, panelW, panelH);
+  g0.strokeStyle = 'rgba(154,182,216,0.35)'; g0.lineWidth = 1; g0.strokeRect(SW / 2 - panelW / 2, ty - 22, panelW, panelH);
+  if (s.asked){ g0.fillStyle = '#8fa0b8'; g0.font = 'italic 13px "Courier New",monospace'; g0.fillText('> ' + s.asked, SW / 2, ty); ty += 26; }
+  g0.fillStyle = '#efe6d2'; g0.font = '17px "Courier New",monospace';
+  // wrap on the full line so words never jump between rows while it types out, then reveal only the typed part
+  let shown = s.line.length + 1;
+  for (const ln of tlines){ const part = ln.slice(0, Math.max(0, shown)); shown -= ln.length + 1; if (part) g0.fillText(part, SW / 2, ty); ty += 24; }
+  // topic buttons along the bottom
+  _sermonRects.length = 0;
+  const btns = [{ a: 'news', l: 'Any news?', sub: 'the wider world' }, { a: 'gossip', l: 'Gossip', sub: 'the others' }, { a: 'self', l: 'How are you?', sub: 'them' }, { a: 'needs', l: 'Need anything?', sub: 'what they lack' }];
+  if (v.hungry > 0 && (village.stores.food || 0) >= 1) btns.push({ a: 'feed', l: 'Give food', sub: '-1 food' });
+  btns.push({ a: 'bye', l: 'Leave', sub: 'Esc' });
+  const n = btns.length, gap = 10, bw = Math.min(170, Math.floor((SW - 40 - gap * (n - 1)) / n)), tot = n * bw + (n - 1) * gap, x0 = Math.round(SW / 2 - tot / 2), yb = SH - 78;
+  btns.forEach((b, i) => {
+    const x = x0 + i * (bw + gap);
+    g0.fillStyle = b.a === 'bye' ? '#1c1622' : '#141c2a'; g0.fillRect(x, yb, bw, 48);
+    g0.strokeStyle = b.a === 'bye' ? '#5a3f6a' : '#4a6a8a'; g0.lineWidth = 2; g0.strokeRect(x, yb, bw, 48);
+    g0.fillStyle = '#e6dcf0'; g0.font = 'bold 13px "Courier New",monospace'; g0.fillText(b.l, x + bw / 2, yb + 21);
+    g0.fillStyle = '#8a7e9a'; g0.font = '10px "Courier New",monospace'; g0.fillText(b.sub, x + bw / 2, yb + 37);
+    _sermonRects.push({ sx: x, sy: yb, sw: bw, sh: 48, act: 'chat_' + b.a });
+  });
+  g0.restore();
 }
 
 // ---- gift-pile picker: open a pile, take out the piece a villager asked for ----
@@ -7051,7 +7466,13 @@ function drawArmory(){
   }
   g.restore();
 }
-function exitCenter(){ const r = mission && mission.exitRect; return r ? { x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2 } : null; }
+// the getaway van is a real prop: if anything moves it, the exit area and the "road home" arrow follow it
+function syncExitToVan(){
+  const v = mission && mission.vanRef; if (!v || v.dead || !mission.exitRect) return;
+  const r = mission.exitRect, cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+  if (Math.hypot(v.x - cx, v.y - cy) > 6) mission.exitRect = { x0: v.x - 75, y0: v.y - 75, x1: v.x + 75, y1: v.y + 75 };
+}
+function exitCenter(){ syncExitToVan(); const r = mission && mission.exitRect; return r ? { x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2 } : null; }
 function dropHolding(){
   if (!player || !player.holding) return;
   const h = player.holding;
@@ -11390,10 +11811,11 @@ function recomputeRoofs(){
       const idx = li(lx, ly);
       if (OUT[idx] || seen[idx] || wall(x0 - pad + lx, y0 - pad + ly)){ seen[idx] = 1; continue; }
       let rx0 = 1e9, ry0 = 1e9, rx1 = -1e9, ry1 = -1e9, n = 0;
-      const q = [idx]; seen[idx] = 1;
+      const q = [idx], cellList = []; seen[idx] = 1;
       while (q.length){
         const ci = q.pop(), cx = ci % w, cy = (ci / w) | 0;
         const gx = x0 - pad + cx, gy = y0 - pad + cy;
+        cellList.push(gx, gy);
         if (gx < rx0) rx0 = gx; if (gx > rx1) rx1 = gx; if (gy < ry0) ry0 = gy; if (gy > ry1) ry1 = gy; n++;
         for (const d of [1, -1, w, -w]){
           const ni = ci + d;
@@ -11426,10 +11848,37 @@ function recomputeRoofs(){
           if (rfw >= rfh){ chimX = rfx0 + rfw * along; chimY = rfy0 + rfh * (side > 0 ? 0.28 : 0.72); }
           else { chimX = rfx0 + rfw * (side > 0 ? 0.28 : 0.72); chimY = rfy0 + rfh * along; }
         }
-        village.roofs.push({
+        const roofObj = {
           x0: rfx0, y0: rfy0, x1: rfx1, y1: rfy1,
           ix0: rx0 * CELL, iy0: ry0 * CELL, ix1: (rx1 + 1) * CELL, iy1: (ry1 + 1) * CELL,   // room interior — for the reveal test
-          col: ROOF_COLS[sd % ROOF_COLS.length], seed: sd, hasChimney, chimX, chimY });
+          col: ROOF_COLS[sd % ROOF_COLS.length], seed: sd, hasChimney, chimX, chimY };
+        // L-shaped / notched / T-shaped buildings: the roof follows the real floor plan (interior cells + the wall ring around them) instead of the bounding box
+        const cells = new Set(); for (let i = 0; i < cellList.length; i += 2) cells.add(cellList[i] + ',' + cellList[i + 1]);
+        if (cells.size < (rx1 - rx0 + 1) * (ry1 - ry0 + 1)){
+          const fp = new Set();
+          for (const k of cells){ const ci = k.indexOf(','), gx = +k.slice(0, ci), gy = +k.slice(ci + 1); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) fp.add((gx + dx) + ',' + (gy + dy)); }
+          const rows = {}; for (const k of fp){ const ci = k.indexOf(','), gx = +k.slice(0, ci), gy = +k.slice(ci + 1); (rows[gy] = rows[gy] || []).push(gx); }
+          const path = new Path2D(), edges = [];
+          for (const gy in rows){
+            const xs = rows[gy].sort((a, b) => a - b); let st = xs[0], prev = xs[0];
+            const flush = (a, b) => path.rect(a * CELL, gy * CELL - 13, (b - a + 1) * CELL + 0.5, CELL + 0.5);
+            for (let i = 1; i < xs.length; i++){ if (xs[i] !== prev + 1){ flush(st, prev); st = xs[i]; } prev = xs[i]; }
+            flush(st, prev);
+          }
+          for (const k of fp){
+            const ci = k.indexOf(','), gx = +k.slice(0, ci), gy = +k.slice(ci + 1), X = gx * CELL, Y = gy * CELL - 13;
+            if (!fp.has(gx + ',' + (gy + 1))){ edges.push({ x: X, y: Y + CELL - 2, w: CELL, h: 2, c: 'rgba(0,0,0,0.34)' }); edges.push({ x: X, y: Y + CELL, w: CELL, h: 1, c: 'rgba(0,0,0,0.3)' }); }
+            if (!fp.has((gx + 1) + ',' + gy)){ edges.push({ x: X + CELL - 2, y: Y, w: 2, h: CELL, c: 'rgba(0,0,0,0.3)' }); }
+            if (!fp.has(gx + ',' + (gy - 1))){ edges.push({ x: X, y: Y, w: CELL, h: 1.2, c: 'rgba(255,255,255,0.14)' }); edges.push({ x: X, y: Y - 1, w: CELL, h: 1, c: 'rgba(0,0,0,0.3)' }); }
+            if (!fp.has((gx - 1) + ',' + gy)){ edges.push({ x: X, y: Y, w: 1.2, h: CELL, c: 'rgba(255,255,255,0.1)' }); }
+          }
+          const ccs = []; let best = null, bd = 1e18; const bcx = (rx0 + rx1 + 1) / 2 * CELL, bcy = (ry0 + ry1 + 1) / 2 * CELL;
+          for (const k of cells){ const ci = k.indexOf(','), gx = +k.slice(0, ci), gy = +k.slice(ci + 1), c = { x: gx * CELL + CELL / 2, y: gy * CELL + CELL / 2 - 6 }; ccs.push(c); const d = (c.x - bcx) ** 2 + (c.y - bcy) ** 2; if (d < bd){ bd = d; best = c; } }
+          // runtime-only fields (kept out of the save file)
+          for (const [nm, val] of [['cells', cells], ['fp', fp], ['_path', path], ['_edges', edges], ['_cc', ccs], ['anchor', best]]) Object.defineProperty(roofObj, nm, { value: val, enumerable: false, writable: true });
+          if (hasChimney){ roofObj.chimX = best.x + ((sd >> 3) % 2 ? 10 : -10); roofObj.chimY = best.y - 2; }
+        } else Object.defineProperty(roofObj, 'cells', { value: null, enumerable: false, writable: true });
+        village.roofs.push(roofObj);
       }
     }
   }
@@ -11486,7 +11935,12 @@ function bakeFloorDetail(g, texture, wx, wy, left, top, u, s){
   } else if (PATH_TEX[texture]){
     const rnd = (a, b) => vhash(Math.round(wx) + a * 13, Math.round(wy) + b * 7);
     const px = Math.max(1, s);
-    if (texture === 'gravel'){
+    if (texture === 'dirt'){
+      for (let k = 0; k < 10; k++){
+        g.fillStyle = k % 3 ? 'rgba(0,0,0,0.16)' : 'rgba(190,160,110,0.2)';
+        g.fillRect(left + rnd(k, k + 2) * u * 0.82, top + rnd(k + 4, k) * u * 0.82, px * 1.6, px * 1.6);
+      }
+    } else if (texture === 'gravel'){
       for (let k = 0; k < 9; k++){
         g.fillStyle = k % 2 ? 'rgba(255,255,255,0.11)' : 'rgba(0,0,0,0.22)';
         g.fillRect(left + rnd(k, k + 2) * u * 0.82, top + rnd(k + 4, k) * u * 0.82, px * 2, px * 2);
@@ -11564,6 +12018,7 @@ function todLerp(){
 const isVillageNight = () => zone === 'village' && village && village.tod != null && todLerp().night > 0.6;   // villagers asleep, unresponsive
 
 function advanceDay(){ if (!village) return; village.day++; village.tod = 0.2;   // wake at sunrise
+  classifyRoofs();                                                                     // re-check what each building holds -> its rooftop feature
   if (village.hqDone) village.conviction = Math.min(convictionCap(), (village.conviction || 0) + 1);   // a night at the HQ steadies your certainty
   farmGrow = 0.22;   // a real night's sleep → yesterday's crop is in, today's is barely up
   villageDayTick(); saveVillage(true); flash('Day ' + (village.day + 1), '#9ad46a', 'the forest has grown a little'); autosave('rested'); generateVillageScripts(); setTimeout(morningRoutines, 500); }
@@ -11680,6 +12135,7 @@ function enterZone(name){
 
   if (name === 'village'){
     village = loadVillage(); worldSeed = village.seed; VOID_GROUND = '#2f5a2c'; loadCodex(); loadWeaponCodex(); refreshNpcCodex(); loadRaidRoster();
+    registerPaths(true);                                                    // the dirt path is buildable from the start
     if (village.research && village.research.paving) registerPaths();
     if (village.cult) registerCultBuild();
     if (cameFromMission){                                  // a raid eats ~4 hours — you come home at a different time each trip.
@@ -11818,6 +12274,7 @@ function enterZone(name){
     // entire side region is the exit" since you could leave from anywhere along it, nowhere near
     // the van itself)
     mission.exitRect = { x0: vanRestX - 75, y0: vanRestY - 75, x1: vanRestX + 75, y1: vanRestY + 75 };
+    mission.vanRef = vanP;                                                   // the exit follows the actual van (see syncExitToVan) if it gets shoved or the marker would point at empty ground / a building
     mission.vanIntro = {
       t: 0, driveDur: 0.4, skidDur: 0.28, emergeDur: 0.28,
       x0: vanStartX, y0: vanStartY, xm: vanMidX, ym: vanMidY, x1: vanRestX, y1: vanRestY,
@@ -11928,7 +12385,7 @@ function enterZone(name){
         money, score, kills, level: player.level };
   savePlayer();
   if (name === 'village'){ regenForage(); regenHoles(); }
-  if (cameFromMission){ saveVillage(true); flash('Back from the raid', '#c9b98a', 'about four hours gone — the village carried on without you'); generateVillageScripts(); }
+  if (cameFromMission){ saveVillage(true); flash('Back from the raid', '#c9b98a', 'about four hours gone — the village carried on without you'); generateVillageScripts(); setTimeout(villageWelcomeBack, 2400); }
   if (name === 'village' && _pendingUrgeDone){
     const done = _pendingUrgeDone; _pendingUrgeDone = false;
     setTimeout(() => { flash('…the voice is satisfied', '#ffe6a0', done); burst(player.x, player.y - 10, 16, '#ffe6a0', 200); }, cameFromMission ? 1600 : 200);
@@ -14000,7 +14457,7 @@ function pickHomeSpot(fire){
 }
 // where a villager loiters, by job — nearest relevant thing, else the fire / their bed
 // the doors of the room a point sits inside (world-px), cached per roof rect
-function roomOf(x, y){ return (village && village.roofs || []).find(r => x > r.ix0 - 4 && x < r.ix1 + 4 && y > r.iy0 - 4 && y < r.iy1 + 4); }
+function roomOf(x, y){ return (village && village.roofs || []).find(r => x > r.ix0 - 4 && x < r.ix1 + 4 && y > r.iy0 - 4 && y < r.iy1 + 4 && (!r.cells || inRoom(r, x, y) || inRoom(r, x - 4, y) || inRoom(r, x + 4, y) || inRoom(r, x, y - 4) || inRoom(r, x, y + 4))); }
 function roomOpenings(rf){
   if (rf._op && rf._opAt === (village && village.day)) return rf._op;
   const doors = [], windows = [];
@@ -14848,8 +15305,21 @@ function calamityTick(dt){
   if (wagerOn('aliens')){
     if (!CAL.ufos.length) for (let i = 0; i < 2; i++) CAL.ufos.push({ a: i * Math.PI, x: P.x, y: P.y });
     for (const u of CAL.ufos){
-      u.a += dt * 0.55; u.x += (P.x + Math.cos(u.a) * 240 - u.x) * Math.min(1, dt * 1.6); u.y += (P.y + Math.sin(u.a) * 190 - 40 - u.y) * Math.min(1, dt * 1.6);
+      // no longer glued to you: they fly at a capped speed (you can outrun them, especially in a car), and every so often lose the trail and drift off for a few seconds before finding you again
+      if (u.st == null){ u.st = 'hunt'; u._modeT = rand(7, 12); u.wx = P.x; u.wy = P.y; }
+      u._modeT -= dt;
+      const dP = Math.hypot(P.x - u.x, P.y - u.y);
+      if (u._modeT <= 0){
+        if (u.st === 'hunt' && Math.random() < 0.55){ u.st = 'wander'; u._modeT = rand(4, 8); const wa = Math.random() * 6.283, wd = rand(380, 620); u.wx = P.x + Math.cos(wa) * wd; u.wy = P.y + Math.sin(wa) * wd; }
+        else { u.st = 'hunt'; u._modeT = rand(9, 15); }
+      }
+      let tx, ty, sp;
+      if (u.st === 'wander'){ tx = u.wx; ty = u.wy; sp = 105; }
+      else { u.a += dt * 0.55; tx = P.x + Math.cos(u.a) * 240; ty = P.y + Math.sin(u.a) * 190 - 40; sp = dP > 650 ? 200 : 150; }
+      const ddx = tx - u.x, ddy = ty - u.y, ddd = Math.hypot(ddx, ddy) || 1, step = Math.min(ddd, sp * dt);
+      u.x += ddx / ddd * step; u.y += ddy / ddd * step;
       u._t = (u._t == null ? rand(1.5, 3) : u._t) - dt;
+      if (u.st !== 'hunt' || dP > 380) u._t = Math.max(u._t, 0.6);      // only fires while it's actually on you and in range
       if (u._t <= 0){
         u._t = rand(3, 4.6);
         const foes = enemies.filter(e => !e.dead && e.team === 'enemy' && !e._alien && !e._indestructible && dist2(e.x, e.y, P.x, P.y) < 420 * 420);
@@ -16423,6 +16893,7 @@ function tryInteract(){
   // them already IS success. If the generic "E always means put this down first" check ran first
   // (it used to — see dropCarry), it swallowed the E-press into a plain drop right there instead,
   // and a second E-press to actually leave found nothing left to carry home.
+  if (zone === 'city' && mission) syncExitToVan();
   if (zone === 'city' && mission && mission.exitRect && inRect(player.x, player.y, mission.exitRect, 18)){
     const R = mission.raid;
     if (R && R.phase !== 'won'){
@@ -16880,10 +17351,18 @@ function steerAvoid(e, dx, dy){
 // squad wall-avoidance: multi-whisker — if the way ahead is walled, fan out to progressively
 // wider veer angles on both shoulders and take the first clear one, else back out. No
 // wall-smashing (that's an enemy thing); the stuck-recovery in updateSoldier is the safety net.
+// is a body of radius r at (x,y) inside any solid prop (a tree that's grown, a crate, a barrel)? same box moveActor uses
+function propBlockAt(x, y, r){
+  for (const p of props){
+    if (p.dead || !p.solid) continue;
+    if (Math.abs(x - p.x) < (p.w + r * 1.4) / 2 && Math.abs(y - p.y) < (p.h + r * 1.4) / 2) return true;
+  }
+  return false;
+}
 function squadAvoid(e, dx, dy){
   const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
-  const ahead = 30;
-  const blocked = (mx, my) => cellSolid(Math.floor(mx / CELL), Math.floor(my / CELL));
+  const ahead = 30, usep = !!e._isGuard;                                   // guards also steer around solid props (trees grow into their beat)
+  const blocked = (mx, my) => cellSolid(Math.floor(mx / CELL), Math.floor(my / CELL)) || (usep && propBlockAt(mx, my, e.r));
   if (!blocked(e.x + dx * ahead, e.y + dy * ahead)) return [dx, dy];
   for (const ang of [0.7, 1.25, 1.9, 2.6]){
     const c = Math.cos(ang), s = Math.sin(ang);
@@ -16903,12 +17382,23 @@ function squadAvoid(e, dx, dy){
 // actually blocked, so an enemy with a clear line to the player never touches this at all.
 const PATH_GRID_R = 16;             // cells out from the seeker in every direction — a 32x32-cell (512x512 world px) box, plenty for "around this corner / through this doorway", not a whole-city search
 const PATH_MAX_STEPS = 900;         // hard cap on nodes expanded — bounds worst case even for a maze-like or unreachable target
-function findPath(x0, y0, x1, y1){
+function findPath(x0, y0, x1, y1, avoidProps, pr){
   const c0x = Math.floor(x0 / CELL), c0y = Math.floor(y0 / CELL);
   const c1x = Math.floor(x1 / CELL), c1y = Math.floor(y1 / CELL);
   if (Math.abs(c1x - c0x) > PATH_GRID_R || Math.abs(c1y - c0y) > PATH_GRID_R) return null;   // out of range — not worth searching, caller falls back
   if (c0x === c1x && c0y === c1y) return null;
   const key = (x, y) => x * 100000 + y;
+  // optional: cells covered by solid props (trees etc, padded by the walker's radius) count as blocked too, except the start and goal cells
+  let pblk = null;
+  if (avoidProps){
+    pblk = new Set(); const rr = (pr || 10) * 0.7, bx0 = (c0x - PATH_GRID_R - 1) * CELL, bx1 = (c0x + PATH_GRID_R + 2) * CELL, by0 = (c0y - PATH_GRID_R - 1) * CELL, by1 = (c0y + PATH_GRID_R + 2) * CELL;
+    for (const p of props){
+      if (p.dead || !p.solid || p.x < bx0 || p.x > bx1 || p.y < by0 || p.y > by1) continue;
+      const hx = p.w / 2 + rr, hy = p.h / 2 + rr;
+      for (let cy = Math.floor((p.y - hy) / CELL); cy <= Math.floor((p.y + hy) / CELL); cy++) for (let cx = Math.floor((p.x - hx) / CELL); cx <= Math.floor((p.x + hx) / CELL); cx++) pblk.add(key(cx, cy));
+    }
+    pblk.delete(key(c0x, c0y)); pblk.delete(key(c1x, c1y));
+  }
   const start = { x: c0x, y: c0y, g: 0, f: 0, parent: null };
   const open = [start];
   const bestG = new Map([[key(c0x, c0y), 0]]);
@@ -16926,8 +17416,8 @@ function findPath(x0, y0, x1, y1){
     for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){
       const nx = cur.x + dx, ny = cur.y + dy;
       if (Math.abs(nx - c0x) > PATH_GRID_R || Math.abs(ny - c0y) > PATH_GRID_R) continue;
-      if (cellSolid(nx, ny)) continue;
-      if (dx !== 0 && dy !== 0 && (cellSolid(cur.x + dx, cur.y) || cellSolid(cur.x, cur.y + dy))) continue;   // no cutting the corner between two solid cells
+      if (cellSolid(nx, ny) || (pblk && pblk.has(key(nx, ny)))) continue;
+      if (dx !== 0 && dy !== 0 && (cellSolid(cur.x + dx, cur.y) || cellSolid(cur.x, cur.y + dy) || (pblk && (pblk.has(key(cur.x + dx, cur.y)) || pblk.has(key(cur.x, cur.y + dy)))))) continue;   // no cutting the corner between two solid cells
       const g = cur.g + ((dx && dy) ? 1.41421 : 1);
       const nk = key(nx, ny);
       if (bestG.has(nk) && bestG.get(nk) <= g) continue;
@@ -17054,8 +17544,26 @@ function updateSoldier(e, dt){
     // no threat — hold a loose slot around the player, or (a permanent village guard — see
     // promoteGuard) walk a beat between the sleeping areas instead of tailing the player around
     // like a raid-mustered squad does
-    let fx, fy;
+    let fx, fy, napTarget = null;
     if (e._isGuard){
+      // guards are on their feet all night, so they get a few hours' sleep around midday: each one heads to their bed (or beside the fire) at a slightly different time, sleeps, then goes back to the beat
+      const tod = village && village.tod != null ? village.tod : 0.3, nrec = village && e._vid ? village.villagers.find(v => v.id === e._vid) : null;
+      const ns = 0.36 + (Math.abs(strHash(e._vid || 'g')) % 4) * 0.02, nap = zone === 'village' && tod >= ns && tod < ns + 0.09;
+      if (e._inBed && !nap){ e._inBed = false; ejectFromWalls(e, 20); e._patrolPath = null; }
+      if (nap){
+        const fireP = props.find(pp => !pp.dead && pp.t === 'campfire' && !pp.dead) || { x: e.x, y: e.y };
+        napTarget = nrec && nrec.bed ? nrec.bed : { x: fireP.x + 34, y: fireP.y + 26 };
+        if (Math.hypot(napTarget.x - e.x, napTarget.y - e.y) < 22){
+          e.vx = e.vy = 0; e.dir = 1.75; e._napping = true;
+          e._zzz = (e._zzz ?? rand(0.5, 3)) - dt;
+          if (e._zzz <= 0){ e._zzz = rand(3, 6); popText(e.x, e.y - 18, 'z', 'rgba(150,150,175,0.85)', 1.8); }
+          e._inBed = !!(nrec && nrec.bed);
+          if (e._inBed){ e.x = nrec.bed.x; e.y = nrec.bed.y; }
+          moveActor(e, dt);
+          return;
+        }
+      }
+      e._napping = false;
       const pts = guardPatrolPoints(e);
       const idx = ((e._patrolIdx || 0) % pts.length + pts.length) % pts.length;
       const wp2 = pts[idx];
@@ -17071,16 +17579,17 @@ function updateSoldier(e, dt){
         else {
           e._toFireT += dt;
           const fdx = e.x - cf.x, fdy = e.y - cf.y, fdd = Math.hypot(fdx, fdy) || 1;
-          if (fdd < 64){ e._fireWarm += dt; if (e._fireWarm > 1.6) e._toFire = false; }
-          if (e._toFireT > 40) e._toFire = false;
-          fx = cf.x + 40 * (fdx / fdd); fy = cf.y + 40 * (fdy / fdd);
-          if (fdd < 64){ fx = e.x; fy = e.y; }
+          if (fdd < 95){ e._fireWarm += dt; if (e._fireWarm > 0.7) e._toFire = false; }          // near enough counts — a quick nod at the fire, then off on the beat
+          if (e._toFireT > 12 || e._stuckT > 1.2 || e._trapT > 1.5) e._toFire = false;         // can't get there / taking too long: skip the fire and just start patrolling
+          fx = cf.x + 70 * (fdx / fdd); fy = cf.y + 70 * (fdy / fdd);
+          if (fdd < 95){ fx = e.x; fy = e.y; }
         }
       }
-      if (!e._toFire && Math.hypot(fx - e.x, fy - e.y) < (isRoute ? 34 : 26)){          // arrived — pause a moment like an actual watch stop, then move on
+      if (napTarget){ fx = napTarget.x; fy = napTarget.y; e._toFire = false; }                   // off to bed
+      if (!e._toFire && !napTarget && Math.hypot(fx - e.x, fy - e.y) < (isRoute ? 34 : 26)){          // arrived — pause a moment like an actual watch stop, then move on
         e._patrolWaitT = (e._patrolWaitT || 0) + dt;
         if (e._patrolWaitT > (isRoute ? rand(0.1, 0.5) : rand(2.5, 5))){ e._patrolWaitT = 0; e._patrolIdx = idx + 1; e._patrolPath = null; }
-      } else if (!e._toFire) e._patrolWaitT = 0;
+      } else if (!e._toFire && !napTarget) e._patrolWaitT = 0;
     } else {
       fx = player.x + (e._fx || 0); fy = player.y + (e._fy || 0);
       if (cellSolid(Math.floor(fx / CELL), Math.floor(fy / CELL))){ fx = player.x; fy = player.y; }   // slot fell inside a wall — just come to the player
@@ -17102,11 +17611,11 @@ function updateSoldier(e, dt){
         // properly with the same A* (findPath) the lost-sight chase logic already uses — own
         // fields so the two never step on each other — recomputed only occasionally, and whenever
         // the destination itself changes (a new patrol stop, or a freshly dropped/moved zone).
-        e._patrolPathT = (e._patrolPathT || 0) - dt;
+        e._patrolPathT = (e._patrolPathT || 0) - dt - (e._stuckT > 0.35 ? 0.5 : 0);        // held up by something → re-plan around it right away
         if (!e._patrolPath || e._patrolPathT <= 0 || !e._patrolPathTgt || dist2(e._patrolPathTgt.x, e._patrolPathTgt.y, fx, fy) > 20 * 20){
           e._patrolPathT = rand(0.6, 1.0);
           e._patrolPathTgt = { x: fx, y: fy };
-          e._patrolPath = findPath(e.x, e.y, fx, fy);
+          e._patrolPath = findPath(e.x, e.y, fx, fy, true, e.r) || findPath(e.x, e.y, fx, fy);   // route round trees/props; fall back to walls-only if that finds nothing
           e._patrolPathIdx = 0;
         }
         const wpt = e.noclip ? null : (e._patrolPath && e._patrolPath[e._patrolPathIdx]);
@@ -17260,14 +17769,29 @@ const COPYCAT_WEAPONS = new Set(['watergun', 'taser', 'zapstaff', 'teslagren', '
   'bubblegun', 'gluegun', 'nailgun', 'flaregun', 'sheeplauncher', 'singularitynade', 'freezeray',
   'slimegun', 'acidspray', 'flamethrower', 'bolas']);
 // stuck for too long (7s of trying to move and going nowhere — typically wedged inside a building) → a brief spell of noclip to slip free, then a nudge onto open ground
-function trapTick(e, wanted, moved, dt, thr){
+// nearest open ground to (x,y): rings outward until a box of size `sz` fits clear of every wall cell
+function freeSpotNear(x, y, sz = 18){
+  if (!solidBoxHit(x, y, sz, sz)) return { x, y };
+  for (let r = 6; r <= 140; r += 6) for (let i = 0; i < 16; i++){
+    const a = i / 16 * 6.283 + r * 0.31, tx = x + Math.cos(a) * r, ty = y + Math.sin(a) * r;
+    if (!solidBoxHit(tx, ty, sz, sz)) return { x: tx, y: ty };
+  }
+  return null;
+}
+// pop an actor out if it's embedded in a wall (waking up beside a bed against the wall, a door closing on them, a shove...)
+function ejectFromWalls(e, sz = 18){
+  if (e.noclip || !solidBoxHit(e.x, e.y, sz, sz)) return false;
+  const f = freeSpotNear(e.x, e.y, sz); if (!f) return false;
+  e.x = f.x; e.y = f.y; e.vx = e.vy = 0; e._patrolPath = null; return true;
+}
+function trapTick(e, wanted, moved, dt, thr, lim = 7){
   if (e._noclipT > 0){
     e._noclipT -= dt;
-    if (e._noclipT <= 0){ e.noclip = false; let g = 0; while (solidBoxHit(e.x, e.y, 16, 16) && g++ < 60){ e.x += rand(-16, 16); e.y += rand(-16, 16); } e._trapT = 0; e._patrolPath = null; }
+    if (e._noclipT <= 0){ e.noclip = false; const f = freeSpotNear(e.x, e.y, 18); if (f){ e.x = f.x; e.y = f.y; } e.vx = e.vy = 0; e._trapT = 0; e._patrolPath = null; }
     return;
   }
   e._trapT = (wanted && moved < thr * dt) ? (e._trapT || 0) + dt : Math.max(0, (e._trapT || 0) - dt * 2);
-  if (e._trapT > 7){ e.noclip = true; e._noclipT = 1.6; e._trapT = 0; burst(e.x, e.y - 6, 8, 'rgba(160,170,200,0.6)', 110); }
+  if (e._trapT > lim){ e.noclip = true; e._noclipT = 1.6; e._trapT = 0; burst(e.x, e.y - 6, 8, 'rgba(160,170,200,0.6)', 110); }
 }
 function updateEnemy(e, dt){
   e.atkCd -= dt; e.hurt = Math.max(0, e.hurt - dt); e.stun = Math.max(0, e.stun - dt);
@@ -17461,6 +17985,7 @@ function updateEnemy(e, dt){
       if (e._inBed){ e.x = rec.bed.x; e.y = rec.bed.y; e.vx = e.vy = 0; }
       return;
     }
+    if (e._inBed){ e._inBed = false; ejectFromWalls(e, 20); e._anchT = 0; e._stuckT = 0; }   // just woke: don't stay wedged where the bed met the wall
     e._inBed = false;
     e.wanderT -= dt;
     if (e.wanderT <= 0){
@@ -17491,7 +18016,9 @@ function updateEnemy(e, dt){
       if (rec && rec.hungry) popText(e.x, e.y - 22, '"…is there any dinner?"', '#e8a06a', 3.2);
       else if (rec && rec.want && player.holding && Math.random() < 0.55) popText(e.x, e.y - 22, '"I do wish I had a ' + rec.want.obj + '…"', '#e6c56a', 3.6);
       else if (quirk) popText(e.x, e.y - 22, quirk.text, quirk.col, 3.2);
-      else {
+      else if (rec && Math.random() < 0.28 && village.country){                       // sometimes the chatter is about the wider world — what you've done out there
+        const wf = chatWorldFacts(rec).filter(l => l.length < 150); popText(e.x, e.y - 22, pick(wf), '#d8c8a0', 4.2);
+      } else {
         const heard = rec ? overhearVillager(e, rec) : null;   // Phase 6 dossier — a fragment / gossip you pick up in earshot
         if (heard){ popText(e.x, e.y - 22, heard, '#cbb6dd', 3.6); }
         else {
@@ -17506,7 +18033,10 @@ function updateEnemy(e, dt){
       }
     }
     if (Math.hypot(e.vx, e.vy) > 4 && e.swing <= 0) e.dir = Math.atan2(e.vy, e.vx);
+    const _vbx = e.x, _vby = e.y;
     moveActor(e, dt);
+    e._ejT = (e._ejT || 0) - dt; if (e._ejT <= 0){ e._ejT = 0.4; ejectFromWalls(e); }              // embedded in a wall? pop out to the nearest open floor
+    trapTick(e, !reached && !e._act, Math.hypot(e.x - _vbx, e.y - _vby), dt, 18, 3.5);          // wants to walk but can't for a few seconds -> brief noclip, then onto open ground
     return;
   }
 
@@ -20520,11 +21050,13 @@ function updateZooCritters(dt){
   }
   critters = critters.filter(c => !(c.dead && c.fade > 6) && ((!c.zoo && !c.pig) || Math.hypot(c.x - player.x, c.y - player.y) < 3200));
 }
+// the home country has no biome kit, but it isn't empty: rabbits, deer and squirrels wander its meadows
+const HOME_FAUNA = { fauna: ['rabbit', 'rabbit', 'rabbit', 'deer', 'deer', 'squirrel', 'squirrel'], home: true };
 function updateCritters(dt){
-  const kit = biomeKit();
+  const kit = biomeKit() || (zone === 'village' && village ? HOME_FAUNA : null);
   if (zone === 'city'){ if (player){ if (kit) kitAtmosphere(dt, kit, player.x, player.y); updateZooCritters(dt); } else if (critters.length) critters = []; return; }
   if (zone !== 'village' || !player || !kit || !kit.fauna){ if (critters.length) critters = []; return; }
-  const want = 16, cx = player.x, cy = player.y, R = Math.max(VUW, VUH) * 0.62;
+  const want = kit.home ? 10 : 16, cx = player.x, cy = player.y, R = Math.max(VUW, VUH) * 0.62;
   let guard = 0;
   while (critters.length < want && guard++ < 6){
     const k = pick(kit.fauna); if (k === 'butterfly') continue;
@@ -21596,6 +22128,7 @@ function draw(){
   // this whole y-sorted list, so it rendered on top of every prop and wall no matter its actual
   // depth (walking behind a tree still drew in front of it). Given a real sort slot instead.
   for (const kp of kennelPets) if (inView(kp.x, kp.y, camx, camy)) _dl.push(kp.y, 12, _dl.length, kp);
+  if (zone === 'village') for (const b of villageBanners()) if (inView(b.x, b.y, camx, camy)) _dl.push(b.y, 14, _dl.length, b);   // conquest banners planted round the village
   for (const c of critters) if (!CRITTER_AIR.has(c.k) && inView(c.x, c.y, camx, camy)) _dl.push(c.y, 13, _dl.length, c);   // wildlife walks behind trees, not over them
   _dl.push(player.dead ? player.y - 40 : player.y, 2, _dl.length, player);
   // wall cells — sorted on their south (ground) edge so buildings occlude / are walked in front of
@@ -21628,6 +22161,7 @@ function draw(){
     else if (kind === 11) drawDisplaySpot(_dl[i + 3]);
     else if (kind === 12) drawDog(_dl[i + 3], null);
     else if (kind === 13) drawCritter(_dl[i + 3]);
+    else if (kind === 14) drawBanner(_dl[i + 3]);
     else if (kind === 3){ const pk = _dl[i + 2], cy = (pk % 131072) - 60000; drawWallBlock((pk - (pk % 131072)) / 131072 - 60000, cy, _dl[i + 3]); }
     else {
       const _a = _dl[i + 3], _pa = playerVisualAlpha(_a);
@@ -21733,7 +22267,8 @@ function draw(){
       // south of every doorway so the door light there stays gold, not blue.
       let lroom = null;
       if (!player.dead && zone === 'village' && village.roofs) for (const r of village.roofs){
-        const pen = Math.min(player.x - r.ix0, r.ix1 - player.x, player.y - r.iy0, r.iy1 - player.y);
+        let pen = Math.min(player.x - r.ix0, r.ix1 - player.x, player.y - r.iy0, r.iy1 - player.y);
+        if (r.cells) pen = inRoom(r, player.x, player.y) ? Math.max(pen, 7) : Math.min(pen, 0);
         if (pen > 5){ lroom = r; break; }   // only once you're genuinely inside and the roof has faded
       }
       const rrect = lroom ? { x0: lroom.ix0 - CELL * 0.95, y0: lroom.iy0 - CELL * 0.95, x1: lroom.ix1 + CELL * 0.95, y1: lroom.iy1 + CELL * 0.4 } : null;
@@ -22177,6 +22712,162 @@ function drawBuildGhost(){
 // stack sat right on the pitch, plus a few soft puffs of smoke drifting up and sideways. Entirely
 // procedural off performance.now() + the roof's own seed (same trick as torchFlame/campfire), so it
 // needs no persistent particle state and just loops forever, staying stable across chunk unload.
+// ================= THE WORLD REACTS =================
+// (1) a banner in each conquered city's colours planted around the village (and the rival's torn standard on the edge, once they're a threat),
+// (2) villagers greet you differently after a raid depending on how it went, (3) their ambient chatter draws on the state of the world (see chatWorldFacts).
+let _banCache = { sig: null, list: [] };
+function villageBanners(){
+  if (!village || zone !== 'village') return [];
+  const held = heldCities(), rv = village.rival, rivalN = village.country ? village.country.nodes.filter(n => n.rival).length : 0;
+  const sig = held.map(n => n.id).join(',') + '|' + (rv && rivalN ? 'r' + rivalN : '');
+  if (_banCache.sig === sig) return _banCache.list;
+  const pos = village._bannerPos || (village._bannerPos = {});
+  const fire = props.find(pp => !pp.dead && pp.t === 'campfire') || { x: 0, y: 0 };
+  const free = (x, y) => !solidBoxHit(x, y, 14, 14) && waterAt(x, y) < 0.05 && !props.some(pp => !pp.dead && pp.solid && Math.abs(pp.x - x) < pp.w / 2 + 16 && Math.abs(pp.y - y) < pp.h / 2 + 16) && !(village.roofs || []).some(r => x > r.x0 - 14 && x < r.x1 + 14 && y > r.y0 - 14 && y < r.y1 + 14);
+  const place = (id, r0, a0) => {
+    if (pos[id]) return pos[id];
+    for (let i = 0; i < 40; i++){
+      const a = a0 + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.16, r = r0 + Math.floor(i / 8) * 18, x = fire.x + Math.cos(a) * r, y = fire.y + Math.sin(a) * r * 0.8;
+      if (free(x, y)) return (pos[id] = { x: Math.round(x), y: Math.round(y) });
+    }
+    return null;
+  };
+  const out = [];
+  held.forEach((n, i) => { const q = place(n.id, 200, -1.9 + i * 0.5); if (q) out.push({ x: q.x, y: q.y, col: (n.faction && n.faction.accent) || '#c8a24a', col2: (n.faction && n.faction.shirt) || '#5a3f26', seed: i * 7 + 3, name: n.name }); });
+  if (rv && rivalN){ const q = place('rival', 330, 0.6); if (q) out.push({ x: q.x, y: q.y, col: rv.color || '#8a2a3a', col2: '#1c1214', seed: 99, rival: true, name: rv.name }); }
+  _banCache = { sig, list: out };
+  return out;
+}
+function drawBanner(b){
+  const g = octx, tt = performance.now() / 1000, sw = Math.sin(tt * 2.2 + b.seed) * 2.2 + Math.sin(tt * 4.1 + b.seed) * 0.8, H = 34, x = b.x, y = b.y;
+  g.fillStyle = 'rgba(0,0,0,0.25)'; g.beginPath(); g.ellipse(x + 3, y + 1, 6, 2.2, 0, 0, 7); g.fill();
+  g.fillStyle = '#3a2c20'; g.fillRect(x - 1, y - H, 2.4, H);                                                   // pole
+  g.fillStyle = '#d8c070'; g.beginPath(); g.arc(x, y - H - 1, 2, 0, 7); g.fill();
+  const cw = 14, ch = 20, top = y - H + 2;
+  g.fillStyle = b.col2; g.beginPath(); g.moveTo(x + 1.4, top); g.lineTo(x + 1.4 + cw + sw, top + 1 + sw * 0.3); g.lineTo(x + 1.4 + cw + sw * 1.3, top + ch - (b.rival ? 5 : 0) + sw * 0.4); g.lineTo(x + 1.4 + cw * 0.5 + sw, top + ch + (b.rival ? -1 : 5) + sw * 0.2); g.lineTo(x + 1.4, top + ch - (b.rival ? 3 : 0)); g.closePath(); g.fill();
+  g.fillStyle = b.col; g.beginPath(); g.moveTo(x + 1.4, top + 3); g.lineTo(x + 1.4 + cw + sw, top + 4 + sw * 0.3); g.lineTo(x + 1.4 + cw + sw * 1.2, top + 8 + sw * 0.4); g.lineTo(x + 1.4, top + 7); g.closePath(); g.fill();   // a stripe of the city's accent colour
+  g.beginPath(); g.arc(x + 1.4 + cw * 0.5 + sw * 0.6, top + 13 + sw * 0.3, 3, 0, 7); g.fill();                                                          // emblem
+  if (b.rival){ g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 5 + sw * 0.5, top + 2); g.lineTo(x + 8 + sw, top + 12); g.stroke(); }   // slashes: the standard of the enemy
+}
+// after a raid the village greets you according to how it went
+function villageWelcomeBack(){
+  if (!village || zone !== 'village' || !player) return;
+  const held = heldCities(), prev = village._heldSeen == null ? held.length : village._heldSeen; village._heldSeen = held.length;
+  const newCity = held.length > prev ? held[held.length - 1] : null, died = runDied;
+  const near = enemies.filter(e => e.villager && !e.dead && dist2(e.x, e.y, player.x, player.y) < 420 * 420).sort((a, b) => dist2(a.x, a.y, player.x, player.y) - dist2(b.x, b.y, player.x, player.y)).slice(0, 4);
+  near.forEach((e, i) => {
+    const rec = village.villagers.find(v => v.id === e._vid), devo = village.cult && rec ? villagerDevotion(rec) : 0.5;
+    let pool;
+    if (newCity) pool = devo > 0.6 ? ['"' + newCity.name + '! Is it true?"', '"They\'re saying your name in the streets of ' + newCity.name + '!"', '"A banner for ' + newCity.name + ' — I\'ll hang it myself."'] : devo < 0.3 ? ['"…' + newCity.name + '. Another one."', '"How many more, exactly?"', '"I hope it was worth what it cost."'] : ['"' + newCity.name + ' — that\'s something, I suppose."', '"Word travels fast. ' + newCity.name + ' already knows."'];
+    else if (died) pool = ['"You\'re alive! We thought— never mind."', '"Sit. Please. You look terrible."', '"Don\'t do that to us again."'];
+    else pool = devo > 0.6 ? ['"Welcome back!"', '"Anything worth telling?"', '"The place felt empty without you."'] : ['"Oh. You\'re back."', '"Anything left of the city?"', '"We held the fort. Barely."'];
+    setTimeout(() => { if (zone === 'village' && !e.dead) popText(e.x, e.y - 26, pick(pool), devo < 0.3 ? '#c8b0b0' : '#e8dcb0', 2.6); }, 500 + i * 650);
+  });
+}
+function skylightRect(rf){
+  const w = rf.x1 - rf.x0, h = rf.y1 - rf.y0;
+  if (rf.anchor){ const a = rf.anchor, kw = 30, kh = 18, ok = [[-kw / 2, -kh / 2], [kw / 2, -kh / 2], [-kw / 2, kh / 2], [kw / 2, kh / 2]].every(([dx, dy]) => rf.fp && rf.fp.has(Math.floor((a.x + dx) / CELL) + ',' + Math.floor((a.y + dy + 6) / CELL))); return ok ? { x: a.x - kw / 2, y: a.y - kh / 2, w: kw, h: kh } : { x: a.x, y: a.y, w: 0, h: 0 }; }
+  return w >= h ? { x: rf.x0 + w * 0.2, y: rf.y0 + h * 0.3, w: w * 0.6, h: h * 0.4 } : { x: rf.x0 + w * 0.3, y: rf.y0 + h * 0.2, w: w * 0.4, h: h * 0.6 };
+}
+function drawRoofRole(rf, w, h){
+  const g = octx, tt = performance.now() / 1000, an = rf.anchor, cx = an ? an.x : rf.x0 + w / 2, cy = an ? an.y : rf.y0 + h / 2, horiz = w >= h;
+  const sm = an ? Math.max(24, Math.min(w, h) * 0.6) : Math.min(w, h);
+  const snap = (x, y) => { if (!rf._cc) return [x, y]; let b = null, bd = 1e18; for (const c of rf._cc){ const d = (c.x - x) ** 2 + (c.y - y) ** 2; if (d < bd){ bd = d; b = c; } } return b ? [b.x, b.y] : [x, y]; };
+  const along = f => an ? snap(horiz ? rf.x0 + w * f : rf.x0 + w / 2, horiz ? rf.y0 + h / 2 : rf.y0 + h * f) : (horiz ? [rf.x0 + w * f, cy] : [cx, rf.y0 + h * f]);
+  switch (rf.role){
+    case 'house': {                                                                          // boring and proud of it: a plain chimney
+      const [x, y] = [rf.hasChimney ? rf.chimX : rf.x0 + w * 0.26, rf.hasChimney ? rf.chimY : rf.y0 + h * 0.3]; drawChimney(x, y, rf.seed); break; }
+    case 'hall': {                                                                           // a feasting hall: two chimneys, both smoking
+      for (const f of [0.22, 0.78]){ const [x, y] = along(f); drawChimney(x, y - 2, rf.seed + (f > 0.5 ? 3 : 0)); } break; }
+    case 'church': {                                                                         // a cruciform slate roof: a crossing transept, a stone ridge, a bell tower with a slate spire, and a stained-glass rose window over the crossing
+      const night = (village && village.tod != null) ? todLerp().night : 0, longD = horiz ? w : h, shortD = horiz ? h : w;
+      const tw = clamp(longD * 0.27, 22, 46), [tcx, tcy] = along(0.58);
+      const tx0 = horiz ? tcx - tw / 2 : rf.x0, ty0 = horiz ? rf.y0 : tcy - tw / 2, tW = horiz ? tw : w, tH = horiz ? h : tw;
+      // transept: the cross-arm roof, shaded like a second gable
+      const gr = horiz ? g.createLinearGradient(tx0, 0, tx0 + tW, 0) : g.createLinearGradient(0, ty0, 0, ty0 + tH);
+      gr.addColorStop(0, '#3c4562'); gr.addColorStop(0.5, '#7d89ac'); gr.addColorStop(1, '#3c4562');
+      g.fillStyle = gr; g.fillRect(tx0, ty0, tW, tH);
+      g.fillStyle = 'rgba(0,0,0,0.16)'; if (horiz){ for (let yy = ty0 + 3; yy < ty0 + tH; yy += 4) g.fillRect(tx0, yy, tW, 1); } else { for (let xx = tx0 + 3; xx < tx0 + tW; xx += 4) g.fillRect(xx, ty0, 1, tH); }
+      g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1; g.strokeRect(tx0 + 0.5, ty0 + 0.5, tW - 1, tH - 1);
+      g.fillStyle = 'rgba(210,216,232,0.55)'; if (horiz) g.fillRect(tcx - 1, ty0, 2, tH); else g.fillRect(tx0, tcy - 1, tW, 2);   // transept ridge
+      // main ridge: a pale stone crest along the full length with a finial at the far end
+      g.fillStyle = 'rgba(200,206,222,0.6)'; if (horiz) g.fillRect(rf.x0 + 2, cy - 1.2, w - 4, 2.4); else g.fillRect(cx - 1.2, rf.y0 + 2, 2.4, h - 4);
+      const [fx2, fy2] = along(0.94); g.fillStyle = '#e8d890'; g.beginPath(); g.arc(fx2, fy2, 2.4, 0, 7); g.fill();
+      // eave trim
+      g.strokeStyle = 'rgba(214,206,182,0.55)'; g.lineWidth = 2; g.strokeRect(rf.x0 + 1.5, rf.y0 + 1.5, w - 3, h - 3);
+      // bell tower + spire at the entrance end
+      const [x, y] = along(0.13), t = clamp(shortD * 0.5, 24, 38);
+      g.fillStyle = 'rgba(0,0,0,0.32)'; g.fillRect(x - t / 2 + 5, y - t / 2 + 6, t, t);
+      g.fillStyle = '#8a8c98'; g.fillRect(x - t / 2, y - t / 2, t, t);
+      g.fillStyle = '#b6b8c4'; g.fillRect(x - t / 2, y - t / 2, t, 2.2); g.fillRect(x - t / 2, y - t / 2, 2.2, t);
+      g.fillStyle = '#5e606e'; g.fillRect(x - t / 2, y + t / 2 - 2.2, t, 2.2); g.fillRect(x + t / 2 - 2.2, y - t / 2, 2.2, t);
+      const q = t / 2 - 3, tri = (ax, ay, bx, by, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(x, y); g.lineTo(ax, ay); g.lineTo(bx, by); g.closePath(); g.fill(); };
+      tri(x - q, y - q, x + q, y - q, '#7d89ac'); tri(x + q, y - q, x + q, y + q, '#4d5878'); tri(x + q, y + q, x - q, y + q, '#343c56'); tri(x - q, y + q, x - q, y - q, '#65719a');
+      g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x - q, y - q); g.lineTo(x + q, y + q); g.moveTo(x + q, y - q); g.lineTo(x - q, y + q); g.stroke();
+      g.fillStyle = '#f0d060'; g.fillRect(x - 1.3, y - 7, 2.6, 13); g.fillRect(x - 4.5, y - 3.5, 9, 2.6);                   // gilded cross on the spire tip
+      g.fillStyle = 'rgba(255,240,170,' + (0.22 + 0.12 * Math.sin(tt * 2)).toFixed(2) + ')'; g.beginPath(); g.arc(x, y, 10, 0, 7); g.fill();
+      // rose window over the crossing (stained glass — glows at night)
+      const rr = clamp(shortD * 0.15, 8, 14), pal = ['#c8383a', '#3a68c8', '#e2b030', '#3a9a58'];
+      if (night > 0.4){ g.fillStyle = 'rgba(255,190,110,' + (0.22 * night).toFixed(2) + ')'; g.beginPath(); g.arc(tcx, tcy, rr * 2.3, 0, 7); g.fill(); }
+      g.fillStyle = '#b8b4a6'; g.beginPath(); g.arc(tcx, tcy, rr + 2, 0, 7); g.fill();
+      for (let i = 0; i < 8; i++){ g.fillStyle = pal[i % 4]; g.beginPath(); g.moveTo(tcx, tcy); g.arc(tcx, tcy, rr, i * Math.PI / 4, (i + 1) * Math.PI / 4); g.closePath(); g.fill(); }
+      g.strokeStyle = 'rgba(24,20,30,0.85)'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i < 8; i++){ g.moveTo(tcx, tcy); g.lineTo(tcx + Math.cos(i * Math.PI / 4) * rr, tcy + Math.sin(i * Math.PI / 4) * rr); } g.stroke();
+      g.beginPath(); g.arc(tcx, tcy, rr * 0.5, 0, 7); g.stroke(); g.beginPath(); g.arc(tcx, tcy, rr, 0, 7); g.stroke();
+      g.fillStyle = '#f0d060'; g.beginPath(); g.arc(tcx, tcy, rr * 0.22, 0, 7); g.fill();
+      break; }
+    case 'lab': {                                                                            // glass flask domes bubbling green
+      for (const f of [0.3, 0.68]){
+        const [x, y] = along(f), r = clamp(sm * 0.15, 6, 10);
+        g.fillStyle = 'rgba(30,60,40,0.5)'; g.beginPath(); g.arc(x + 1, y + 2, r + 1, 0, 7); g.fill();
+        g.fillStyle = 'rgba(120,255,140,0.6)'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+        g.strokeStyle = 'rgba(210,255,220,0.8)'; g.lineWidth = 1.2; g.stroke();
+        g.fillStyle = 'rgba(255,255,255,0.55)'; g.beginPath(); g.arc(x - r * 0.35, y - r * 0.35, r * 0.28, 0, 7); g.fill();
+        for (let i = 0; i < 3; i++){ const ph = (tt * 0.5 + i * 0.33 + f) % 1; g.fillStyle = 'rgba(190,255,190,' + (0.55 * (1 - ph)).toFixed(2) + ')'; g.beginPath(); g.arc(x + Math.sin(tt * 2 + i) * 2, y - ph * 18, 1.6 + ph, 0, 7); g.fill(); }
+      }
+      break; }
+    case 'library': {                                                                        // a big skylight cut through the ridge: clear glass, so you can see into the room; a warm lamplit tint at night
+      const k = skylightRect(rf), night = (village && village.tod != null) ? todLerp().night : 0;
+      g.save(); g.beginPath(); g.rect(k.x, k.y, k.w, k.h); g.clip();
+      g.fillStyle = night > 0.4 ? 'rgba(255,190,100,' + (0.16 * night).toFixed(2) + ')' : 'rgba(160,205,240,0.13)'; g.fillRect(k.x, k.y, k.w, k.h);
+      const sw = ((tt * 0.25 + rf.seed * 0.13) % 1.8) - 0.4; g.fillStyle = 'rgba(255,255,255,' + (night > 0.4 ? 0.06 : 0.16) + ')'; g.transform(1, 0, -0.5, 1, 0, 0); g.fillRect(k.x + k.w * sw + k.h * 0.25, k.y, k.w * 0.14, k.h); g.restore();
+      g.strokeStyle = '#2e2620'; g.lineWidth = 2.4; g.strokeRect(k.x, k.y, k.w, k.h);                                 // wooden frame
+      g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 1; g.strokeRect(k.x + 1.6, k.y + 1.6, k.w - 3.2, k.h - 3.2);
+      g.strokeStyle = '#2e2620'; g.lineWidth = 1.6; g.beginPath();                                                       // glazing bars
+      const cols = Math.max(2, Math.round((horiz ? k.w : k.h) / 20));
+      for (let i = 1; i < cols; i++){ if (horiz){ const x = k.x + k.w * i / cols; g.moveTo(x, k.y); g.lineTo(x, k.y + k.h); } else { const y = k.y + k.h * i / cols; g.moveTo(k.x, y); g.lineTo(k.x + k.w, y); } }
+      if (horiz){ g.moveTo(k.x, k.y + k.h / 2); g.lineTo(k.x + k.w, k.y + k.h / 2); } else { g.moveTo(k.x + k.w / 2, k.y); g.lineTo(k.x + k.w / 2, k.y + k.h); }
+      g.stroke();
+      g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(k.x, k.y + k.h + 1, k.w, 2);                                              // shadow under the sill
+      break; }
+    case 'forge': {                                                                          // a tall soot-black stack glowing at the mouth, heavy smoke and sparks
+      const [x, y] = along(0.75);
+      g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(x - 6 + 3, y - 9 + 4, 12, 16);
+      g.fillStyle = '#3a3230'; g.fillRect(x - 6, y - 14, 12, 18); g.fillStyle = '#524643'; g.fillRect(x - 6, y - 14, 4, 18);
+      g.fillStyle = '#211b1a'; g.fillRect(x - 8, y - 17, 16, 4);
+      const glow = 0.55 + 0.35 * Math.sin(tt * 7 + rf.seed); g.fillStyle = 'rgba(255,120,30,' + glow.toFixed(2) + ')'; g.fillRect(x - 5, y - 16, 10, 2.2);
+      for (let i = 0; i < 6; i++){ const ph = (tt * 0.35 + i * 0.17) % 1; g.fillStyle = 'rgba(60,56,58,' + (0.32 * (1 - ph)).toFixed(2) + ')'; g.beginPath(); g.arc(x + ph * 10 + Math.sin(tt + i) * 2, y - 18 - ph * 30, 3 + ph * 6, 0, 7); g.fill(); }
+      for (let i = 0; i < 3; i++){ const ph = (tt * 1.2 + i * 0.4) % 1; g.fillStyle = 'rgba(255,190,80,' + (1 - ph).toFixed(2) + ')'; g.fillRect(x + Math.sin(i * 5 + tt * 3) * 6, y - 18 - ph * 20, 1.6, 1.6); }
+      break; }
+    case 'barracks': {                                                                       // a banner on a pole, blowing in the wind
+      const [x, y] = along(0.5), ph = Math.sin(tt * 3) * 1.6;
+      g.fillStyle = '#4a3a2a'; g.fillRect(x - 1, y - 16, 2, 26);
+      g.fillStyle = '#a02a2a'; g.beginPath(); g.moveTo(x + 1, y - 16); g.lineTo(x + 17, y - 14 + ph); g.lineTo(x + 14, y - 8 - ph * 0.5); g.lineTo(x + 17, y - 3 + ph); g.lineTo(x + 1, y - 4); g.closePath(); g.fill();
+      g.strokeStyle = '#f0d060'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x + 5, y - 13); g.lineTo(x + 12, y - 5); g.moveTo(x + 12, y - 13); g.lineTo(x + 5, y - 5); g.stroke();
+      break; }
+    case 'market': {                                                                         // striped awning along the eaves
+      const n = Math.max(4, Math.round((horiz ? w : h) / 8));
+      for (let i = 0; i < n; i++){ g.fillStyle = i % 2 ? '#f2ead8' : '#c04a3a'; if (horiz) g.fillRect(rf.x0 + w * i / n, rf.y1 - 7, w / n + 0.5, 6); else g.fillRect(rf.x1 - 7, rf.y0 + h * i / n, 6, h / n + 0.5); }
+      const [x, y] = along(0.5); g.fillStyle = '#e8c860'; g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); g.strokeStyle = '#8a6a20'; g.stroke();
+      break; }
+    case 'granary': {                                                                        // a round grain-store lid with a hatch
+      const [x, y] = along(0.5), r = clamp(sm * 0.26, 8, 14);
+      g.fillStyle = 'rgba(0,0,0,0.28)'; g.beginPath(); g.arc(x + 2, y + 3, r, 0, 7); g.fill();
+      g.fillStyle = '#b89a52'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.strokeStyle = '#7a6230'; g.lineWidth = 1.2; g.stroke();
+      g.strokeStyle = 'rgba(90,70,30,0.6)'; g.beginPath(); g.moveTo(x - r, y); g.lineTo(x + r, y); g.moveTo(x, y - r); g.lineTo(x, y + r); g.stroke();
+      g.fillStyle = '#5a4a2a'; g.fillRect(x - 2.5, y - 2.5, 5, 5);
+      break; }
+  }
+}
 function drawChimney(x, y, seed){
   const w = 6, h = 11;
   octx.fillStyle = '#5a4a44'; octx.fillRect(x - w / 2, y - h, w, h);                    // brick stack
@@ -22306,13 +22997,16 @@ function drawRoofs(camx, camy){
   if (zone === 'village' && village && village.roofs && village.roofs.length){
     for (const rf of village.roofs){
       if (rf.x1 < camx - 40 || rf.x0 > camx + VUW + 40 || rf.y1 < camy - 40 || rf.y0 > camy + VUH + 40) continue;
-      const pen = Math.min(px - rf.ix0, rf.ix1 - px, py - rf.iy0, rf.iy1 - py);   // >0 once the player is past the inner wall face
+      let pen = Math.min(px - rf.ix0, rf.ix1 - px, py - rf.iy0, rf.iy1 - py);   // >0 once the player is past the inner wall face
+      if (rf.cells) pen = inRoom(rf, px, py) ? Math.max(pen, 7) : Math.min(pen, 0);      // irregular building: only inside the real floor plan
       let a = 1 - clamp(pen / 7, 0, 1);                                           // opaque outside; clears as soon as you step in, even hugging a wall
       a = a * a * (3 - 2 * a);
       if (a <= 0.02) continue;
       const [r, g, b] = rf.col, w = rf.x1 - rf.x0, h = rf.y1 - rf.y0;
       const dk = (r * 0.72) | 0, dg = (g * 0.72) | 0, db = (b * 0.72) | 0;
       octx.globalAlpha = a;
+      if (rf._path){ octx.save(); octx.translate(3, 4); octx.fillStyle = 'rgba(0,0,0,0.26)'; octx.fill(rf._path); octx.restore(); octx.save(); octx.clip(rf._path); }   // irregular building: shadow + clip to the real footprint
+      if (rf.role === 'library'){ const k = skylightRect(rf); octx.save(); octx.beginPath(); octx.rect(rf.x0 - 8, rf.y0 - 8, w + 16, h + 16); octx.rect(k.x, k.y, k.w, k.h); octx.clip('evenodd'); }   // cut the skylight out of the roof so the room shows through
       octx.fillStyle = 'rgba(0,0,0,0.26)'; octx.fillRect(rf.x0 + 3, rf.y0 + 4, w, h);        // drop shadow on the grass
       if (w >= h){                                                                          // ridge runs left↔right
         const g1 = octx.createLinearGradient(0, rf.y0, 0, rf.y0 + h / 2);
@@ -22336,7 +23030,10 @@ function drawRoofs(camx, camy){
       octx.fillStyle = 'rgba(255,255,255,0.1)'; octx.fillRect(rf.x0, rf.y0, w, 1); octx.fillRect(rf.x0, rf.y0, 1, h);
       octx.fillStyle = 'rgba(0,0,0,0.32)'; octx.fillRect(rf.x0, rf.y1 - 2, w, 2); octx.fillRect(rf.x1 - 2, rf.y0, 2, h);
       octx.strokeStyle = 'rgba(0,0,0,0.3)'; octx.lineWidth = 1; octx.strokeRect(rf.x0 + 0.5, rf.y0 + 0.5, w - 1, h - 1);
-      if (rf.hasChimney) drawChimney(rf.chimX, rf.chimY, rf.seed);   // inherits the same fading `a` — drawn while it's still the active globalAlpha
+      if (rf.role === 'library') octx.restore();
+      if (rf._edges) for (const e of rf._edges){ octx.fillStyle = e.c; octx.fillRect(e.x, e.y, e.w, e.h); }
+      if (rf.role) drawRoofRole(rf, w, h); else if (rf.hasChimney) drawChimney(rf.chimX, rf.chimY, rf.seed);
+      if (rf._path) octx.restore();   // inherits the same fading `a` — drawn while it's still the active globalAlpha
     }
     octx.globalAlpha = 1;
   }
@@ -22563,8 +23260,9 @@ function drawWallBlock(cx, cy, m){
       // the earlier fix's generic texture-fill cache never covered since this path doesn't go
       // through drawTexturedFill at all. Built once, reused forever after.
       octx.drawImage(getWinFrameSprite(), 0, 0, CELL, CELL, x, ty, CELL, CELL);
-      octx.fillStyle = winMat ? _hexA(winMat.arc.c1, 0.42) : 'rgba(150,205,225,0.4)';
-      octx.fillRect(x + 2, ty + 2, CELL - 4, CELL - 4);
+      if (!winMat && isChurchCell(cx, cy)) stainedGlass(octx, x + 2, ty + 2, CELL - 4, CELL - 4, cx * 5 + cy, 0.7);
+      else { octx.fillStyle = winMat ? _hexA(winMat.arc.c1, 0.42) : 'rgba(150,205,225,0.4)';
+      octx.fillRect(x + 2, ty + 2, CELL - 4, CELL - 4); }
       octx.strokeStyle = 'rgba(0,0,0,0.3)'; octx.lineWidth = 1;
       octx.beginPath();
       octx.moveTo(x + CELL/2, ty + 2); octx.lineTo(x + CELL/2, ty + CELL - 2);
@@ -22637,21 +23335,25 @@ function drawWallBlock(cx, cy, m){
       const wH = Math.max(6, (H - 2) * 0.6);
       const wy0 = fFy - overhang;
       octx.fillStyle = 'rgba(18,14,10,0.5)'; octx.fillRect(wx0 - 1, wy0 - 1, wW + 2, wH + 2);   // reveal / recess shadow
-      octx.fillStyle = 'rgba(150,196,220,0.42)'; octx.fillRect(wx0, wy0, wW, wH);               // glass
-      octx.fillStyle = 'rgba(235,248,255,0.34)'; octx.fillRect(wx0, wy0, wW, 1);                // top glint
-      octx.strokeStyle = 'rgba(0,0,0,0.30)'; octx.lineWidth = 1;                                // muntin cross
-      octx.beginPath();
-      octx.moveTo(x + CELL / 2, wy0); octx.lineTo(x + CELL / 2, wy0 + wH);
-      octx.moveTo(wx0, wy0 + wH / 2); octx.lineTo(wx0 + wW, wy0 + wH / 2);
-      octx.stroke();
-      octx.strokeStyle = frameCol; octx.lineWidth = 1;                                          // frame
-      octx.strokeRect(wx0 - 1, wy0 - 1, wW + 2, wH + 2);
+      if (isChurchCell(cx, cy)) stainedGlass(octx, wx0 + 1, wy0 + 4.5, wW - 2, Math.max(5, wH - 3), cx * 5 + cy, 1);   // pointed stained-glass window, dropped a little so the arch clears the roof edge
+      else {
+        octx.fillStyle = 'rgba(150,196,220,0.42)'; octx.fillRect(wx0, wy0, wW, wH);             // glass
+        octx.fillStyle = 'rgba(235,248,255,0.34)'; octx.fillRect(wx0, wy0, wW, 1);              // top glint
+        octx.strokeStyle = 'rgba(0,0,0,0.30)'; octx.lineWidth = 1;                              // muntin cross
+        octx.beginPath();
+        octx.moveTo(x + CELL / 2, wy0); octx.lineTo(x + CELL / 2, wy0 + wH);
+        octx.moveTo(wx0, wy0 + wH / 2); octx.lineTo(wx0 + wW, wy0 + wH / 2);
+        octx.stroke();
+        octx.strokeStyle = frameCol; octx.lineWidth = 1;                                        // frame
+        octx.strokeRect(wx0 - 1, wy0 - 1, wW + 2, wH + 2);
+      }
       octx.fillStyle = _tone(MAT_COL[m] || '#8a6a44', 0.06);                                    // sill right under the pane, not fixed at the ground anymore
       octx.fillRect(wx0 - 1.5, wy0 + wH - 0.5, wW + 3, 1.5);
     } else {
       // an interior / non-south wall has no visible face — keep a small pane on the top surface
       const px = x + 3.5, pw = CELL - 7;
-      octx.fillStyle = 'rgba(150,205,225,0.30)'; octx.fillRect(px, ty + 3.5, pw, pw);
+      if (isChurchCell(cx, cy)) stainedGlass(octx, px, ty + 3.5, pw, pw, cx * 5 + cy, 0.7);
+      else { octx.fillStyle = 'rgba(150,205,225,0.30)'; octx.fillRect(px, ty + 3.5, pw, pw); }
       octx.fillStyle = 'rgba(232,248,255,0.34)'; octx.fillRect(px, ty + 3.5, pw, 1.6);
       octx.strokeStyle = 'rgba(0,0,0,0.26)'; octx.lineWidth = 1;
       octx.beginPath();
@@ -23479,7 +24181,9 @@ function drawActor(a){
     octx.beginPath();
     octx.moveTo(a.x, a.y - R - 16); octx.lineTo(a.x - 4, a.y - R - 21); octx.lineTo(a.x + 4, a.y - R - 21);
     octx.closePath(); octx.fill();
-    if (a._name){
+    if (a._isGuard && a._met === undefined) a._met = !!(village && village.villagers.some(v => v.id === a._vid && v.met));
+    const _gd = a._isGuard ? Math.hypot(a.x - player.x, a.y - player.y) : 0;
+    if (a._name && (!a._isGuard || (a._met && _gd < 120))){                     // permanent village guards follow the villager rule: name only once met, and only when you're close
       const nm = a._name.split(' ')[0];
       octx.font = '9px "Courier New",monospace'; octx.textAlign = 'center';
       const nw = octx.measureText(nm).width;
@@ -23544,13 +24248,16 @@ function drawActor(a){
       }
     }
     if (a.villager && a._met === undefined) a._met = !!(village && village.villagers.some(v => v.id === a._vid && v.met));
-    if ((a.isTarget || (a.villager && a._met)) && a._name){
+    const _nd = (a.villager && player) ? Math.hypot(a.x - player.x, a.y - player.y) : 0;
+    if (a._name && (a.isTarget || (a.villager && a._met && _nd < 120))){            // villager tags only show when you're standing close (they fade in over the last stretch)
+      const na = a.villager ? clamp((120 - _nd) / 50, 0, 1) : 1;
+      octx.globalAlpha = na;
       octx.fillStyle = 'rgba(0,0,0,0.55)'; octx.font = '9px "Courier New",monospace'; octx.textAlign = 'center';
       const nw = octx.measureText(a._name).width;
       octx.fillRect(a.x - nw/2 - 3, a.y - R - 24, nw + 6, 11);
       octx.fillStyle = a.villager ? '#bcd0e0' : '#ffe6a0';
       octx.fillText(a._name, a.x, a.y - R - 15);
-      octx.textAlign = 'left';
+      octx.textAlign = 'left'; octx.globalAlpha = 1;
     }
   }
   if (a._dog) drawDog(a._dog, a);
@@ -25904,7 +26611,7 @@ window.__G = () => ({ player, enemies, props, pickups, bullets, calledShots, par
   _fn: { A, get texFillCacheSize(){ return _texFillCache.size; }, get texFillCacheKeys(){ return [..._texFillCache.keys()]; }, drawWallBlock, drawTexturedFill, get fastGlow(){ return FAST_GLOW; }, set fastGlow(v){ FAST_GLOW = !!v; },
     damageCell, explode, attack, damage, cellSolid, cellMat, spawnEnemy, populateCityStreets, spawnFromSpec,
          killActor, hurtProp, freezeActor, petrifyActor, spawnPuddle, spawnIceStatue, addHazard, weaponFx, breakNearbyErrandItem, explode, get hazards(){ return hazards; },
-         get specialProps(){ return specialProps; }, get warningCars(){ return warningCars; }, get panicCars(){ return panicCars; }, get kennelPets(){ return kennelPets; }, get ambientCars(){ return ambientCars; }, get rollingBarrels(){ return rollingBarrels; }, get weatherObj(){ return weather; }, updatePanicCars, updateKennelPets, hurtKennelPet, updateAmbientTraffic, updateRollingBarrels, updateHazards, findPath, get thrownItems(){ return thrownItems; }, updateThrown, LIFTABLE_PROPS, grantTempTrait, grantRandomTempTrait, clearTempTraits, get quests(){ return quests; }, completeQuest, updateQuestHUD, questTargetPos, questLabel, PLAYER_TRAITS,
+         get specialProps(){ return specialProps; }, get warningCars(){ return warningCars; }, get panicCars(){ return panicCars; }, get kennelPets(){ return kennelPets; }, get ambientCars(){ return ambientCars; }, get rollingBarrels(){ return rollingBarrels; }, get weatherObj(){ return weather; }, updatePanicCars, updateKennelPets, hurtKennelPet, forceScenePal(n){ _scenePalForce = n; }, setCell, noteEdit, recomputeRoofs, MAT, openChat, chatAct, chatWorldFacts, updateAmbientTraffic, updateRollingBarrels, updateHazards, findPath, get thrownItems(){ return thrownItems; }, updateThrown, LIFTABLE_PROPS, grantTempTrait, grantRandomTempTrait, clearTempTraits, get quests(){ return quests; }, completeQuest, updateQuestHUD, questTargetPos, questLabel, PLAYER_TRAITS,
          enterCar, exitCar, get drivingCar(){ return drivingCar; }, maybeSpawnTurfWar, lightningStrike, updateSpecialProps,
          get wanted(){ return wanted; }, set wanted(v){ wanted = v; }, wantedTier, keys, updatePlayer,
          tryInteract, updateEnemy, get paused(){ return paused; }, get gameOver(){ return gameOver; }, get winOpenNow(){ return winOpen; },
