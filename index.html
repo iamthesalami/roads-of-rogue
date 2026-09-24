@@ -506,12 +506,24 @@
   #smithy .rowline .row{flex:1;min-width:0}
   #smithy .eq{background:#182a1a;border:1px solid #3a6a2a;color:#bfe8a0;padding:6px 8px;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
   #smithy .eq:hover{border-color:#9ad46a;color:#fff}
+  #smithy .eq.on{border-color:#ffe6a0;color:#fff;background:#2a3a1a}
+  #smithy .tabs{display:flex;gap:6px;justify-content:center;margin:4px 0 8px}
+  #smithy .list.short{max-height:96px}
+  #smithy .vdetail{display:flex;gap:12px;align-items:flex-start;margin:6px 0 8px}
+  #smithy #vetport{width:120px;height:130px;border:1px solid #4a3220;flex:none}
+  #smithy .vstats{flex:1;font-size:12px;color:#e8d8c4;display:flex;flex-direction:column;gap:3px}
+  #smithy .vstats i{color:#a89078;font-style:normal;font-size:11px}
+  #smithy .xpbar{height:6px;background:#241a12;border:1px solid #4a3220;margin-top:2px}
+  #smithy .xpbar span{display:block;height:100%;background:#e8b04a}
+  #smithy .loadouts{margin:6px 0 12px;display:flex;flex-direction:column;gap:4px}
+  #smithy .lo{flex:1;min-width:0;background:#241a12;border:1px solid #4a3220;color:#e8d8c4;padding:6px 10px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #smithy .opts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
   #smithy .opts button,#smithy .foot button{background:#2a1c12;border:1px solid #b8763a;color:#f0e0cc;padding:7px;
     font:inherit;font-size:11px;cursor:pointer}
   #smithy .opts button:hover:not(:disabled),#smithy .foot button:hover{border-color:#ffe6a0;color:#fff}
   #smithy button:disabled{opacity:.4;cursor:default}
-  #smithy .swatches{display:flex;gap:6px;justify-content:center;margin:6px 0 10px}
+  #smithy .swatches{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0 10px}
+  #smithy #forgeprev{display:block;margin:4px auto 2px;width:100%;max-width:300px;border:1px solid #4a3220;image-rendering:auto}
   #smithy .sw{width:22px;height:22px;border:2px solid #4a3220;cursor:pointer}
   #smithy .sw.on{border-color:#fff}
   #smithy .foot{text-align:center;margin-top:8px}
@@ -1102,7 +1114,7 @@ function registerYardBuilds(){
 // these to stage them (proposed pacing: Temple/Barracks/cult = 2, Watchtower/Town tier = 3).
 const FEATURES = [
   { id: 'shrine',      name: 'Shrines',       country: 1, need: 'the cult (10 villagers)', when: () => !!(village && village.cult), blurb: 'small Favor sources' },
-  { id: 'blacksmith',  name: 'Blacksmith',    country: 1, need: 'take your first city', when: () => firstCityTaken(), blurb: 'upgrade, infuse and recolour weapons — also equips you from the armory' },
+  { id: 'blacksmith',  name: 'Blacksmith',    country: 1, need: 'take your first city', when: () => firstCityTaken(), blurb: 'forge weapons: upgrade, infuse and recolour (send them to the weapon rack from here)' },
   { id: 'market',      name: 'Market Stall',  country: 1, need: 'Village rank', when: () => ((village && village.tier) || 0) >= 1, blurb: '+8 cash a day' },
   { id: 'granary',     name: 'Granary',       country: 1, need: 'Village rank', when: () => ((village && village.tier) || 0) >= 1, blurb: '+5 food a day' },
   { id: 'scriptorium', name: 'Scriptorium',   country: 1, need: 'take your first city', when: () => firstCityTaken(), blurb: '+4 research a day' },
@@ -3181,7 +3193,7 @@ function helpSections(){
     <h4>Faith &amp; war buildings <span class="dim">(unlock with the cult)</span></h4><ul>
     <li><b>Altar</b> — the heart of the cult; required for ranks.</li>
     <li><b>Shrine</b> — cheap, one tile. Each yields Favor, more with devout villagers living nearby (up to 3 per shrine). Also protects nearby homes from dark shrines. Build many.</li>
-    <li><b>Blacksmith</b> — press ${HK('E')} to upgrade, infuse and recolour weapons, or Equip one straight off the armory rack (see Weapons).</li>
+    <li><b>Blacksmith</b> — press ${HK('E')} to upgrade, infuse and recolour weapons, then send them "To rack". At the <b>Weapon rack</b> press ${HK('E')} to build your belt, save up to three kits, and (Squad &amp; gear tab) choose each villager's weapon and armour — they level up with every raid they survive. Forge armour at the Smithy.</li>
     <li><b>Weapon rack</b> — the village armory; arms your squad and guards.</li>
     <li><b>Standing torch</b> — light.</li></ul>
     <h4>Town buildings <span class="dim">(up to ${typeof TOWN_BUILD_CAP !== 'undefined' ? TOWN_BUILD_CAP : 3} of each count)</span></h4><ul>${(typeof TOWN_BUILDINGS !== 'undefined' ? TOWN_BUILDINGS : []).map(b => '<li><b>' + b.name + '</b> — ' + b.blurb + ' <span class="dim">(costs ' + Object.keys(b.cost).map(k => b.cost[k] + ' ' + k).join(', ') + ')</span></li>').join('')}</ul>
@@ -3956,7 +3968,7 @@ const PIECE_DESC = {
   altar: 'The heart of the cult. Required for village ranks; villagers can be sat down and preached to here.',
   shrine: 'A small shrine. Makes Favor every day — more with devout villagers living near it — and protects nearby homes from dark shrines.',
   blacksmith: 'Press E beside it to upgrade weapons, infuse them with elements (Sacred Fire research) and recolour them.',
-  weaponrack: 'The village armory. Holds spare weapons for your guards and muster squad — visit the Blacksmith to Equip one for yourself.',
+  weaponrack: 'The village armory. Holds spare weapons for your guards and muster squad — press E at it to build your belt and save kits.',
   mutlab: 'Press E beside it to spend boss DNA mutating a villager — a random look and a random gift.',
 };
 function pieceInfo(id, name){
@@ -4416,8 +4428,8 @@ function closeNgPlusFlee(){
 // Works on weapons in the cult's armory rack AND the ones in your own quick slots / pack (tools and
 // fists excluded). Costs Favor (+ a little stone) — the reason to build shrines. The result is just a
 // new weapon id (see forgedId), swapped in place, so nothing else in the game needs to know.
-let smithyOpen = false, smithySel = null;
-const FORGE_COLORS = ['#c9c9d2', '#e8b04a', '#d05a4a', '#4aa0d8', '#6fbf3a', '#a06ad8', '#2a2a32', '#f0eee0'];
+let smithyOpen = false, smithySel = null, smithyMode = 'smithy';
+const FORGE_COLORS = ['#c9c9d2', '#e8b04a', '#d05a4a', '#4aa0d8', '#6fbf3a', '#a06ad8', '#2a2a32', '#f0eee0', '#e07a2a', '#3ad8c8', '#e06aa8', '#7a4a2a', '#8a1a2a', '#1a3a7a', '#b8d84a', '#5a5a66'];
 const FORGE_MAX_TIER = 3;
 const forgeTierCost = t => ({ favor: 8 * (t + 1), stone: 3 * (t + 1) });   // cost to go from tier t to t+1
 const FORGE_FX_COST = { favor: 12, stone: 2 };
@@ -4438,6 +4450,195 @@ function smithySlotSet(e, id){
 // player had no way to actually take one off the rack for themselves. Equip pulls it into your belt
 // (grows a new quick slot if you have room, otherwise swaps out whatever's in your current slot and
 // racks that instead) so the rack doubles as a pick-your-loadout screen before a raid.
+// ===== VETERANS: levels, armour and squad gear =====
+// every villager can level up by surviving raids with the squad (XP per raid + per kill), which raises their HP, damage
+// and damage reduction; armour is crafted at the Smithy or recovered from won raids and worn from the Armory's Squad tab
+const ARMOR = {
+  leather: { name: 'Leather Vest', dr: 0.10, col: '#8a5a30', cost: { wood: 6 } },
+  chain:   { name: 'Chain Mail',   dr: 0.20, col: '#9aa2ac', cost: { stone: 8, favor: 4 } },
+  plate:   { name: 'Plate Armour', dr: 0.32, col: '#c9ced8', cost: { stone: 16, favor: 10 }, req: 'tempering' },
+};
+const VL_MAX = 12;
+const vLvl = rec => Math.min(VL_MAX, (rec && rec.lvl) || 1);
+const vXpNext = l => 60 + 40 * l;
+function vStats(rec){
+  const l = vLvl(rec), a = rec && ARMOR[rec.armor], lvlDr = Math.min(0.15, 0.012 * (l - 1));
+  return { lvl: l, hpMul: 1 + 0.10 * (l - 1), dmgMul: 1 + 0.07 * (l - 1), armorDR: a ? a.dr : 0, dr: Math.min(0.6, (a ? a.dr : 0) + lvlDr) };
+}
+function applyVetStats(e, rec){ const st = vStats(rec); e._lvl = st.lvl; e._lvlDmg = st.dmgMul; e._armorDR = st.dr; e._armor = (rec && rec.armor) || null; return st; }
+function armorCostText(c){ return Object.keys(c).map(k => c[k] + ' ' + k).join(' + '); }
+function canCraftArmor(k){
+  const a = ARMOR[k]; if (!a || !village || !player) return false;
+  if (a.req && !(village.research && village.research[a.req])) return false;
+  return (a.cost.wood || 0) <= (player.res.wood || 0) && (a.cost.stone || 0) <= (player.res.stone || 0) && (a.cost.favor || 0) <= (village.stores.favor | 0);
+}
+function craftArmor(k){
+  if (!canCraftArmor(k)) return;
+  const a = ARMOR[k]; player.res.wood -= a.cost.wood || 0; player.res.stone = (player.res.stone || 0) - (a.cost.stone || 0); village.stores.favor -= a.cost.favor || 0;
+  (village.armorStock ||= []).push(k);
+  A.S.thud(); burst(player.x, player.y, 10, '#c9ced8', 180); flash('Forged: ' + a.name, '#c8b48a', 'wear it from the Armory (Squad & gear)');
+  saveVillage(true); savePlayer(); buildInvUI(); syncHUD();
+}
+// after a raid: every squad member who came home gains XP (more for kills and for a won raid) and may level up
+function squadDebrief(won){
+  if (!village || !village.squad || !village.squad.length) return;
+  const ups = [];
+  for (const id of village.squad){
+    const rec = village.villagers.find(v => v.id === id); if (!rec) continue;
+    rec.raids = (rec.raids || 0) + 1;
+    rec.xp = (rec.xp || 0) + 40 + 8 * (rec.runKills || 0) + (won ? 60 : 0); rec.runKills = 0;
+    rec.lvl = rec.lvl || 1; let up = false;
+    while (rec.lvl < VL_MAX && rec.xp >= vXpNext(rec.lvl)){ rec.xp -= vXpNext(rec.lvl); rec.lvl++; up = true; }
+    if (rec.lvl >= VL_MAX) rec.xp = 0;
+    if (up) ups.push(firstName(rec) + ' → Lv ' + rec.lvl);
+  }
+  if (won && (village.armorStock || []).length < 30){
+    const r = Math.random(), k = r < 0.6 ? 'leather' : r < 0.9 ? 'chain' : 'plate';
+    (village.armorStock ||= []).push(k);
+    setTimeout(() => flash('Armour recovered: ' + ARMOR[k].name, '#c8b48a', 'waiting in the Armory'), 2800);
+  }
+  saveVillage(true);
+  if (ups.length) setTimeout(() => flash('Veterans grow stronger', '#ffd98a', ups.join('  ·  ')), 1800);
+}
+// the armour a villager wears, drawn over the front-view torso (in-world sprite and the Armory portrait share it)
+function drawArmorOverlay(g, R, id, HX){
+  const a = ARMOR[id]; if (!a) return;
+  g.fillStyle = a.col; g.fillRect(-R * 0.66, -R * 1.72, R * 1.32, R * 1.02);
+  g.fillStyle = 'rgba(0,0,0,0.28)'; g.fillRect(-R * 0.66, -R * 0.82, R * 1.32, R * 0.12);
+  g.fillStyle = 'rgba(255,255,255,0.28)'; g.fillRect(-R * 0.66, -R * 1.72, R * 1.32, R * 0.16);
+  if (id === 'leather'){ g.strokeStyle = 'rgba(40,24,10,0.6)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(0, -R * 1.7); g.lineTo(0, -R * 0.74); g.stroke(); }
+  else if (id === 'chain'){ g.fillStyle = 'rgba(40,46,54,0.35)'; for (let i = 0; i < 4; i++) g.fillRect(-R * 0.62, -R * 1.55 + i * R * 0.22, R * 1.24, 0.9); }
+  else if (id === 'plate'){
+    g.fillStyle = a.col; g.fillRect(-R * 0.92, -R * 1.72, R * 0.36, R * 0.42); g.fillRect(R * 0.56, -R * 1.72, R * 0.36, R * 0.42);          // pauldrons
+    g.fillStyle = '#7a828e'; for (const rx of [-0.45, 0.45]) g.fillRect(R * rx - 0.6, -R * 1.5, 1.4, 1.4);
+    g.fillStyle = a.col; g.beginPath(); g.arc(HX + R * 0.5, -R * 2.5, R * 0.62, Math.PI, 0); g.closePath(); g.fill();                        // helm
+    g.fillStyle = '#3a4048'; g.fillRect(HX + R * 0.18, -R * 2.52, R * 0.64, R * 0.12);
+  }
+}
+function drawVetPortrait(cv, rec){
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height, R = 12, tn = performance.now() / 1000;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
+  const bg = g.createRadialGradient(W / 2, H * 0.55, 8, W / 2, H * 0.55, W * 0.7); bg.addColorStop(0, '#5a4028'); bg.addColorStop(1, '#1a120a'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  g.save(); g.translate(W / 2, H - 8); g.scale(3.4, 3.4);
+  const skin = rec.skin || '#f0c9a0', hair = rec.hair || '#3a2a1a', shirt = rec.shirt || '#4a6a9a', HX = -R * 0.5 + R * 0.12;
+  g.fillStyle = '#3a3a46'; g.fillRect(-R * 0.5, -R * 0.75, R * 0.42, R * 0.75); g.fillRect(R * 0.08, -R * 0.75, R * 0.42, R * 0.75);
+  g.fillStyle = shirt; g.fillRect(-R * 0.62, -R * 1.7, R * 1.24, R * 1.0); g.fillRect(-R * 0.82, -R * 1.55, R * 0.28, R * 0.8); g.fillRect(R * 0.54, -R * 1.55, R * 0.28, R * 0.8);
+  g.fillStyle = skin; g.fillRect(HX, -R * 2.55, R * 1.0, R * 0.95); g.fillStyle = hair; g.fillRect(HX, -R * 2.6, R * 1.0, R * 0.4);
+  g.fillStyle = '#1a1a1a'; g.fillRect(-R * 0.22, -R * 2.0, 2, 2); g.fillRect(R * 0.08, -R * 2.0, 2, 2);
+  if (rec.armor) drawArmorOverlay(g, R, rec.armor, HX);
+  if (rec.armed && WEAPONS[rec.armed]){ const wp = WEAPONS[rec.armed]; g.save(); g.translate(R * 0.9, -R * 1.0); g.rotate(-0.5); try { drawHeldWeapon(g, { weapon: rec.armed, dir: 0, swing: 0, muzzle: 0, r: R, animT: tn }, R, 0, 0, 1, wp, wp._base || rec.armed); } catch (e) {} g.restore(); }
+  try { drawMutOverlays(g, rec.mut || [], R, 1, 'S', HX, tn); } catch (e) {}
+  g.restore();
+}
+// LOADOUT PRESETS: three named belts saved from the Smithy. Loading one rebuilds your belt from
+// whatever you currently hold across belt + pack + armory (racking what you swap out), and reports
+// anything in the preset that has since been lost or used up.
+const LOADOUT_N = 3;
+function loadoutNames(ids){ return ids.filter(id => id && id !== 'fists').map(id => (WEAPONS[id] || { name: id }).name).join(', ') || 'bare hands'; }
+function saveLoadout(i){
+  village.loadouts ||= [null, null, null];
+  village.loadouts[i] = { ids: player.quick.slice(0, 5) };
+  saveVillage(true); flash('Kit ' + (i + 1) + ' saved', '#c8e8a0', loadoutNames(player.quick));
+}
+function applyLoadout(i){
+  const L = village.loadouts && village.loadouts[i]; if (!L) return;
+  village.armory ||= []; player.pack ||= [];
+  const beltPool = player.quick.slice(), next = [], missing = [];
+  const take = (arr, id) => { const k = arr.indexOf(id); if (k < 0) return false; arr.splice(k, 1); return true; };
+  for (const id of L.ids){
+    if (id === 'fists'){ next.push('fists'); continue; }
+    if (take(beltPool, id) || take(village.armory, id) || take(player.pack, id)) next.push(id); else missing.push((WEAPONS[id] || { name: id }).name);
+  }
+  for (const id of beltPool) if (id && id !== 'fists') village.armory.push(id);
+  if (!next.length) next.push('fists');
+  player.quick = next; player.slot = 0;
+  saveVillage(true); savePlayer(); syncHUD();
+  flash('Kit ' + (i + 1) + ' equipped', '#c8e8a0', loadoutNames(next) + (missing.length ? '  ·  missing: ' + missing.join(', ') : ''));
+}
+// send a belt/pack weapon to the rack (the Smithy is for forging; the rack is where kits are built)
+function rackStore(e){
+  if (!e || e.src === 'armory') return;
+  village.armory ||= [];
+  if (e.src === 'quick'){
+    const id = player.quick[e.i]; if (!id || id === 'fists') return;
+    player.quick.splice(e.i, 1); if (!player.quick.length) player.quick.push('fists');
+    if (player.slot >= player.quick.length) player.slot = player.quick.length - 1;
+    village.armory.push(id);
+  } else { const id = player.pack[e.i]; if (!id) return; player.pack.splice(e.i, 1); village.armory.push(id); }
+  saveVillage(true); savePlayer(); syncHUD(); buildInvUI();
+}
+function armoryTakeBelt(i){
+  const id = player.quick[i]; if (!id || id === 'fists') return;
+  player.quick.splice(i, 1); if (!player.quick.length) player.quick.push('fists');
+  if (player.slot >= player.quick.length) player.slot = player.quick.length - 1;
+  village.armory.push(id); saveVillage(true); savePlayer(); syncHUD();
+}
+let armoryTab = 'belt', squadSel = null;
+function armoryTabs(){ return '<div class="tabs"><button class="eq' + (armoryTab === 'belt' ? ' on' : '') + '" data-tab="belt">Belt & kits</button><button class="eq' + (armoryTab === 'squad' ? ' on' : '') + '" data-tab="squad">Squad & gear</button></div>'; }
+function bindArmoryTabs(){ $('smithy').querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { armoryTab = b.dataset.tab; buildArmoryUI(); })); }
+function liveActorOf(rec){ return enemies.find(e => e._vid === rec.id && e.soldier && !e.dead) || null; }
+function buildSquadUI(){
+  clearInterval(_mutIv);
+  village.armory ||= []; village.armorStock ||= [];
+  const vs = village.villagers.slice().sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || vLvl(b) - vLvl(a) || String(a.name).localeCompare(String(b.name)));
+  if (!squadSel || !vs.some(v => v.id === squadSel)) squadSel = vs.length ? vs[0].id : null;
+  const sel = vs.find(v => v.id === squadSel), wn = id => (WEAPONS[id] || { name: id }).name;
+  let html = '<div class="panel"><h2>THE ARMORY</h2><p class="sub">equip your people — the ones who survive raids grow stronger</p>' + armoryTabs();
+  if (!vs.length) html += '<p class="sub">no villagers yet</p>';
+  else {
+    html += '<div class="list">' + vs.map(v => '<button class="row' + (v.id === squadSel ? ' sel' : '') + '" data-v="' + v.id + '">' + (v.pinned ? '★ ' : '') + firstName(v) + '  ·  Lv ' + vLvl(v) + (v.armor ? '  ·  ' + ARMOR[v.armor].name : '') + (v.armed ? '  ·  ' + wn(v.armed) : '') + '</button>').join('') + '</div>';
+    const st = vStats(sel), base = (village.research && village.research.drill) ? 105 : 85, hp = Math.round(base * st.hpMul), taken = Math.round((1 - 0.8 * (1 - st.dr)) * 100);
+    const need = vXpNext(st.lvl), xpPct = st.lvl >= VL_MAX ? 100 : Math.min(100, Math.round(((sel.xp || 0) / need) * 100));
+    html += '<div class="vdetail"><canvas id="vetport" width="120" height="130"></canvas><div class="vstats"><b>' + (sel.name || '?') + '</b> <i>' + (sel.job || 'villager') + '</i>'
+      + '<div class="xpbar"><span style="width:' + xpPct + '%"></span></div><small>Lv ' + st.lvl + (st.lvl >= VL_MAX ? ' (max)' : '  ·  ' + (sel.xp || 0) + ' / ' + need + ' xp') + '</small>'
+      + '<div>HP <b>' + hp + '</b></div><div>Damage <b>+' + Math.round((st.dmgMul - 1) * 100) + '%</b></div><div>Damage taken <b>-' + taken + '%</b></div>'
+      + '<div>Raids <b>' + (sel.raids || 0) + '</b> · Kills <b>' + (sel.kills || 0) + '</b></div>'
+      + '<button class="eq' + (sel.pinned ? ' on' : '') + '" data-a2="pin">' + (sel.pinned ? '★ Marches on raids' : '☆ Bring on raids') + '</button></div></div>';
+    html += '<p class="sub">WEAPON — ' + (sel.armed ? wn(sel.armed) : 'bare hands') + '</p><div class="list short">' + (sel.armed ? '<div class="rowline"><span class="lo">take it back to the rack</span><button class="eq" data-a2="unarm">Unequip</button></div>' : '')
+      + (village.armory.length ? village.armory.map((id, i) => '<div class="rowline"><span class="lo">' + wn(id) + '</span><button class="eq" data-give="' + i + '">Give</button></div>').join('') : '<p class="sub">the rack is empty</p>') + '</div>';
+    html += '<p class="sub">ARMOUR — ' + (sel.armor ? ARMOR[sel.armor].name + ' (-' + Math.round(ARMOR[sel.armor].dr * 100) + '%)' : 'none') + '</p><div class="list short">' + (sel.armor ? '<div class="rowline"><span class="lo">take it off</span><button class="eq" data-a2="unwear">Remove</button></div>' : '')
+      + (village.armorStock.length ? village.armorStock.map((k, i) => '<div class="rowline"><span class="lo">' + ARMOR[k].name + ' (-' + Math.round(ARMOR[k].dr * 100) + '%)</span><button class="eq" data-wear="' + i + '">Wear</button></div>').join('') : '<p class="sub">no spare armour — forge some at the Smithy or win it back from raids</p>') + '</div>';
+  }
+  html += '<div class="foot"><button id="smithyclose">Leave</button></div></div>';
+  $('smithy').innerHTML = html; bindArmoryTabs();
+  const refresh = () => { saveVillage(true); savePlayer(); buildSquadUI(); };
+  const live = () => { const e = sel && liveActorOf(sel); if (e){ const s2 = applyVetStats(e, sel); e.weapon = sel.armed || 'fists'; e.maxhp = Math.round(((village.research && village.research.drill) ? 105 : 85) * s2.hpMul); e.hp = Math.min(e.hp, e.maxhp); } };
+  $('smithy').querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => { squadSel = b.dataset.v; buildSquadUI(); }));
+  $('smithy').querySelectorAll('[data-a2]').forEach(b => b.addEventListener('click', () => {
+    const a = b.dataset.a2;
+    if (a === 'pin') sel.pinned = !sel.pinned;
+    else if (a === 'unarm' && sel.armed){ village.armory.push(sel.armed); sel.armed = null; sel.gearSet = !!sel.armor; }
+    else if (a === 'unwear' && sel.armor){ village.armorStock.push(sel.armor); sel.armor = null; }
+    live(); refresh();
+  }));
+  $('smithy').querySelectorAll('[data-give]').forEach(b => b.addEventListener('click', () => { const id = village.armory.splice(+b.dataset.give, 1)[0]; if (id === undefined) return; if (sel.armed) village.armory.push(sel.armed); sel.armed = id; sel.gearSet = true; live(); refresh(); }));
+  $('smithy').querySelectorAll('[data-wear]').forEach(b => b.addEventListener('click', () => { const k = village.armorStock.splice(+b.dataset.wear, 1)[0]; if (!k) return; if (sel.armor) village.armorStock.push(sel.armor); sel.armor = k; sel.gearSet = true; live(); refresh(); }));
+  const pc = $('vetport'); if (pc && sel) drawVetPortrait(pc, sel);
+  $('smithyclose').addEventListener('click', closeSmithy);
+}
+function buildArmoryUI(){
+  if (armoryTab === 'squad') return buildSquadUI();
+  clearInterval(_mutIv);
+  village.armory ||= [];
+  const nm = id => (WEAPONS[id] || { name: id }).name;
+  let html = '<div class="panel"><h2>THE ARMORY</h2><p class="sub">build your belt from the rack — forge new weapons at the Smithy</p>' + armoryTabs();
+  html += '<p class="sub">ON YOUR BELT (' + player.quick.length + '/5)</p><div class="list">';
+  html += player.quick.map((id, i) => '<div class="rowline"><span class="lo">' + (i + 1) + '. ' + (id === 'fists' ? 'Fists' : nm(id)) + '</span>' + (id !== 'fists' ? '<button class="eq" data-belt="' + i + '">To rack</button>' : '') + '</div>').join('') + '</div>';
+  html += '<p class="sub">ON THE RACK (' + village.armory.length + ')</p><div class="list">';
+  html += village.armory.length ? village.armory.map((id, i) => '<div class="rowline"><span class="lo">' + nm(id) + '</span><button class="eq" data-rack="' + i + '">Equip →</button></div>').join('') : '<p class="sub">empty — send weapons here from the Smithy or your belt</p>';
+  html += '</div><div class="loadouts"><p class="sub">SAVED KITS</p>';
+  for (let i = 0; i < LOADOUT_N; i++){
+    const L = village.loadouts && village.loadouts[i];
+    html += '<div class="rowline"><span class="lo">Kit ' + (i + 1) + ': ' + (L ? loadoutNames(L.ids) : 'empty') + '</span><button class="eq" data-lo="save" data-i="' + i + '">Save belt</button><button class="eq" data-lo="load" data-i="' + i + '"' + (L ? '' : ' disabled') + '>Equip</button></div>';
+  }
+  html += '</div><div class="foot"><button id="smithyclose">Leave</button></div></div>';
+  $('smithy').innerHTML = html;
+  bindArmoryTabs();
+  $('smithy').querySelectorAll('[data-belt]').forEach(b => b.addEventListener('click', () => { armoryTakeBelt(+b.dataset.belt); buildArmoryUI(); }));
+  $('smithy').querySelectorAll('[data-rack]').forEach(b => b.addEventListener('click', () => { smithyEquip({ src: 'armory', i: +b.dataset.rack }); buildArmoryUI(); }));
+  $('smithy').querySelectorAll('[data-lo]').forEach(b => b.addEventListener('click', () => { (b.dataset.lo === 'save' ? saveLoadout : applyLoadout)(+b.dataset.i); buildArmoryUI(); }));
+  $('smithyclose').addEventListener('click', closeSmithy);
+}
 function smithyEquip(e){
   if (e.src !== 'armory' || !village.armory) return;
   const id = village.armory[e.i]; if (id === undefined) return;
@@ -4468,14 +4669,30 @@ function forgeApply(e, kind, val){
   saveVillage(true); savePlayer(); buildInvUI(); syncHUD();
   return true;
 }
+// live forge preview: the weapon exactly as it's drawn in your hand (same drawHeldWeapon), enlarged, with an element glow
+function drawForgePreview(cv, id, t){
+  const g = cv.getContext('2d'), wp = WEAPONS[id]; if (!wp) return;
+  const W = cv.width, H = cv.height, wkey = wp._base || id, fx = wp._forged && wp._forged.fx;
+  g.clearRect(0, 0, W, H);
+  const bg = g.createRadialGradient(W / 2, H / 2, 6, W / 2, H / 2, W * 0.55); bg.addColorStop(0, '#7a5a3c'); bg.addColorStop(1, '#2a1c10'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  if (fx){ const gl = g.createRadialGradient(W / 2, H / 2, 4, W / 2, H / 2, W * 0.4); const c = FX_BULLET_COLOR[fx] || '#fff'; gl.addColorStop(0, c + '66'); gl.addColorStop(1, c + '00'); g.fillStyle = gl; g.fillRect(0, 0, W, H); }
+  const len = wp.kind === 'gun' ? 24 : Math.max(24, (wp.reach || 30) * 0.8), sc = Math.min(4.6, (W * 0.78) / (len + 14));
+  g.save(); g.translate(W / 2 - (len / 2 + 4) * sc + Math.sin(t * 1.4) * 2, H / 2 + 6 + Math.sin(t * 2) * 1.5); g.scale(sc, sc); g.rotate(-0.12 + Math.sin(t * 1.2) * 0.04);
+  try { drawHeldWeapon(g, { weapon: id, dir: 0, swing: 0, muzzle: 0, r: 12, animT: t }, 12, 0, 0, 1, wp, wkey); } catch (e) {}
+  g.restore();
+}
 function buildSmithyUI(){
+  if (smithyMode === 'armory') return buildArmoryUI();
+  clearInterval(_mutIv);
   const ents = smithyEntries();
   if (smithySel && !ents.some(e => e.src === smithySel.src && e.i === smithySel.i)) smithySel = null;
   const sel = smithySel && ents.find(e => e.src === smithySel.src && e.i === smithySel.i);
   const label = e => ((WEAPONS[e.id] || { name: e.id }).name) + '  ·  ' + (e.src === 'armory' ? 'armory' : e.src === 'quick' ? 'equipped' : 'pack');
   let html = '<div class="panel"><h2>THE SMITHY</h2><p class="sub">favor ' + (village.stores.favor | 0) + '  ·  stone ' + (player.res.stone || 0) + '</p>';
-  html += '<div class="list">' + (ents.length ? ents.map((e, k) => '<div class="rowline"><button class="row' + (sel === e ? ' sel' : '') + '" data-k="' + k + '">' + label(e) + '</button>' + (e.src === 'armory' ? '<button class="eq" data-eq="' + k + '" title="take this off the rack and equip it">Equip →</button>' : '') + '</div>').join('') : '<p class="sub">no weapons to work on — win some in the city</p>') + '</div>';
+  html += '<div class="list">' + (ents.length ? ents.map((e, k) => '<div class="rowline"><button class="row' + (sel === e ? ' sel' : '') + '" data-k="' + k + '">' + label(e) + '</button>' + (e.src !== 'armory' ? '<button class="eq" data-rk="' + k + '" title="put this on the weapon rack">To rack →</button>' : '') + '</div>').join('') : '<p class="sub">no weapons to work on — win some in the city (belt, pack and rack weapons all show here)</p>') + '</div>';
   if (sel){
+    const wpS = WEAPONS[sel.id] || {}, fS = forgeCurrent(sel);
+    html += '<canvas id="forgeprev" width="300" height="120"></canvas><p class="sub">' + (wpS.name || sel.id) + '  ·  dmg ' + (wpS.dmg || 0) + (wpS.reach ? '  ·  reach ' + wpS.reach : '') + '  ·  ' + (fS.tier ? '+' + fS.tier + ' tempered' : 'untempered') + (fS.fx ? '  ·  ' + FORGE_FX_NAME[fS.fx] + '-infused' : '') + '</p>';
     const f = forgeCurrent(sel), tq = forgeQuote(sel, 'tier');
     const cost = q => q ? ' (' + (q.favor ? q.favor + ' favor' : '') + (q.stone ? (q.favor ? ' + ' : '') + q.stone + ' stone' : '') + ')' : '';
     html += '<div class="opts"><button data-a="tier"' + (tq ? '' : ' disabled') + '>' + (tq ? 'Upgrade to +' + (f.tier + 1) + cost(tq) : f.tier >= FORGE_MAX_TIER ? 'Fully upgraded (+' + FORGE_MAX_TIER + ')' : 'Needs Tempering research') + '</button>';
@@ -4485,21 +4702,25 @@ function buildSmithyUI(){
     }
     const qn = forgeQuote(sel, 'fx', null);
     html += '<button data-a="fx" data-v=""' + (qn ? '' : ' disabled') + '>Remove infusion</button></div>';
-    html += '<div class="swatches">' + FORGE_COLORS.map(c => '<span class="sw' + (f.col === c ? ' on' : '') + '" data-a="col" data-v="' + c + '" style="background:' + c + '" title="colour (1 favor)"></span>').join('') + '</div>';
+    html += '<p class="sub">PAINT — recolours the weapon itself (1 favor)</p><div class="swatches">' + '<span class="sw' + (!f.col ? ' on' : '') + '" data-a="col" data-v="" style="background:repeating-linear-gradient(45deg,#3a2a1a 0 4px,#1a1208 4px 8px)" title="original colour"></span>' + FORGE_COLORS.map(c => '<span class="sw' + (f.col === c ? ' on' : '') + '" data-a="col" data-v="' + c + '" style="background:' + c + '" title="colour (1 favor)"></span>').join('') + '</div>';
   }
+  html += '<p class="sub">ARMOURER — forge armour for your people (' + (village.armorStock || []).length + ' in store)</p><div class="opts">' + Object.keys(ARMOR).map(k => { const a = ARMOR[k]; return '<button data-craft="' + k + '"' + (canCraftArmor(k) ? '' : ' disabled') + '>' + a.name + ' (-' + Math.round(a.dr * 100) + '% dmg) — ' + armorCostText(a.cost) + (a.req && !(village.research && village.research[a.req]) ? ' · needs Tempering' : '') + '</button>'; }).join('') + '</div>';
   html += '<div class="foot"><button id="smithyclose">Leave</button></div></div>';
   $('smithy').innerHTML = html;
+  $('smithy').querySelectorAll('[data-craft]').forEach(b => b.addEventListener('click', () => { craftArmor(b.dataset.craft); buildSmithyUI(); }));
   $('smithy').querySelectorAll('.row').forEach(b => b.addEventListener('click', () => { const e = ents[+b.dataset.k]; smithySel = { src: e.src, i: e.i }; buildSmithyUI(); }));
-  $('smithy').querySelectorAll('.eq').forEach(b => b.addEventListener('click', (ev) => { ev.stopPropagation(); smithyEquip(ents[+b.dataset.eq]); buildSmithyUI(); }));
+  $('smithy').querySelectorAll('.eq[data-rk]').forEach(b => b.addEventListener('click', (ev) => { ev.stopPropagation(); rackStore(ents[+b.dataset.rk]); buildSmithyUI(); }));
   $('smithy').querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => {
     if (!sel) return;
     forgeApply(sel, b.dataset.a, b.dataset.v === undefined ? null : (b.dataset.v || null));
     buildSmithyUI();
   }));
+  const pc = $('forgeprev'); if (pc && sel){ drawForgePreview(pc, sel.id, 0); _mutIv = setInterval(() => { const c2 = $('forgeprev'); if (!smithyOpen || !c2 || smithyMode !== 'smithy'){ clearInterval(_mutIv); return; } drawForgePreview(c2, sel.id, performance.now() / 1000); }, 60); }
   $('smithyclose').addEventListener('click', closeSmithy);
 }
-function openSmithy(){
+function openSmithy(mode){
   if (!village || !player) return;
+  smithyMode = mode === 'armory' ? 'armory' : 'smithy';
   smithyOpen = true; paused = true;
   for (const k in keys) keys[k] = false;
   buildSmithyUI();
@@ -9196,6 +9417,10 @@ function drawLiftedPropIcon(data, scale){
     octx.beginPath(); octx.moveTo(-6 * scale, -1.5 * scale); octx.lineTo(6 * scale, -1.5 * scale); octx.moveTo(-6 * scale, 1.5 * scale); octx.lineTo(6 * scale, 1.5 * scale); octx.stroke();
     octx.fillStyle = '#8a7228'; octx.beginPath(); octx.ellipse(0, -7 * scale, 4 * scale, 2.2 * scale, 0, 0, 7); octx.fill();
     octx.restore();
+  } else if (pt === 'freezer'){
+    octx.fillStyle = '#aebbc7'; octx.fillRect(-9 * scale, -6 * scale, 18 * scale, 12 * scale);
+    octx.fillStyle = '#e4edf4'; octx.fillRect(-9 * scale, -6 * scale, 18 * scale, 5 * scale);
+    octx.fillStyle = '#3a8ad8'; octx.fillRect(-8 * scale, 1 * scale, 16 * scale, 2.5 * scale);
   } else if (pt === 'firework'){
     // the same wooden crate-of-rockets look drawProp already gives a standing one — a few colorful
     // sticks poking out is what actually reads as "fireworks," not just another plain crate
@@ -9251,7 +9476,16 @@ const HAZ = {
   // effectively "forever" (updateHazards's per-hazard fire check is what actually kills these off
   // early, by evaporating any puddle near an open flame — see the fire branch below)
   puddle: { r:24, life:9999, col:'rgba(120,175,225,0.30)',
-    tick(h,a){ a._wetT = Math.max(a._wetT || 0, 1.4); } },
+    tick(h,a){ if (h.frozen){ a.slipT = Math.max(a.slipT || 0, 0.25); return; }   // a flash-frozen puddle is a slick sheet of ice instead of a wet patch
+      a._wetT = Math.max(a._wetT || 0, 1.4); } },
+  // a flash-freeze's frosted ground: slippery and cold, and it freezes anyone wet who is standing in it
+  // (the hydrant + freezer combo) — the player only slips, never gets frozen by their own toys
+  frost: { r:78, life:9, col:'rgba(190,230,250,0.28)',
+    tick(h,a){ a.slipT = Math.max(a.slipT || 0, 0.3); a.slowT = Math.max(a.slowT || 0, 0.25);
+      if (a !== player && a._wetT > 0 && !(a._iceFrozenT > 0) && !a.slimeBoss) freezeActor(a); } },
+  // a burst hydrant's geyser: soaks everyone in a wide radius while it lasts and keeps flooding the ground
+  geyser: { r:130, life:7, col:'rgba(120,175,225,0.16)',
+    tick(h,a){ a._wetT = Math.max(a._wetT || 0, 4); } },
   // a knocked-over fireworks stand — no tick(h,a) here on purpose (real damage comes from real
   // explode() calls in updateHazards' dedicated per-tick block below, same pattern fire uses)
   fireworks: { r:90, life:4.5, light:[255,180,80] },
@@ -9265,7 +9499,7 @@ const HAZ = {
 function sparkThroughPuddles(x, y){
   const reach = 160 * rainConductMul();
   for (const h of hazards){
-    if (h.kind !== 'puddle' || h.dead) continue;
+    if (h.kind !== 'puddle' || h.dead || h.frozen) continue;   // ice doesn't conduct
     const d = Math.hypot(h.x - x, h.y - y);
     if (d > reach) continue;
     const steps = Math.max(3, Math.round(d / 14));
@@ -9297,16 +9531,41 @@ function addHazard(kind, x, y, opts){
 // water-gun hits/splashes drop these constantly (every ~0.1s of sustained fire) — merge into a
 // nearby puddle instead of stacking a fresh overlapping hazard every single tick, and cap the
 // total count the same way fire spread does, so a long soak doesn't quietly bloat the hazards array
-function spawnPuddle(x, y, r){
+function spawnPuddle(x, y, r, distinct){
   r = r || 20;
+  if (distinct){ if (hazards.reduce((n, o) => n + (o.kind === 'puddle' ? 1 : 0), 0) < 40) addHazard('puddle', x, y, { r }); return; }   // a flood: separate pools, not merged into one
   for (const h of hazards){
-    if (h.kind === 'puddle' && !h.dead && dist2(h.x, h.y, x, y) < (h.r + 26) * (h.r + 26)){
+    if (h.kind === 'puddle' && !h.dead && !h.frozen && dist2(h.x, h.y, x, y) < (h.r + 26) * (h.r + 26)){
       h.r = Math.min(70, Math.max(h.r, r) + 3); h.life = 9999; h.life0 = 9999;
       return;
     }
   }
-  if (hazards.reduce((n, o) => n + (o.kind === 'puddle' ? 1 : 0), 0) >= 22) return;
+  if (hazards.reduce((n, o) => n + (o.kind === 'puddle' ? 1 : 0), 0) >= 40) return;   // raised from 22 so a burst hydrant can flood a whole intersection
   addHazard('puddle', x, y, { r });
+}
+// a freezer bursting (broken, or thrown and landed): flash-freezes enemies who are wet or right next to it, chills the rest,
+// turns nearby puddles into ice sheets, snuffs fires, and leaves slippery frost — the soak-then-freeze combo
+function freezerBurst(x, y){
+  const R = 100;
+  burst(x, y, 30, '#dff3ff', 300); burst(x, y, 16, '#ffffff', 220); burst(x, y - 6, 12, '#8fd0ff', 160);
+  A.S.glass && A.S.glass(); shake(4);
+  fx.push({ t: 'shock', x, y, r0: 6, r1: R, life: 0.45, life0: 0.45, col: 'rgba(190,235,255,0.9)', w: 3 });
+  fx.push({ t: 'shard', x, y, life: 0.5, life0: 0.5, n: 12, len: 28, col: '#dff3ff', ang0: rand(0, 6.283) });
+  lights.push({ x, y, r: 120, col: [170, 220, 255], life: 0.3, t: 0.3 });
+  popText(x, y - 20, 'FLASH FREEZE!', '#bfe8ff', 1.2);
+  for (const a of [player, ...enemies]){
+    if (a.dead || a._indestructible) continue;
+    const d = Math.sqrt(dist2(a.x, a.y, x, y)); if (d > R) continue;
+    if (a === player || a.boss || a.slimeBoss){ a.slowT = Math.max(a.slowT || 0, 2); continue; }   // your own toy only chills you; bosses shrug it off
+    const wet = a._wetT > 0 || hazards.some(h => h.kind === 'puddle' && !h.dead && !h.frozen && dist2(a.x, a.y, h.x, h.y) < h.r * h.r);
+    if (d < 45 || wet) freezeActor(a); else { a.slowT = Math.max(a.slowT || 0, 3); burst(a.x, a.y, 6, '#dff3ff', 90); }
+  }
+  for (const h of hazards){
+    if (h.dead) continue;
+    if (h.kind === 'puddle' && !h.frozen && dist2(h.x, h.y, x, y) < (R + 30) * (R + 30)){ h.frozen = true; h.life = h.life0 = 16; }
+    else if (h.kind === 'fire' && dist2(h.x, h.y, x, y) < R * R){ h.life = Math.min(h.life, 0.4); burst(h.x, h.y, 6, 'rgba(225,240,245,0.6)', 70); }
+  }
+  addHazard('frost', x, y, { r: 78, life: 9 });
 }
 function updateHazards(dt){
   if (!hazards.length) return;
@@ -9314,6 +9573,13 @@ function updateHazards(dt){
     h.t += dt; h.life -= dt;
     const base = HAZ[h.kind] || HAZ.fire;
     if (base.light && Math.random() < dt * 10) lights.push({ x: h.x, y: h.y, r: h.r * 0.9, col: base.light, life: 0.09, t: 0.09 });
+    if (h.kind === 'geyser'){
+      h._pT = (h._pT ?? 0) - dt;
+      if (h._pT <= 0){ h._pT = 0.4; const an = rand(0, 6.283), dd = rand(16, h.r * 1.15); spawnPuddle(h.x + Math.cos(an) * dd, h.y + Math.sin(an) * dd * 0.7, rand(28, 46)); }   // keeps flooding outward
+      for (let i = 0; i < 3; i++) parts.push({ x: h.x + rand(-4, 4), y: h.y - 8, vx: rand(-55, 55), vy: -rand(90, 170), life: rand(0.5, 0.95), col: pick(['rgba(190,225,250,0.85)', 'rgba(140,195,235,0.8)', 'rgba(255,255,255,0.7)']), r: rand(1.4, 2.8) });
+      for (const h2 of hazards) if (!h2.dead && h2.kind === 'fire' && dist2(h.x, h.y, h2.x, h2.y) < h.r * h.r) h2.life = Math.min(h2.life, 0.3);   // a geyser drowns any fire it reaches
+    }
+    if (h.kind === 'frost' && Math.random() < dt * 6) parts.push({ x: h.x + rand(-h.r * 0.7, h.r * 0.7), y: h.y + rand(-h.r * 0.3, h.r * 0.3), vx: rand(-4, 4), vy: -rand(4, 12), life: 1.1, col: 'rgba(225,242,255,0.5)', r: rand(2, 4) });
     if (h.kind === 'fire'){
       if (Math.random() < dt * 1.6) parts.push({ x: h.x + rand(-h.r*0.3,h.r*0.3), y: h.y - h.r*0.2, vx: rand(-8,8), vy: -rand(16,30), life: 1.1, col: 'rgba(70,68,66,0.4)', r: rand(2.5,4) });   // ambient smoke, even with nobody standing in it
       // an open flame changes whatever's nearby: a lingering puddle hisses away instead of sitting
@@ -9493,11 +9759,40 @@ function drawHazards(){
         torchFlame(octx, 0.5 + ((i * 19) % 10) / 22, now, fx + i * 11, fy);
         octx.restore();
       }
+    } else if (h.kind === 'puddle' && h.frozen){
+      const ig = octx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r);
+      ig.addColorStop(0, 'rgba(225,245,255,0.7)'); ig.addColorStop(1, 'rgba(150,205,240,0.22)');
+      octx.fillStyle = ig; octx.beginPath(); octx.ellipse(h.x, h.y, h.r, h.r * 0.5, 0, 0, 7); octx.fill();
+      octx.strokeStyle = 'rgba(255,255,255,0.7)'; octx.lineWidth = 1; octx.beginPath();
+      for (let i = 0; i < 5; i++){ const a = i * 1.3 + h.x * 0.02; octx.moveTo(h.x, h.y); octx.lineTo(h.x + Math.cos(a) * h.r * 0.85, h.y + Math.sin(a) * h.r * 0.42); }
+      octx.stroke();
+      octx.fillStyle = 'rgba(255,255,255,0.8)'; octx.fillRect(h.x - h.r * 0.3, h.y - h.r * 0.16, 3, 1.5); octx.fillRect(h.x + h.r * 0.25, h.y + h.r * 0.08, 2, 1.5);
     } else if (h.kind === 'puddle'){
+      // wet ground has to be obvious at a glance (it's what water/ice/electric combos key off): a dark, saturated
+      // halo of soaked ground around the pool, a bluer body, slow rippling rings and a moving glint
+      const hr = h.r * 1.6, wg = octx.createRadialGradient(h.x, h.y, h.r * 0.3, h.x, h.y, hr);
+      wg.addColorStop(0, 'rgba(20,42,72,0.34)'); wg.addColorStop(0.65, 'rgba(20,42,72,0.18)'); wg.addColorStop(1, 'rgba(20,42,72,0)');
+      octx.fillStyle = wg; octx.beginPath(); octx.ellipse(h.x, h.y, hr, hr * 0.55, 0, 0, 7); octx.fill();
       const gg = octx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r);
-      gg.addColorStop(0, 'rgba(140,190,230,0.36)'); gg.addColorStop(1, 'rgba(90,140,190,0.04)');
+      gg.addColorStop(0, 'rgba(120,180,240,0.6)'); gg.addColorStop(0.7, 'rgba(85,140,205,0.38)'); gg.addColorStop(1, 'rgba(70,120,185,0.1)');
       octx.fillStyle = gg; octx.beginPath(); octx.ellipse(h.x, h.y, h.r, h.r * 0.5, 0, 0, 7); octx.fill();
-      octx.fillStyle = 'rgba(225,242,255,0.4)'; octx.beginPath(); octx.ellipse(h.x - h.r * 0.2, h.y - h.r * 0.12, h.r * 0.32, h.r * 0.08, -0.2, 0, 7); octx.fill();
+      octx.lineWidth = 1;
+      for (let i = 0; i < 2; i++){ const k = ((now / 1500) + h.x * 0.013 + i * 0.5) % 1, rr = h.r * (0.2 + 0.7 * k); octx.strokeStyle = 'rgba(225,244,255,' + (0.55 * (1 - k)) + ')'; octx.beginPath(); octx.ellipse(h.x, h.y, rr, rr * 0.5, 0, 0, 7); octx.stroke(); }
+      octx.fillStyle = 'rgba(235,248,255,0.6)'; octx.beginPath(); octx.ellipse(h.x - h.r * 0.2 + Math.sin(now / 900 + h.y) * h.r * 0.05, h.y - h.r * 0.12, h.r * 0.32, h.r * 0.08, -0.2, 0, 7); octx.fill();
+    } else if (h.kind === 'frost'){
+      const fg = octx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r);
+      fg.addColorStop(0, 'rgba(225,245,255,0.5)'); fg.addColorStop(0.7, 'rgba(190,228,250,0.28)'); fg.addColorStop(1, 'rgba(190,228,250,0)');
+      octx.fillStyle = fg; octx.beginPath(); octx.ellipse(h.x, h.y, h.r, h.r * 0.55, 0, 0, 7); octx.fill();
+      octx.fillStyle = 'rgba(255,255,255,0.75)';
+      for (let i = 0; i < 9; i++){ const a = i * 2.4 + h.x * 0.01, rr = 0.25 + ((i * 37) % 10) / 14, cx = h.x + Math.cos(a) * h.r * rr, cy = h.y + Math.sin(a) * h.r * 0.5 * rr; octx.beginPath(); octx.moveTo(cx, cy - 3); octx.lineTo(cx + 2, cy); octx.lineTo(cx, cy + 3); octx.lineTo(cx - 2, cy); octx.closePath(); octx.fill(); }
+    } else if (h.kind === 'geyser'){
+      const gg2 = octx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r);
+      gg2.addColorStop(0, 'rgba(150,200,240,0.32)'); gg2.addColorStop(1, 'rgba(90,140,200,0)');
+      octx.fillStyle = gg2; octx.beginPath(); octx.ellipse(h.x, h.y, h.r, h.r * 0.55, 0, 0, 7); octx.fill();
+      for (let i = 0; i < 2; i++){ const k = ((now / 700) + i * 0.5) % 1; octx.strokeStyle = 'rgba(225,244,255,' + (0.6 * (1 - k)) + ')'; octx.lineWidth = 2; octx.beginPath(); octx.ellipse(h.x, h.y, 10 + k * h.r * 0.55, (10 + k * h.r * 0.55) * 0.5, 0, 0, 7); octx.stroke(); }
+      const wob = Math.sin(now / 60) * 1.5;   // the column of water
+      octx.fillStyle = 'rgba(185,222,248,0.8)'; octx.beginPath(); octx.moveTo(h.x - 4, h.y); octx.quadraticCurveTo(h.x - 6 + wob, h.y - 26, h.x - 2, h.y - 46); octx.lineTo(h.x + 2, h.y - 46); octx.quadraticCurveTo(h.x + 6 + wob, h.y - 26, h.x + 4, h.y); octx.closePath(); octx.fill();
+      octx.fillStyle = 'rgba(255,255,255,0.6)'; octx.fillRect(h.x - 1, h.y - 44, 2, 40);
     } else if (h.kind === 'spark'){
       // user: "improve the visuals on electricity" — this used to fall through to the plain flat
       // oval every hazard type gets by default (the same generic shape a slow-glue or web patch
@@ -10577,7 +10872,7 @@ const RS = {
   signs: ['neon','painted','none'],
   aits: ['wall','center','corner'],
   furniture: ['table','chair','counter','bed','plant','fridge','tv','couch','crate','barrel',
-    'stool','booth','pooltable','arcade','shelf','rack','register','locker','sink','safe'],
+    'stool','booth','pooltable','arcade','shelf','rack','register','locker','sink','safe','freezer'],
   loot: ['cash','health'],
 };
 function _nearest(v, list, fallback){ return (typeof v === 'string' && list.includes(v)) ? v : fallback; }
@@ -12762,11 +13057,11 @@ const DEFAULT_ROSTER = {
   ],
   places: [
     { id:'diner', name:"Nite Owl Diner", kind:'diner', floor:'checker', wall:'brick', layout:'open',
-      fixtures:[ {item:'counter',along:'wall',count:1}, {item:'stool',along:'wall',count:4},
+      fixtures:[ {item:'freezer',along:'wall',count:1}, {item:'counter',along:'wall',count:1}, {item:'stool',along:'wall',count:4},
                  {item:'booth',along:'wall',count:3}, {item:'table',along:'center',count:2} ],
       occupants:['civ','civ'], loot:['cash'], sign:'neon' },
     { id:'corner-bar', name:"The Anchor", kind:'bar', floor:'wood', wall:'wood', layout:'split',
-      fixtures:[ {item:'pooltable',along:'center',count:1}, {item:'stool',along:'wall',count:4},
+      fixtures:[ {item:'freezer',along:'wall',count:1}, {item:'pooltable',along:'center',count:1}, {item:'stool',along:'wall',count:4},
                  {item:'counter',along:'wall',count:1}, {item:'booth',along:'corner',count:2} ],
       occupants:['civ'], loot:['cash'], sign:'neon' },
     { id:'depot', name:"Depot 9", kind:'warehouse', floor:'stained', wall:'block', layout:'open',
@@ -12938,7 +13233,7 @@ const UNIQUE_PLACES = {
 // hand-authored shops, civic and leisure places — beyond the roster's base set (fixtures use FURN variants too)
 const EXTRA_PLACES = [
   { id: 'bakery', name: 'Crumb & Crust', kind: 'bakery', floor: 'checker', wall: 'brick', layout: 'open', rug: null, sign: 'painted', biome: 'city', occupants: ['civ', 'civ'], loot: ['health'],
-    fixtures: [{ item: 'display', along: 'wall', count: 2 }, { item: 'counter', along: 'wall', count: 1 }, { item: 'stove', along: 'corner', count: 1 }, { item: 'table', along: 'center', count: 2 }, { item: 'chair', along: 'center', count: 4 }] },
+    fixtures: [ {item:'freezer',along:'wall',count:1},{ item: 'display', along: 'wall', count: 2 }, { item: 'counter', along: 'wall', count: 1 }, { item: 'stove', along: 'corner', count: 1 }, { item: 'table', along: 'center', count: 2 }, { item: 'chair', along: 'center', count: 4 }] },
   { id: 'library', name: 'Public Library', kind: 'library', floor: 'carpet', wall: 'brick', layout: 'split', rug: '#5a3a5a', sign: 'none', biome: 'city', occupants: ['civ', 'civ', 'civ'], loot: ['health'],
     fixtures: [{ item: 'bookcase', along: 'wall', count: 6 }, { item: 'desk', along: 'center', count: 1 }, { item: 'table', along: 'center', count: 2 }, { item: 'chair', along: 'center', count: 4 }] },
   { id: 'nightclub', name: 'The Velvet Room', kind: 'nightclub', floor: 'checker', wall: 'block', layout: 'open', rug: null, sign: 'neon', biome: 'city', occupants: ['civ', 'civ', 'civ'], loot: ['cash'],
@@ -12952,7 +13247,7 @@ const EXTRA_PLACES = [
   { id: 'pawn', name: 'Gold Rush Pawn', kind: 'pawn', floor: 'wood', wall: 'brick', layout: 'backroom', rug: null, sign: 'painted', biome: 'city', occupants: ['civ', 'alleytough'], loot: ['cash', 'knife'],
     fixtures: [{ item: 'display', along: 'wall', count: 3 }, { item: 'shelf', along: 'wall', count: 3 }, { item: 'counter', along: 'wall', count: 1 }, { item: 'safe', along: 'corner', count: 1 }] },
   { id: 'jazz', name: 'Blue Note Jazz Bar', kind: 'bar', floor: 'wood', wall: 'wood', layout: 'open', rug: '#3a2a4a', sign: 'neon', biome: 'city', occupants: ['civ', 'civ'], loot: ['cash'],
-    fixtures: [{ item: 'piano', along: 'wall', count: 1 }, { item: 'booth', along: 'wall', count: 3 }, { item: 'counter', along: 'wall', count: 1 }, { item: 'stool', along: 'wall', count: 5 }] },
+    fixtures: [ {item:'freezer',along:'wall',count:1},{ item: 'piano', along: 'wall', count: 1 }, { item: 'booth', along: 'wall', count: 3 }, { item: 'counter', along: 'wall', count: 1 }, { item: 'stool', along: 'wall', count: 5 }] },
   { id: 'hotel', name: 'Grand Hotel Lobby', kind: 'hotel', floor: 'carpet', wall: 'block', layout: 'split', rug: '#7a2a3a', sign: 'painted', biome: 'city', occupants: ['civ', 'civ', 'civ'], loot: ['cash'],
     fixtures: [{ item: 'couch', along: 'wall', count: 3 }, { item: 'counter', along: 'wall', count: 1 }, { item: 'register', along: 'wall', count: 1 }, { item: 'plant', along: 'corner', count: 3 }, { item: 'chair', along: 'center', count: 3 }] },
   { id: 'school', name: 'Marrow Street School', kind: 'school', floor: 'checker', wall: 'brick', layout: 'split', rug: null, sign: 'none', biome: 'city', occupants: ['civ', 'civ', 'civ'], loot: ['health'],
@@ -13377,7 +13672,7 @@ function loadVillage(){
       s.weaponCodex ||= { entries: {} }; s.weaponCodex.entries ||= {};
       s.npcCodex ||= { entries: {} }; s.npcCodex.entries ||= {};
       s.day = s.day || 0; s.tod = 0.2;   // always wake into a fresh morning on load
-      s.money ||= 0;
+      s.money ||= 0; s.loadouts ||= [null, null, null];
       return s; } }
   catch {}
   return freshVillage();
@@ -13776,6 +14071,7 @@ function enterZone(name){
     registerEventGrounds();
     if (village.research && village.research.paving) registerPaths();
     if (village.cult) registerCultBuild();
+    if (cameFromMission) squadDebrief(!!_raidWon);
     if (cameFromMission){                                  // a raid eats ~4 hours — you come home at a different time each trip.
       village.tod = Math.min(0.93, (village.tod == null ? 0.2 : village.tod) + 4 / 24);   // never past deep night — the day only turns over when you sleep
     }
@@ -14662,6 +14958,7 @@ function genCityChunk(c, ccx, ccy, rng){
   // kind was well under 1, so most raids showed none of them at all: "I never saw a wrecking ball"
   // wasn't bad luck, the odds meant you basically never would. Raised so each kind averages
   // roughly one appearance per raid instead of one every several raids.
+  if (rng() < 0.3){ const fsp = sidewalkSpot(ox, oy, rng, 22, 18); if (fsp) props.push(mkProp(fsp.x, fsp.y, 22, 18, 'freezer')); }   // a drink cooler / chest freezer out on the pavement — pick it up and throw it
   if (rng() < 0.35){
     // 'trafficcar' (a fixed-lane bouncing set-piece) retired 2026-09-14u — replaced by ordinary
     // parked cars that sometimes have a driver in them (see the kerb-parking loop below + hurtProp's
@@ -15914,23 +16211,23 @@ const PROP_MAT = { car:'metal', van:'metal', dumpster:'metal', hydrant:'metal', 
   register:'metal', locker:'metal', sink:'metal', safe:'metal',
   tree:'wood', stump:'wood', campfire:'wood', signpost:'wood', rock:'metal', bush:'soft', flowers:'soft', reeds:'soft',
   twigbush:'wood', pebbles:'metal', dump:'metal', study:'wood', altar:'stone', shrine:'stone', blacksmith:'metal', bones:'wood', furn:'wood', landmark:'stone', cliff:'stone', waterfall:'stone', log:'wood', darkshrine:'stone', well:'stone', logpile:'wood', stonepile:'stone', smokerack:'wood', handcart:'wood', sheaves:'wood', market:'wood', barracks:'wood', watchtower:'wood', scriptorium:'wood', temple:'stone', eventgrounds:'stone', grandshrine:'stone', granary:'wood', mutlab:'metal', icestatue:'glass',
-  manhole:'metal', firework:'wood', cementmixer:'metal', kennel:'wood', neonsign:'glass', wreckingball:'metal', trafficcar:'metal' };
+  manhole:'metal', firework:'wood', cementmixer:'metal', kennel:'wood', neonsign:'glass', wreckingball:'metal', trafficcar:'metal', freezer:'metal' };
 const PROP_HP = { car:90, van:9999, dumpster:120, hydrant:40, barrel:14, crate:20, table:22, chair:8, tv:10,
   firebarrel:60, vent:9999, lamppost:26,
   counter:34, bed:16, plant:6, fridge:30, couch:20,
   stool:8, booth:30, pooltable:44, arcade:16, shelf:20, rack:22, register:14, locker:26, sink:20, safe:60,
   tree:40, stump:16, campfire:9999, signpost:9999, rock:400, bush:14, flowers:4, reeds:6, twigbush:8, pebbles:6, dump:9999, study:9999, altar:9999, shrine:9999, blacksmith:9999, bones:9999, furn:40, landmark:9999, cliff:9999, waterfall:9999, log:70, darkshrine:70, well:9999, logpile:9999, stonepile:9999, smokerack:9999, handcart:9999, sheaves:9999, market:9999, barracks:9999, watchtower:9999, scriptorium:9999, temple:9999, eventgrounds:9999, grandshrine:9999, granary:9999, mutlab:9999, icestatue:46,
-  manhole:20, firework:24, cementmixer:70, kennel:16, neonsign:28, wreckingball:9999, trafficcar:90 };   // same as a parked 'car' — it should take damage and blow up the same way, not shrug off everything
+  manhole:20, firework:24, cementmixer:70, kennel:16, neonsign:28, wreckingball:9999, trafficcar:90, freezer:36 };   // same as a parked 'car' — it should take damage and blow up the same way, not shrug off everything
 const PROP_DIM = { table:[26,18], chair:[14,14], tv:[22,14], counter:[46,16], bed:[24,30], plant:[14,14],
   firebarrel:[20,18], vent:[26,20], lamppost:[7,8], torchpost:[7,10],
   fridge:[18,24], couch:[40,18], stool:[12,12], booth:[30,20], pooltable:[46,28], arcade:[18,22],
   shelf:[34,14], rack:[24,14], register:[16,12], locker:[16,26], sink:[22,14], safe:[20,20],
   tree:[16,14], stump:[14,12], campfire:[16,14], signpost:[12,16], rock:[16,12], bush:[16,12], flowers:[14,10], reeds:[10,10],
   twigbush:[16,13], pebbles:[13,9], dump:[40,20], study:[24,22], altar:[26,18], shrine:[16,16], blacksmith:[30,18], bones:[16,10], furn:[30,18], landmark:[30,20], cliff:[46,16], waterfall:[60,18], log:[30,12], darkshrine:[18,30], well:[26,24], logpile:[26,18], stonepile:[24,18], smokerack:[26,24], handcart:[30,18], sheaves:[20,20], market:[48,30], barracks:[32,46], watchtower:[48,32], scriptorium:[34,20], grandshrine:[58,34], eventgrounds:[62,62], temple:[30,30], granary:[32,28], mutlab:[34,20], weaponrack:[26,12], icestatue:[24,34],
-  manhole:[13,13], firework:[20,24], cementmixer:[26,24], kennel:[18,15], neonsign:[32,10], wreckingball:[20,20], trafficcar:[64,30] };   // same silhouette size as a parked 'car' — it was spawning at under half scale
+  manhole:[13,13], firework:[20,24], cementmixer:[26,24], kennel:[18,15], neonsign:[32,10], wreckingball:[20,20], trafficcar:[64,30], freezer:[22,18] };   // same silhouette size as a parked 'car' — it was spawning at under half scale
 // props with faux-3D height — y-sort earlier by ~half their visual rise so a player level with
 // the base draws in front of the tall part (same trick as trees / beds / boulders)
-const PROP_SORT_LIFT = { crate:14, barrel:16, dumpster:18, car:12, van:14, hydrant:15, firebarrel:19, lamppost:38, torchpost:26, weaponrack:10, cementmixer:16, wreckingball:12, trafficcar:12 };
+const PROP_SORT_LIFT = { crate:14, barrel:16, dumpster:18, car:12, van:14, hydrant:15, firebarrel:19, lamppost:38, torchpost:26, weaponrack:10, cementmixer:16, wreckingball:12, trafficcar:12, freezer:12 };
 // cementmixer deliberately NOT here — user's first ask ("walk through it") briefly made it
 // walkable, but the follow-up corrected that: it should stay a solid obstacle you go AROUND, with
 // its wet-concrete slow hazard as a separate, lopsided puddle to one side (see
@@ -15943,7 +16240,7 @@ const FIXED_PROP = new Set(['bones', 'furn', 'landmark', 'cliff', 'waterfall','l
 // you can throw crates." A short, deliberately conservative list — light clutter and freestanding
 // pieces, not the bulky fixed-to-the-wall stuff. City-only, same as the combat that gives it a
 // reason to exist (see tryInteract's lift branch, throwHeld, updateThrown).
-const LIFTABLE_PROPS = new Set(['crate', 'barrel', 'firebarrel', 'chair', 'tv', 'cementmixer', 'firework']);
+const LIFTABLE_PROPS = new Set(['crate', 'barrel', 'firebarrel', 'chair', 'tv', 'cementmixer', 'firework', 'freezer']);
 // the cement mixer's wet-concrete slow puddle — deliberately off-center ("lopsided"), not a ring
 // around the mixer itself, so there's always a dry side to approach and lift it from. Shared by
 // updateSpecialProps (the actual slow check), drawProp (the visible puddle — what you see IS the
@@ -15965,6 +16262,7 @@ const PROP_THROW_STATS = {
   barrel:     { dmg: 22, knock: 340 },
   firebarrel: { dmg: 22, knock: 340, burn: true },
   cementmixer:{ dmg: 20, knock: 280 },
+  freezer:    { dmg: 12, knock: 320 },   // the real payoff is the flash-freeze when it lands (see freezerBurst)
   // a wooden crate of fireworks, no heavier than any other crate on impact — the real payoff isn't
   // the beaning, it's landing intact and going off (see hurtProp's 'firework' branch, reused as-is
   // for a thrown-and-landed one via updateThrown's generic mkProp+hurtProp destroy dispatch): a
@@ -16334,7 +16632,8 @@ function promoteSoldier(e, rec){
   e.soldier = true; e.team = 'player'; e.routed = false;
   e.speed = 160 * ((e._mutB && e._mutB.swift) || 1); e.invuln = e.invuln || 0; e.mad = false;   // a marching pace — slower than the player, no sprint into the fray
   const sHp = village && village.research && village.research.drill ? 105 : 85;   // Drill — raised from 80/64, they were dying too fast on early raids
-  e.maxhp = Math.round(sHp * ((e._mutB && e._mutB.bulk) || 1)); e.hp = e.maxhp;   // steadier than a random townsperson, still mortal; patched up each time home
+  const vs = applyVetStats(e, rec);
+  e.maxhp = Math.round(sHp * ((e._mutB && e._mutB.bulk) || 1) * vs.hpMul); e.hp = e.maxhp;   // steadier than a random townsperson, still mortal; patched up each time home — veterans are tougher
   e.weapon = (rec && rec.armed) || 'fists';
   const wp = WEAPONS[e.weapon] || {};
   e.ammo = wp.kind === 'gun' ? (wp.ammo || 12) * 3 : 0;
@@ -16404,8 +16703,9 @@ function promoteGuard(e, rec){
   e.soldier = true; e.team = 'player'; e.routed = false; e.mad = false;
   e.speed = 150; e.invuln = e.invuln || 0;
   const gHp = village && village.research && village.research.drill ? 100 : 80;   // Drill
-  e.maxhp = gHp; e.hp = gHp;   // sturdier than an ordinary villager — this is who signed up to fight
-  e.weapon = pick(GUARD_WEAPONS);
+  const gs = applyVetStats(e, rec);
+  e.maxhp = Math.round(gHp * gs.hpMul); e.hp = e.maxhp;   // sturdier than an ordinary villager — this is who signed up to fight
+  e.weapon = (rec && rec.armed) || pick(GUARD_WEAPONS);
   e.ammo = 0;
   e._isGuard = true;
   e._patrolIdx = Math.floor(Math.random() * guardPatrolPoints(e).length);   // stagger several guards across different stops instead of all starting at bed #1
@@ -16418,13 +16718,14 @@ function muster(){
   village.squad ||= [];
   if (village.squad.length){                                  // stand down
     for (const e of enemies) if (e.soldier) demoteSoldier(e);
-    for (const v of village.villagers) if (v.armed){ village.armory.push(v.armed); v.armed = null; }
+    for (const v of village.villagers) if (v.armed && !v.gearSet){ village.armory.push(v.armed); v.armed = null; }   // gear you chose in the Armory stays with them
     village.squad = [];
     flash('Stand down', '#bcd0e0', 'they drift back to their chores');
     saveVillage(true); savePlayer(); syncHUD(); return;
   }
+  const pinnedOf = e => { const r = village.villagers.find(v => v.id === e._vid); return r && r.pinned ? 1 : 0; };   // people you picked in the Armory march first
   const near = enemies.filter(e => e.villager && !e.soldier && !e.dead && e._vid)
-    .sort((a, b) => dist2(a.x, a.y, player.x, player.y) - dist2(b.x, b.y, player.x, player.y))
+    .sort((a, b) => (pinnedOf(b) - pinnedOf(a)) || (dist2(a.x, a.y, player.x, player.y) - dist2(b.x, b.y, player.x, player.y)))
     .slice(0, squadCap() + 3);   // room to lose a few to refusals
   if (!near.length){ popText(player.x, player.y - 22, 'no one to muster', '#ff8f8f'); return; }
   let armed = 0, refused = 0, took = 0;
@@ -17922,11 +18223,17 @@ function hurtProp(p, dmg, from){
       return;
     }
     if (p.t === 'hydrant'){                                             // a burst hydrant — sprays water and coughs up a real water gun
-      burst(p.x, p.y, 22, '#7ab8e0', 220); A.S.splash(); shake(2);
+      burst(p.x, p.y, 34, '#7ab8e0', 280); burst(p.x, p.y, 16, '#ffffff', 200); A.S.splash(); shake(4);
+      fx.push({ t: 'shock', x: p.x, y: p.y, r0: 6, r1: 150, life: 0.5, life0: 0.5, col: 'rgba(160,210,245,0.8)', w: 3 });
       pickups.push({ x: p.x + rand(-10, 10), y: p.y + rand(-6, 10), w: 'watergun', taken: false });
-      const drenchR = 60 * 60;
-      for (const a of [player, ...enemies]) if (!a.dead && dist2(a.x, a.y, p.x, p.y) < drenchR) a._wetT = Math.max(a._wetT || 0, 6);
-      spawnPuddle(p.x, p.y, 46);   // floods the intersection — a real, lingering flood, not just a splash
+      // a proper burst main: the whole area gets soaked (everyone within ~190px), a geyser keeps spraying and flooding
+      // outward for several seconds, and the ground is left covered in puddles you can see (and shock, or freeze)
+      const drenchR = 190 * 190;
+      for (const a of [player, ...enemies]) if (!a.dead && dist2(a.x, a.y, p.x, p.y) < drenchR) a._wetT = Math.max(a._wetT || 0, 8);
+      for (const h2 of hazards) if (!h2.dead && h2.kind === 'fire' && dist2(h2.x, h2.y, p.x, p.y) < drenchR) h2.life = Math.min(h2.life, 0.3);
+      addHazard('geyser', p.x, p.y, { r: 130, life: 7 });
+      spawnPuddle(p.x, p.y, 62);
+      for (let i = 0; i < 8; i++){ const an = i * 0.785 + rand(-0.3, 0.3), dd = rand(34, 150); spawnPuddle(p.x + Math.cos(an) * dd, p.y + Math.sin(an) * dd * 0.7, rand(32, 52), true); }
       return;
     }
     if (p.t === 'icestatue'){                                           // shattered — whatever it would have dropped on a normal kill was waiting for this moment
@@ -18019,6 +18326,9 @@ function hurtProp(p, dmg, from){
       addHazard('fire', p.x, p.y, { r: 48, life: 6.5 });
       for (let i = 0; i < 14; i++) parts.push({ x: p.x, y: p.y, vx: rand(-90, 90), vy: rand(-120, -20), life: rand(0.4, 0.9), col: pick(['#ffd257', '#ff7a30', '#ffae40']), r: rand(1, 2.6) });
     }
+    else if (p.t === 'freezer'){
+      freezerBurst(p.x, p.y);
+    }
     else if (p.t === 'cementmixer'){
       // user: "if thrown at enemies (or broken) it'll break and splash concrete all over... if it
       // covers your enemies they turn into grey statues for 10s." A whole drum's worth going at
@@ -18092,7 +18402,7 @@ function attack(a){
       const ang = a.dir + rand(-sp, sp);
       bullets.push({ x: a.x + Math.cos(ang)*16, y: a.y + Math.sin(ang)*16,
         vx: Math.cos(ang)*bv, vy: Math.sin(ang)*bv, ang, style, col,
-        dmg: wp.dmg * (a._frenzy || 1) * (a.dmgMul || 1) * ((a._mutB && a._mutB.brawn) || 1), knock: wp.knock, team: a.team, life: 1.1, wp, from: a });
+        dmg: wp.dmg * (a._frenzy || 1) * (a.dmgMul || 1) * (a._lvlDmg || 1) * ((a._mutB && a._mutB.brawn) || 1), knock: wp.knock, team: a.team, life: 1.1, wp, from: a });
     }
     a.muzzle = 0.05;
     lights.push({ x: a.x + Math.cos(a.dir)*20, y: a.y + Math.sin(a.dir)*20, r: 60, col: [255, 220, 140], life: 0.06, t: 0.06 });
@@ -18123,7 +18433,7 @@ function attack(a){
     const ang = Math.atan2(t.y - a.y, t.x - a.x);
     if (Math.abs(((ang - a.dir + Math.PI*3) % (Math.PI*2)) - Math.PI) > wp.arc) continue;
     const wasDead = t.dead;
-    damage(t, wp.dmg * (a.dmgMul || 1) * (a._frenzy || 1) * ((a._mutB && a._mutB.brawn) || 1) + (a.team === 'player' ? (a.dmgBonus || 0) : 0), a, wp.knock * (a.knockMul || 1));
+    damage(t, wp.dmg * (a.dmgMul || 1) * (a._lvlDmg || 1) * (a._frenzy || 1) * ((a._mutB && a._mutB.brawn) || 1) + (a.team === 'player' ? (a.dmgBonus || 0) : 0), a, wp.knock * (a.knockMul || 1));
     if (wp.hitFx) weaponFx(t, wp, a.team);
     if (wp.onHit && !t.dead && !wasDead) wp.onHit(t, a);
     hit = true;
@@ -18166,7 +18476,7 @@ function damage(t, dmg, from, knock, noHeat){
   if (t._indestructible){ burst(t.x, t.y - 8, 3, '#ffe08a', 140); return; }   // the Terminator wager's robot
   if (t.slimeBoss && t._sb){ if (t._sb.air || t._sb.invuln > 0){ burst(t.x, t.y - 8, 4, BK[t._bk || 'slime'].burst[0], 140); return; } if (t._sb.vuln > 0) dmg *= 1.6; }
   if (t._mutB && t._mutB.guard) dmg *= t._mutB.guard;                                                                                // Cinder Skin & co.   // untouchable mid-air / mid-roar; its exposed core takes extra
-  if (t.soldier) dmg *= 0.7;                                                          // mustered villagers wear scavenged armour on a raid — they were dying too fast in the early game to be worth the risk of bringing along
+  if (t.soldier) dmg *= 0.8 * (1 - Math.min(0.6, t._armorDR || 0));                                                          // mustered villagers wear scavenged armour on a raid — they were dying too fast in the early game to be worth the risk of bringing along
   if (t === player && (drivingCar || (mission && mission.vanGetaway))) return;                       // behind the wheel (or diving into the getaway van) you can't be hurt — no dying on the way out
   if (t.team === 'player' && (t.invuln > 0 || godMode || zone === 'village')) return;
   if (runWagers.length && zone === 'city'){                                  // Glass Cannon
@@ -18355,6 +18665,7 @@ function killActor(t, from, noHeat){
   shake(6); hitStop = Math.max(hitStop, 0.045);
   if (t.team === 'enemy'){
     kills++;
+    if (from && from.soldier && from._vid && village){ const kr = village.villagers.find(v => v.id === from._vid); if (kr){ kr.kills = (kr.kills || 0) + 1; kr.runKills = (kr.runKills || 0) + 1; } }
     if (t.boss && mission && mission.raid && !mission.raid.bossOutcome){
       mission.raid.bossOutcome = 'killed';
       if (!t.slimeBoss) flash(mission.raid.bossTitle + ' is dead', '#e06a4a', 'no convert from this one');
@@ -18559,7 +18870,7 @@ function resolveInteractTarget(){
     else if (pr.t === 'signpost') consider(pr.x, pr.y, 46, 8, 800);
   }
   if (village.toolStash && village.toolStash.length) consider(TOOL_STASH_POS.x, TOOL_STASH_POS.y, 28, 10);
-  if (village.cult && village.armory && village.armory.length){ const _rp = armoryProp(); if (_rp) consider(_rp.x, _rp.y, 32, 12); }
+  if (zone === 'village'){ const _rp = armoryProp(); if (_rp) consider(_rp.x, _rp.y, 36, 12); }
   for (const h of (village.hoard || [])) if (h !== p.holding) consider(h.x, h.y, KEEPSAKE_REACH, 7, 300);
   for (const pk of pickups) if (!pk.taken) consider(pk.x, pk.y, 46, 7, 300);
   return best;
@@ -18780,18 +19091,10 @@ function tryInteract(){
       flash('Tools back in hand', '#c9a06a', got.map(id => (WEAPONS[id] || {}).name || id).join(' + '));
       return;
     }
-    // arm yourself from the cult's weapon rack — takes a loadout of the best kit
+    // the weapon rack: build your belt / kits from everything on it
     {
-      const rp = village && village.cult && village.armory && village.armory.length ? armoryProp() : null;
-      if (rp && dist2(rp.x, rp.y, player.x, player.y) < 32 * 32){
-        const want = armoryLoadout(village.armory, 5 - player.quick.filter(id => id && id !== 'fists').length);
-        if (!want.length){ popText(player.x, player.y - 22, 'belt is full', '#ff8f8f'); return; }
-        for (const id of want){ const i = village.armory.indexOf(id); if (i >= 0) village.armory.splice(i, 1); giveTool(id); }
-        saveVillage(true); savePlayer(); A.S.wood();
-        burst(rp.x, rp.y, 9, '#c8b48a', 150);
-        flash('Armed from the rack', '#c8b48a', want.map(id => (WEAPONS[id] || {}).name || id).join(' + '));
-        return;
-      }
+      const rp = village && zone === 'village' ? armoryProp() : null;
+      if (rp && dist2(rp.x, rp.y, player.x, player.y) < 36 * 36){ openSmithy('armory'); return; }
     }
     // a villager you're all but standing on wins over any adjacent altar / bench / bed / fire —
     // step off them to reach the furniture instead
@@ -19494,7 +19797,7 @@ function tickWet(a, dt){
   if (!(a._wetT > 0)) return;
   a._wetT -= dt;
   if (a._burnT > 0){ a._burnT = 0; burst(a.x, a.y, 10, '#cfe8ff', 130); popText(a.x, a.y - 20, 'hiss!', '#bfe0ff', 0.8); }
-  if (Math.random() < dt * 3) parts.push({ x: a.x + rand(-5, 5), y: a.y + a.r * 0.6, vx: rand(-4, 4), vy: rand(6, 16), life: 0.4, col: 'rgba(122,184,224,0.6)', r: rand(1.4, 2.4) });
+  if (Math.random() < dt * 9) parts.push({ x: a.x + rand(-6, 6), y: a.y + a.r * 0.4, vx: rand(-5, 5), vy: rand(8, 22), life: 0.55, col: 'rgba(150,205,240,0.8)', r: rand(1.4, 2.6) });   // dripping
 }
 // wet + a direct ice hit = frozen solid, not just slowed — see weaponFx's 'ice' case. A hard
 // lockout (no movement, no attacks) tracked in its own field (`_iceFrozenT`) so it never collides
@@ -26039,6 +26342,216 @@ function drawSkullFace(R, face, s, a){
     for (let i = 0; i < 4; i++){ g.fillStyle = i % 2 ? '#0a0a0e' : '#2a2a30'; g.fillRect(s * (R * 0.1 + i * R * 0.09) - (s < 0 ? R * 0.08 : 0), -R * 1.7, R * 0.08, R * 0.11); }
   }
 }
+// fallback in-hand art for melee weapons that never had their own: a readable silhouette per family, tinted by a forged colour
+function drawGenericMelee(g, R, wp, key, wc){
+  const L = R * 0.3, len = (wp.reach || 40) * 0.72;
+  g.lineCap = 'round';
+  if (key === 'katana'){
+    g.fillStyle = '#2a1a1a'; g.fillRect(L, -1.6, 6, 3.2); g.fillStyle = '#c9a03a'; g.fillRect(L + 6, -3, 1.8, 6);          // wrapped grip, guard
+    g.fillStyle = wc || '#dfe5ec'; g.beginPath(); g.moveTo(L + 8, -1.3); g.quadraticCurveTo(L + len * 0.6, -2.4, L + len, -0.4); g.lineTo(L + len - 1, 1.1); g.quadraticCurveTo(L + len * 0.6, 0.6, L + 8, 1.3); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.55)'; g.fillRect(L + 9, -1, len - 12, 0.7);
+  } else if (key === 'sledge'){
+    g.fillStyle = '#5a3d22'; g.fillRect(L, -1.7, len, 3.4); g.fillStyle = '#6e4a2c'; g.fillRect(L, -1.7, len, 1.1);
+    g.fillStyle = wc || '#7a7f88'; g.fillRect(L + len - 5, -6, 11, 12); g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(L + len - 5, -6, 11, 2); g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(L + len - 5, 4, 11, 2);
+  } else if (key === 'whip'){
+    g.fillStyle = '#3a2a1a'; g.fillRect(L, -2, 7, 4); g.strokeStyle = wc || '#c8a24a'; g.lineWidth = 1.8;
+    g.beginPath(); g.moveTo(L + 7, 0); g.bezierCurveTo(L + len * 0.4, -9, L + len * 0.6, 9, L + len, -2); g.stroke();
+  } else if (key === 'springfist'){
+    g.strokeStyle = '#8a8a92'; g.lineWidth = 1.4; g.beginPath(); for (let i = 0; i < 6; i++){ g.moveTo(L + 2 + i * 3, -3); g.lineTo(L + 4 + i * 3, 3); } g.stroke();
+    g.fillStyle = wc || '#c33'; g.beginPath(); g.arc(L + len * 0.7, 0, 6, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(L + len * 0.7 - 3, -4, 4, 1.4);
+  } else if (key === 'prod' || key === 'zapstaff'){
+    g.fillStyle = '#3a2a4a'; g.fillRect(L, -1.5, len, 3); g.fillStyle = wc || (key === 'prod' ? '#ffe27a' : '#b98cff'); g.beginPath(); g.arc(L + len + 2, 0, key === 'prod' ? 3 : 4.6, 0, 7); g.fill();
+    g.strokeStyle = '#ffe27a'; g.lineWidth = 1; for (let i = 0; i < 3; i++){ const an = (performance.now() / 90 + i * 2.1) % 6.3; g.beginPath(); g.moveTo(L + len + 2, 0); g.lineTo(L + len + 2 + Math.cos(an) * 7, Math.sin(an) * 7); g.stroke(); }
+  } else if (key === 'trout'){
+    g.fillStyle = wc || '#8fb4c8'; g.beginPath(); g.ellipse(L + len * 0.5, 0, len * 0.5, 4.5, 0, 0, 7); g.fill(); g.beginPath(); g.moveTo(L + len * 0.95, 0); g.lineTo(L + len + 5, -4); g.lineTo(L + len + 5, 4); g.fill();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(L + 5, -1, 1.2, 0, 7); g.fill();
+  } else {
+    g.fillStyle = '#5a3d22'; g.fillRect(L, -1.7, len, 3.4); g.fillStyle = wc || '#9aa0a8'; g.fillRect(L + len - 3, -4, 7, 8);
+  }
+}
+// the in-hand art for one weapon, drawn into whichever context is passed (the world actor pass, or the Smithy's live preview)
+function drawHeldWeapon(octx, a, R, d, arc, s, wp, wkey){
+    const head = wp._wspec && wp._wspec.head;
+    const wc = wp._wspec ? resolveColor(wp._wspec.color, a) : (wp._forged && wp._forged.col) || null;   // a forged weapon's chosen colour paints its main body
+    if (wp.kind === 'gun'){
+      const bx = R*0.4, glow = a.muzzle > 0;
+      if (head === 'flamethrower'){                        // fuel tank slung under a short wide nozzle
+        octx.fillStyle = wc || '#a5303a'; octx.beginPath(); octx.ellipse(bx+2, 2, 7, 4.4, 0, 0, 7); octx.fill();
+        octx.fillStyle = '#141414'; octx.fillRect(bx, -2.6, 13, 5.2);
+        if (glow){ octx.fillStyle = 'rgba(255,140,40,0.85)'; octx.beginPath(); octx.moveTo(bx+13,-4); octx.lineTo(bx+13+10+Math.random()*6,0); octx.lineTo(bx+13,4); octx.fill();
+          octx.fillStyle = '#ffe08a'; octx.beginPath(); octx.arc(bx+16, 0, 3, 0, 7); octx.fill(); }
+      } else if (head === 'freezeray'){                     // crystalline barrel, frosty tip
+        octx.fillStyle = wc || '#8fd0e8'; octx.fillRect(bx, -2.4, 15, 4.8);
+        octx.fillStyle = 'rgba(255,255,255,0.4)'; octx.fillRect(bx, -2.4, 15, 1.2);
+        octx.fillStyle = glow ? '#eaffff' : '#bfe8ff'; octx.beginPath(); octx.moveTo(bx+15,-4); octx.lineTo(bx+21,0); octx.lineTo(bx+15,4); octx.closePath(); octx.fill();
+      } else if (head === 'slimegun'){                      // a lumpy green blob-tank with a dripping nozzle
+        octx.fillStyle = wc || '#6fbf3a'; octx.beginPath(); octx.arc(bx+3, 0, 6.4, 0, 7); octx.fill();
+        octx.fillStyle = '#141414'; octx.fillRect(bx+7, -2, 11, 4);
+        if (glow || Math.random() < 0.3){ octx.fillStyle = 'rgba(150,220,60,0.8)'; octx.beginPath(); octx.arc(bx+19, 2.5, 2.2, 0, 7); octx.fill(); }
+      } else if (head === 'acidspray'){                     // bubbling corroded canister
+        octx.fillStyle = wc || '#c8d84a'; octx.fillRect(bx, -4, 11, 8);
+        octx.fillStyle = 'rgba(255,255,255,0.2)'; for (let i=0;i<3;i++){ octx.beginPath(); octx.arc(bx+2+i*3.5, -4+((performance.now()/200+i)%1)*8, 1.1, 0, 7); octx.fill(); }
+        octx.fillStyle = '#141414'; octx.fillRect(bx+11, -1.8, 8, 3.6);
+      } else {
+        octx.fillStyle = wc || '#141414';
+        octx.fillRect(bx, -2, head === 'shotgun' ? 16 : head === 'smg' ? 14 : head === 'dartgun' ? 15 : 12, head === 'shotgun' ? 5 : head === 'dartgun' ? 2.4 : 4);
+        if (head === 'dartgun'){ octx.fillStyle = wc || '#9a9aa2'; octx.fillRect(bx+13, -0.6, 6, 1.2); }
+        octx.fillStyle = wc ? 'rgba(0,0,0,0.35)' : '#3a2a1a'; octx.fillRect(bx + 1, 2, 3.4, 4.2);                                  // grip
+        if (head === 'shotgun' || head === 'smg' || (!head && wp.pellets > 1)){ octx.fillStyle = '#6a4a2a'; octx.fillRect(bx - 5, -1.6, 6, 3.6); }   // stock on the long guns
+        octx.fillStyle = 'rgba(255,255,255,0.28)'; octx.fillRect(bx + 2, -2, 8, 0.9);                                             // sheen along the barrel
+      }
+      if (glow && !['flamethrower','freezeray','slimegun'].includes(head)){ octx.fillStyle = '#ffe08a'; octx.beginPath(); octx.arc(bx + 14, 0, head === 'shotgun' ? 6 : 4, 0, 7); octx.fill(); }
+    } else if (head === 'bat'){                             // tapered barrel — thin at the grip, thick at the tip
+      octx.fillStyle = wc || '#9a6b3a';
+      octx.beginPath(); octx.moveTo(R*0.3, -1.6); octx.lineTo(R*0.3+wp.reach*0.62, -4.2); octx.lineTo(R*0.3+wp.reach*0.7, 0);
+      octx.lineTo(R*0.3+wp.reach*0.62, 4.2); octx.lineTo(R*0.3, 1.6); octx.closePath(); octx.fill();
+      octx.strokeStyle = 'rgba(255,255,255,0.18)'; octx.lineWidth = 1;
+      octx.beginPath(); octx.moveTo(R*0.3+wp.reach*0.15,-2.2); octx.lineTo(R*0.3+wp.reach*0.6,-3.6); octx.stroke();
+    } else if (head === 'club'){                            // knobbly wood, a fat organic knot at the striking end
+      octx.fillStyle = wc || '#7a5a3a'; octx.fillRect(R*0.3, -2.6, wp.reach*0.55, 5.2);
+      octx.beginPath(); octx.arc(R*0.3+wp.reach*0.6, 0, 6.4, 0, 7); octx.fill();
+      octx.fillStyle = 'rgba(0,0,0,0.22)'; octx.beginPath(); octx.arc(R*0.3+wp.reach*0.6-1.5, -1.5, 1.6, 0, 7); octx.arc(R*0.3+wp.reach*0.6+2, 1.8, 1.2, 0, 7); octx.fill();
+    } else if (head === 'pipe'){                            // a real pipe: banded metal segments, not a flat bar
+      octx.fillStyle = wc || '#9a9aa2'; octx.fillRect(R*0.3, -2, wp.reach*0.7, 4);
+      octx.fillStyle = 'rgba(255,255,255,0.22)'; octx.fillRect(R*0.3, -2, wp.reach*0.7, 1);
+      octx.fillStyle = 'rgba(0,0,0,0.28)';
+      for (let sx = R*0.3 + 8; sx < R*0.3 + wp.reach*0.7; sx += 9) octx.fillRect(sx, -2, 1.4, 4);
+    } else if (head === 'blade'){ octx.fillStyle = wc || '#d2d8de'; octx.fillRect(R*0.4, -1.5, 14, 3); octx.fillStyle = '#5a3a22'; octx.fillRect(R*0.35, -2.5, 3, 5); }
+    else if (head === 'mallet'){ octx.fillStyle = '#7a5a3a'; octx.fillRect(R*0.3, -2, wp.reach*0.55, 4); octx.fillStyle = wc || '#c33'; octx.fillRect(R*0.3 + wp.reach*0.5, -6, 10, 12); }
+    else if (head === 'torch'){ octx.fillStyle = '#5a3a22'; octx.fillRect(R*0.3, -2, wp.reach*0.7, 4); octx.fillStyle = '#ff9030'; octx.beginPath(); octx.arc(R*0.3 + wp.reach*0.72, 0, 4 + Math.random()*2, 0, 7); octx.fill(); }
+    else if (head === 'hose'){                              // a fat flexible hose coiling to a metal nozzle ring
+      octx.strokeStyle = wc || '#c9a83c'; octx.lineWidth = 5; octx.lineCap = 'round';
+      octx.beginPath(); octx.moveTo(R*0.3, 0); octx.quadraticCurveTo(R*0.3+wp.reach*0.35, -6, R*0.3+wp.reach*0.62, 0); octx.stroke();
+      octx.strokeStyle = '#8a8a92'; octx.lineWidth = 2; octx.beginPath(); octx.arc(R*0.3+wp.reach*0.7, 0, 3.6, 0, 7); octx.stroke();
+    } else if (head === 'zapstaff'){                        // a rod topped with a crackling orb
+      octx.fillStyle = '#3a2a4a'; octx.fillRect(R*0.3, -1.6, wp.reach*0.68, 3.2);
+      const orbx = R*0.3 + wp.reach*0.7;
+      octx.fillStyle = wc || '#b98cff'; octx.beginPath(); octx.arc(orbx, 0, 5, 0, 7); octx.fill();
+      octx.strokeStyle = '#ffe27a'; octx.lineWidth = 1;
+      for (let i=0;i<3;i++){ const ang = Math.random()*6.3; octx.beginPath(); octx.moveTo(orbx,0); octx.lineTo(orbx+Math.cos(ang)*7, Math.sin(ang)*7); octx.stroke(); }
+    } else if (head === 'frostblade'){                      // a jagged crystalline edge
+      const bx2 = R*0.4, len = wp.reach*0.72;
+      octx.fillStyle = wc || '#bfe8ff';
+      octx.beginPath(); octx.moveTo(bx2, -1.8);
+      for (let i=0;i<4;i++){ const px = bx2 + len*(i+1)/4; octx.lineTo(px, i%2===0 ? -4.2 : -1.2); }
+      octx.lineTo(bx2+len, 0.4); octx.lineTo(bx2, 1.8); octx.closePath(); octx.fill();
+      octx.fillStyle = '#5a3a22'; octx.fillRect(bx2-4, -2.4, 4, 4.8);
+    } else if (head === 'chainsaw'){                         // boxy motor body + a serrated bar
+      octx.fillStyle = '#3a3a3a'; octx.fillRect(R*0.28, -4, 10, 8);
+      octx.fillStyle = wc || '#c33'; octx.fillRect(R*0.28+2, -2.6, 6, 2.4);
+      const barx = R*0.28+10, barlen = wp.reach*0.5;
+      octx.fillStyle = '#8a8a92'; octx.fillRect(barx, -1.6, barlen, 3.2);
+      octx.fillStyle = '#1a1a1a';
+      for (let sx = barx; sx < barx+barlen; sx += 3){ octx.beginPath(); octx.moveTo(sx,-1.6); octx.lineTo(sx+1.5,-3); octx.lineTo(sx+3,-1.6); octx.fill(); }
+    } else if (wkey === 'bat'){ octx.fillStyle = wc || '#9a6b3a'; octx.fillRect(R*0.3, -2.5, wp.reach*0.72, 5); }
+    else if (wkey === 'pipe'){ octx.fillStyle = wc || '#9a9aa2'; octx.fillRect(R*0.3, -2, wp.reach*0.7, 4); }
+    else if (wkey === 'knife'){ octx.fillStyle = wc || '#d2d8de'; octx.fillRect(R*0.4, -1.5, 12, 3); }
+    else if (wkey === 'axe'){
+      const L = R*0.28, hlen = wp.reach*0.68, hx = L + hlen;
+      octx.fillStyle = '#5a3d22'; octx.fillRect(L, -1.8, hlen + 2, 3.6);                          // haft
+      octx.fillStyle = '#6e4a2c'; octx.fillRect(L, -1.8, hlen + 2, 1.3);                          // lit top of haft
+      octx.fillStyle = wc || '#8b9199';                                                                 // head — a bearded blade hung off one side of the haft, bit curving forward
+      octx.beginPath();
+      octx.moveTo(hx-5, -1); octx.lineTo(hx-6, -6); octx.lineTo(hx-1, -12);
+      octx.quadraticCurveTo(hx+7, -9, hx+8, -1);
+      octx.quadraticCurveTo(hx+3, 1, hx-5, -1); octx.closePath(); octx.fill();
+      octx.fillStyle = '#c9ced5';                                                                 // lit bevel along the cutting edge
+      octx.beginPath();
+      octx.moveTo(hx-1,-12); octx.quadraticCurveTo(hx+7,-9,hx+8,-1);
+      octx.quadraticCurveTo(hx+2,-4,hx,-9); octx.closePath(); octx.fill();
+      octx.fillStyle = '#5a3d22'; octx.fillRect(hx-1, -7, 3, 6);                                  // haft nub poking through the eye
+    }
+    else if (wkey === 'pickaxe'){
+      const L = R*0.28, hlen = wp.reach*0.6, hx = L + hlen;
+      octx.fillStyle = '#5a3d22'; octx.fillRect(L, -1.8, hlen + 2, 3.6);                          // haft
+      octx.fillStyle = '#6e4a2c'; octx.fillRect(L, -1.8, hlen + 2, 1.3);
+      octx.fillStyle = wc || '#8b9199';                                                                 // crescent head — pointed both ends, bowed forward, crossing the haft
+      octx.beginPath();
+      octx.moveTo(hx-2, -13); octx.quadraticCurveTo(hx+5, -5, hx+4, 0);
+      octx.quadraticCurveTo(hx+5, 4, hx+1, 10);
+      octx.quadraticCurveTo(hx-2, 4, hx-3, 0);
+      octx.quadraticCurveTo(hx-3, -6, hx-2, -13); octx.closePath(); octx.fill();
+      octx.fillStyle = '#c9ced5';                                                                 // lit forward edge
+      octx.beginPath();
+      octx.moveTo(hx-2,-13); octx.quadraticCurveTo(hx+5,-5,hx+4,0); octx.quadraticCurveTo(hx+5,4,hx+1,10);
+      octx.lineTo(hx,6); octx.quadraticCurveTo(hx+2,0,hx,-6); octx.closePath(); octx.fill();
+      octx.fillStyle = '#4a3320'; octx.beginPath(); octx.arc(hx-1, -1.5, 2.6, 0, 7); octx.fill();  // hub where the haft meets the head
+    }
+    else if (wkey === 'shovel'){
+      const L = R*0.28, hlen = wp.reach*0.62, hx = L + hlen;
+      octx.fillStyle = '#5a3d22'; octx.fillRect(L, -1.6, hlen, 3.2);                                // haft
+      octx.fillStyle = '#6e4a2c'; octx.fillRect(L, -1.6, hlen, 1.1);
+      octx.fillStyle = wc || '#9fb0c4'; octx.beginPath();                                                  // flat spade blade at the tip
+      octx.moveTo(hx-2, -5); octx.quadraticCurveTo(hx+7, -4, hx+9, 0);
+      octx.quadraticCurveTo(hx+7, 6, hx-2, 7); octx.quadraticCurveTo(hx-5, 1, hx-2, -5);
+      octx.closePath(); octx.fill();
+      octx.fillStyle = 'rgba(255,255,255,0.35)'; octx.fillRect(hx-1, -3.5, 5, 1.6);                  // lit bevel
+    }
+    else if (wkey === 'spear'){
+      octx.rotate(-(d + arc));                                        // hand-place it — no swing thrust
+      const gx = s * R * 0.6, gy = -R * 0.85;                          // grip: about 40% up the shaft
+      octx.translate(gx, gy); octx.rotate(s * -0.42);                  // carried near-vertical, a touch forward
+      octx.fillStyle = '#5a3d22'; octx.fillRect(-1.3, -R * 1.55, 2.6, R * 2.9);     // shaft — sticks out both sides of the fist
+      octx.fillStyle = '#6e4a2c'; octx.fillRect(-1.3, -R * 1.55, 1, R * 2.9);
+      octx.fillStyle = '#3a2a1a'; octx.fillRect(-1.3, R * 1.2, 2.6, 2.4);           // butt cap
+      octx.fillStyle = '#c9ced5'; octx.beginPath();                                 // leaf blade at the top
+      octx.moveTo(-1.6, -R * 1.55); octx.lineTo(-4.2, -R * 1.55 - 8); octx.lineTo(0.6, -R * 1.55 - 8); octx.lineTo(-0.4, -R * 1.55); octx.closePath(); octx.fill();
+      octx.fillStyle = 'rgba(255,255,255,0.4)'; octx.fillRect(-1.4, -R * 1.55 - 7, 1, 7);
+    }
+    else if (wkey === 'hoe' && a._plow){
+      const L = R*0.28, len = wp.reach*0.66, hx = L + len;                                           // a two-handled plough: haft + steel share
+      octx.fillStyle = '#5a3d22'; octx.fillRect(L, -1.6, len, 3.2);
+      octx.fillStyle = '#6e4a2c'; octx.fillRect(L, -1.6, len, 1);
+      octx.fillStyle = '#3a2a1a'; octx.fillRect(hx - 3, -1.6, 2.4, 9);                               // upright handle
+      octx.fillStyle = '#9aa0a8'; octx.beginPath();                                                  // share (pointed blade)
+      octx.moveTo(hx - 2, 6); octx.lineTo(hx + 9, 8); octx.lineTo(hx - 2, 10); octx.closePath(); octx.fill();
+      octx.fillStyle = 'rgba(255,255,255,0.35)'; octx.fillRect(hx - 2, 6.5, 8, 1);
+    }
+    else if (wkey === 'hoe'){
+      const L = R*0.28, len = wp.reach*0.66, hx = L + len;
+      octx.fillStyle = '#5a3d22'; octx.fillRect(L, -1.3, len, 2.6);                                 // haft
+      octx.fillStyle = '#6e4a2c'; octx.fillRect(L, -1.3, len, 0.9);
+      octx.fillStyle = wc || '#8b9199'; octx.fillRect(hx-1, -1, 2.6, 8);                                  // neck
+      octx.fillRect(hx-1, 6, 8, 2.6);                                                               // blade, turned forward
+      octx.fillStyle = 'rgba(255,255,255,0.3)'; octx.fillRect(hx-1, 6, 8, 1);
+    }
+    else if (wkey === 'fishrod'){
+      octx.rotate(-(d + arc));                                        // hand-place in actor-upright frame
+      const hx0 = s * R * 0.5, hy0 = -R * 0.5;                         // the fist
+      octx.strokeStyle = '#6e4a2c'; octx.lineWidth = 1.9; octx.lineCap = 'round';
+      if (a._fishing){
+        // rod out over the water, line dropping from the tip to a bobber on the surface
+        const tx = s * R * 3.0, ty = -R * 1.0;
+        octx.beginPath(); octx.moveTo(hx0, hy0 + R * 0.4);
+        octx.quadraticCurveTo((hx0 + tx) / 2, ty - R * 0.5, tx, ty); octx.stroke();
+        octx.strokeStyle = 'rgba(235,240,250,0.5)'; octx.lineWidth = 0.7;
+        octx.beginPath(); octx.moveTo(tx, ty); octx.lineTo(tx + s * 2, ty + R * 2.2); octx.stroke();
+        octx.fillStyle = '#d24a3a'; octx.beginPath(); octx.arc(tx + s * 2, ty + R * 2.2, 1.6, 0, 7); octx.fill();
+        octx.fillStyle = 'rgba(255,255,255,0.5)'; octx.beginPath(); octx.arc(tx + s * 2, ty + R * 2.25, 3, 0, 7); octx.stroke();   // faint ripple
+      } else {
+        // stowed: rod held up, line reeled in tight against the shaft
+        const tx = hx0 + s * R * 0.7, ty = -R * 2.7;
+        octx.beginPath(); octx.moveTo(hx0, hy0 + R * 0.4); octx.lineTo(tx, ty); octx.stroke();
+        octx.strokeStyle = 'rgba(235,240,250,0.4)'; octx.lineWidth = 0.5;           // line tucked along the rod
+        octx.beginPath(); octx.moveTo(hx0 + s * 2, hy0 + R * 0.2); octx.lineTo(tx + s * 1, ty + 1); octx.stroke();
+        octx.fillStyle = '#3a3a3a'; octx.beginPath(); octx.arc(hx0 + s * 2.5, hy0 + R * 0.1, 1.9, 0, 7); octx.fill();  // reel
+      }
+    }
+    else if (wkey === 'basket'){
+      octx.rotate(-(d + arc));                                                                      // ignore the swing pose — carried level
+      octx.fillStyle = '#8a6a3a'; octx.beginPath(); octx.ellipse(R*0.7, 5, 6, 4.6, 0, 0, 7); octx.fill();
+      octx.fillStyle = '#6a4f28'; octx.fillRect(R*0.7-6, 3, 12, 2);
+      octx.strokeStyle = '#6a4f28'; octx.lineWidth = 1; octx.beginPath(); octx.arc(R*0.7, 3, 6, Math.PI, 0); octx.stroke();
+      octx.fillStyle = '#b8394a'; for (const dx of [-2.5, 0.5, 3]) octx.fillRect(R*0.7+dx, 2.5, 1.8, 1.8);
+    }
+    else if (wp.kind !== 'gun'){ drawGenericMelee(octx, R, wp, wkey, wc); }   // katana, sledgehammer, whip, prod... had no in-hand art at all
+    if (wp._forged && !['spear', 'basket', 'hoe', 'fishrod'].includes(wkey)){   // a forged weapon's own trim: its chosen colour, and a glow tip for its element
+      const fg = wp._forged, len = wp.reach ? wp.reach * 0.7 : 14;
+      if (fg.col){ octx.fillStyle = fg.col; octx.globalAlpha = 0.9; octx.fillRect(R*0.3, -0.9, len, 1.8); octx.globalAlpha = 1; }
+      for (let ti = 0; ti < fg.tier; ti++){ octx.fillStyle = '#ffd24a'; octx.fillRect(R*0.3 + 2 + ti * 4, -3.4, 2.2, 2.2); octx.fillStyle = 'rgba(255,255,255,0.6)'; octx.fillRect(R*0.3 + 2 + ti * 4, -3.4, 1, 1); }   // one gold stud per upgrade tier
+      if (fg.fx){ octx.fillStyle = FX_BULLET_COLOR[fg.fx] || '#fff'; octx.globalAlpha = 0.55 + 0.3 * Math.sin(performance.now() / 110); octx.beginPath(); octx.arc(R*0.3 + len + 2, 0, 3.6, 0, 7); octx.fill(); octx.globalAlpha = 1; }
+    }
+}
 function drawActor(a){
   if (a._champ && !a._champDrawing){ drawChampion(a); return; }
   if (a.slimeBoss && !a._champ){ if (a._bk && a._bk !== 'slime') drawBossKind(a); else drawSlimeBoss(a); return; }
@@ -26054,12 +26567,17 @@ function drawActor(a){
   // covers the whole silhouette without having to touch each fillStyle individually — ice carries
   // its own alpha (translucent, "like ice"), concrete stays fully opaque (it's stone, not glass).
   const frozen = a._iceFrozenT > 0, petrified = a._concreteT > 0;
-  const shirt = petrified ? 'rgba(152,152,158,0.97)' : frozen ? 'rgba(178,224,250,0.62)' : (a.hurt > 0 ? '#ffffff' : ((look && look.shirt) || (a.team === 'player' ? a.shirt : a.shirt)));
-  const skin = petrified ? 'rgba(168,168,172,0.97)' : frozen ? 'rgba(205,236,255,0.62)' : (a.hurt > 0 ? '#ffffff' : ((look && look.skin) || a.skin));
+  let shirt = petrified ? 'rgba(152,152,158,0.97)' : frozen ? 'rgba(178,224,250,0.62)' : (a.hurt > 0 ? '#ffffff' : ((look && look.shirt) || (a.team === 'player' ? a.shirt : a.shirt)));
+  let skin = petrified ? 'rgba(168,168,172,0.97)' : frozen ? 'rgba(205,236,255,0.62)' : (a.hurt > 0 ? '#ffffff' : ((look && look.skin) || a.skin));
 
+  const wetLook = a._wetT > 0 && !frozen && !petrified && !a.dead;   // soaked: darker, slicked clothes and a rippling wet patch underfoot
+  if (wetLook && !(a.hurt > 0)){ if (typeof shirt === 'string' && shirt[0] === '#') shirt = _tone(shirt, -0.22); if (typeof skin === 'string' && skin[0] === '#') skin = _tone(skin, -0.1); }
   // shadow
   octx.fillStyle = 'rgba(0,0,0,0.35)';
   octx.beginPath(); octx.ellipse(a.x, fy, a.r * 1.15, a.r * 0.5, 0, 0, 7); octx.fill();
+  if (wetLook){ const wk = Math.min(1, a._wetT / 2), wt = ((performance.now() / 600) + a.x * 0.01) % 1;
+    octx.fillStyle = 'rgba(60,110,175,' + (0.3 * wk) + ')'; octx.beginPath(); octx.ellipse(a.x, fy, a.r * 1.6, a.r * 0.75, 0, 0, 7); octx.fill();
+    octx.strokeStyle = 'rgba(210,235,255,' + (0.55 * wk * (1 - wt)) + ')'; octx.lineWidth = 1; octx.beginPath(); octx.ellipse(a.x, fy, a.r * (1 + wt * 0.9), a.r * (0.45 + wt * 0.4), 0, 0, 7); octx.stroke(); }
 
   // M6a: a pulsing trait aura ring + a tiny tag so the player can read what they're up against
   const lurking = a._combat === 'ambusher' && !a._sprung && !a.dead;   // M6c: hidden until it pounces
@@ -26222,6 +26740,7 @@ function drawActor(a){
     octx.fillStyle = 'rgba(255,255,255,0.35)'; octx.fillRect(HX + R*0.2, -R*2.95, R*0.3, R*0.1);
     if (a._isGuard){ octx.fillStyle = '#b8402e'; octx.fillRect(HX + R*0.44, -R*3.35, R*0.12, R*0.42); }   // guards get a plume
   }
+  if (a.soldier && a._armor && !a.dead) drawArmorOverlay(octx, R, a._armor, HX);
   if (a._spec && !a._headless) drawSpecParts(a, 'front');   // hat / face / neck / chest / waist / foot items
 
   // weapon — hidden while your hands are full (carrying a target/bulky item, or holding a
@@ -26244,181 +26763,7 @@ function drawActor(a){
       } else arc = wp.tool ? -0.6 : -0.12;                    // shouldered / ready at rest
     }
     octx.rotate(d + arc);
-    const head = wp._wspec && wp._wspec.head;
-    const wc = wp._wspec ? resolveColor(wp._wspec.color, a) : null;
-    if (wp.kind === 'gun'){
-      const bx = R*0.4, glow = a.muzzle > 0;
-      if (head === 'flamethrower'){                        // fuel tank slung under a short wide nozzle
-        octx.fillStyle = wc || '#a5303a'; octx.beginPath(); octx.ellipse(bx+2, 2, 7, 4.4, 0, 0, 7); octx.fill();
-        octx.fillStyle = '#141414'; octx.fillRect(bx, -2.6, 13, 5.2);
-        if (glow){ octx.fillStyle = 'rgba(255,140,40,0.85)'; octx.beginPath(); octx.moveTo(bx+13,-4); octx.lineTo(bx+13+10+Math.random()*6,0); octx.lineTo(bx+13,4); octx.fill();
-          octx.fillStyle = '#ffe08a'; octx.beginPath(); octx.arc(bx+16, 0, 3, 0, 7); octx.fill(); }
-      } else if (head === 'freezeray'){                     // crystalline barrel, frosty tip
-        octx.fillStyle = wc || '#8fd0e8'; octx.fillRect(bx, -2.4, 15, 4.8);
-        octx.fillStyle = 'rgba(255,255,255,0.4)'; octx.fillRect(bx, -2.4, 15, 1.2);
-        octx.fillStyle = glow ? '#eaffff' : '#bfe8ff'; octx.beginPath(); octx.moveTo(bx+15,-4); octx.lineTo(bx+21,0); octx.lineTo(bx+15,4); octx.closePath(); octx.fill();
-      } else if (head === 'slimegun'){                      // a lumpy green blob-tank with a dripping nozzle
-        octx.fillStyle = wc || '#6fbf3a'; octx.beginPath(); octx.arc(bx+3, 0, 6.4, 0, 7); octx.fill();
-        octx.fillStyle = '#141414'; octx.fillRect(bx+7, -2, 11, 4);
-        if (glow || Math.random() < 0.3){ octx.fillStyle = 'rgba(150,220,60,0.8)'; octx.beginPath(); octx.arc(bx+19, 2.5, 2.2, 0, 7); octx.fill(); }
-      } else if (head === 'acidspray'){                     // bubbling corroded canister
-        octx.fillStyle = wc || '#c8d84a'; octx.fillRect(bx, -4, 11, 8);
-        octx.fillStyle = 'rgba(255,255,255,0.2)'; for (let i=0;i<3;i++){ octx.beginPath(); octx.arc(bx+2+i*3.5, -4+((performance.now()/200+i)%1)*8, 1.1, 0, 7); octx.fill(); }
-        octx.fillStyle = '#141414'; octx.fillRect(bx+11, -1.8, 8, 3.6);
-      } else {
-        octx.fillStyle = '#141414';
-        octx.fillRect(bx, -2, head === 'shotgun' ? 16 : head === 'smg' ? 14 : head === 'dartgun' ? 15 : 12, head === 'shotgun' ? 5 : head === 'dartgun' ? 2.4 : 4);
-        if (head === 'dartgun'){ octx.fillStyle = wc || '#9a9aa2'; octx.fillRect(bx+13, -0.6, 6, 1.2); }
-      }
-      if (glow && !['flamethrower','freezeray','slimegun'].includes(head)){ octx.fillStyle = '#ffe08a'; octx.beginPath(); octx.arc(bx + 14, 0, head === 'shotgun' ? 6 : 4, 0, 7); octx.fill(); }
-    } else if (head === 'bat'){                             // tapered barrel — thin at the grip, thick at the tip
-      octx.fillStyle = wc || '#9a6b3a';
-      octx.beginPath(); octx.moveTo(R*0.3, -1.6); octx.lineTo(R*0.3+wp.reach*0.62, -4.2); octx.lineTo(R*0.3+wp.reach*0.7, 0);
-      octx.lineTo(R*0.3+wp.reach*0.62, 4.2); octx.lineTo(R*0.3, 1.6); octx.closePath(); octx.fill();
-      octx.strokeStyle = 'rgba(255,255,255,0.18)'; octx.lineWidth = 1;
-      octx.beginPath(); octx.moveTo(R*0.3+wp.reach*0.15,-2.2); octx.lineTo(R*0.3+wp.reach*0.6,-3.6); octx.stroke();
-    } else if (head === 'club'){                            // knobbly wood, a fat organic knot at the striking end
-      octx.fillStyle = wc || '#7a5a3a'; octx.fillRect(R*0.3, -2.6, wp.reach*0.55, 5.2);
-      octx.beginPath(); octx.arc(R*0.3+wp.reach*0.6, 0, 6.4, 0, 7); octx.fill();
-      octx.fillStyle = 'rgba(0,0,0,0.22)'; octx.beginPath(); octx.arc(R*0.3+wp.reach*0.6-1.5, -1.5, 1.6, 0, 7); octx.arc(R*0.3+wp.reach*0.6+2, 1.8, 1.2, 0, 7); octx.fill();
-    } else if (head === 'pipe'){                            // a real pipe: banded metal segments, not a flat bar
-      octx.fillStyle = wc || '#9a9aa2'; octx.fillRect(R*0.3, -2, wp.reach*0.7, 4);
-      octx.fillStyle = 'rgba(255,255,255,0.22)'; octx.fillRect(R*0.3, -2, wp.reach*0.7, 1);
-      octx.fillStyle = 'rgba(0,0,0,0.28)';
-      for (let sx = R*0.3 + 8; sx < R*0.3 + wp.reach*0.7; sx += 9) octx.fillRect(sx, -2, 1.4, 4);
-    } else if (head === 'blade'){ octx.fillStyle = wc || '#d2d8de'; octx.fillRect(R*0.4, -1.5, 14, 3); octx.fillStyle = '#5a3a22'; octx.fillRect(R*0.35, -2.5, 3, 5); }
-    else if (head === 'mallet'){ octx.fillStyle = '#7a5a3a'; octx.fillRect(R*0.3, -2, wp.reach*0.55, 4); octx.fillStyle = wc || '#c33'; octx.fillRect(R*0.3 + wp.reach*0.5, -6, 10, 12); }
-    else if (head === 'torch'){ octx.fillStyle = '#5a3a22'; octx.fillRect(R*0.3, -2, wp.reach*0.7, 4); octx.fillStyle = '#ff9030'; octx.beginPath(); octx.arc(R*0.3 + wp.reach*0.72, 0, 4 + Math.random()*2, 0, 7); octx.fill(); }
-    else if (head === 'hose'){                              // a fat flexible hose coiling to a metal nozzle ring
-      octx.strokeStyle = wc || '#c9a83c'; octx.lineWidth = 5; octx.lineCap = 'round';
-      octx.beginPath(); octx.moveTo(R*0.3, 0); octx.quadraticCurveTo(R*0.3+wp.reach*0.35, -6, R*0.3+wp.reach*0.62, 0); octx.stroke();
-      octx.strokeStyle = '#8a8a92'; octx.lineWidth = 2; octx.beginPath(); octx.arc(R*0.3+wp.reach*0.7, 0, 3.6, 0, 7); octx.stroke();
-    } else if (head === 'zapstaff'){                        // a rod topped with a crackling orb
-      octx.fillStyle = '#3a2a4a'; octx.fillRect(R*0.3, -1.6, wp.reach*0.68, 3.2);
-      const orbx = R*0.3 + wp.reach*0.7;
-      octx.fillStyle = wc || '#b98cff'; octx.beginPath(); octx.arc(orbx, 0, 5, 0, 7); octx.fill();
-      octx.strokeStyle = '#ffe27a'; octx.lineWidth = 1;
-      for (let i=0;i<3;i++){ const ang = Math.random()*6.3; octx.beginPath(); octx.moveTo(orbx,0); octx.lineTo(orbx+Math.cos(ang)*7, Math.sin(ang)*7); octx.stroke(); }
-    } else if (head === 'frostblade'){                      // a jagged crystalline edge
-      const bx2 = R*0.4, len = wp.reach*0.72;
-      octx.fillStyle = wc || '#bfe8ff';
-      octx.beginPath(); octx.moveTo(bx2, -1.8);
-      for (let i=0;i<4;i++){ const px = bx2 + len*(i+1)/4; octx.lineTo(px, i%2===0 ? -4.2 : -1.2); }
-      octx.lineTo(bx2+len, 0.4); octx.lineTo(bx2, 1.8); octx.closePath(); octx.fill();
-      octx.fillStyle = '#5a3a22'; octx.fillRect(bx2-4, -2.4, 4, 4.8);
-    } else if (head === 'chainsaw'){                         // boxy motor body + a serrated bar
-      octx.fillStyle = '#3a3a3a'; octx.fillRect(R*0.28, -4, 10, 8);
-      octx.fillStyle = wc || '#c33'; octx.fillRect(R*0.28+2, -2.6, 6, 2.4);
-      const barx = R*0.28+10, barlen = wp.reach*0.5;
-      octx.fillStyle = '#8a8a92'; octx.fillRect(barx, -1.6, barlen, 3.2);
-      octx.fillStyle = '#1a1a1a';
-      for (let sx = barx; sx < barx+barlen; sx += 3){ octx.beginPath(); octx.moveTo(sx,-1.6); octx.lineTo(sx+1.5,-3); octx.lineTo(sx+3,-1.6); octx.fill(); }
-    } else if (wkey === 'bat'){ octx.fillStyle = '#9a6b3a'; octx.fillRect(R*0.3, -2.5, wp.reach*0.72, 5); }
-    else if (wkey === 'pipe'){ octx.fillStyle = '#9a9aa2'; octx.fillRect(R*0.3, -2, wp.reach*0.7, 4); }
-    else if (wkey === 'knife'){ octx.fillStyle = '#d2d8de'; octx.fillRect(R*0.4, -1.5, 12, 3); }
-    else if (wkey === 'axe'){
-      const L = R*0.28, hlen = wp.reach*0.68, hx = L + hlen;
-      octx.fillStyle = '#5a3d22'; octx.fillRect(L, -1.8, hlen + 2, 3.6);                          // haft
-      octx.fillStyle = '#6e4a2c'; octx.fillRect(L, -1.8, hlen + 2, 1.3);                          // lit top of haft
-      octx.fillStyle = '#8b9199';                                                                 // head — a bearded blade hung off one side of the haft, bit curving forward
-      octx.beginPath();
-      octx.moveTo(hx-5, -1); octx.lineTo(hx-6, -6); octx.lineTo(hx-1, -12);
-      octx.quadraticCurveTo(hx+7, -9, hx+8, -1);
-      octx.quadraticCurveTo(hx+3, 1, hx-5, -1); octx.closePath(); octx.fill();
-      octx.fillStyle = '#c9ced5';                                                                 // lit bevel along the cutting edge
-      octx.beginPath();
-      octx.moveTo(hx-1,-12); octx.quadraticCurveTo(hx+7,-9,hx+8,-1);
-      octx.quadraticCurveTo(hx+2,-4,hx,-9); octx.closePath(); octx.fill();
-      octx.fillStyle = '#5a3d22'; octx.fillRect(hx-1, -7, 3, 6);                                  // haft nub poking through the eye
-    }
-    else if (wkey === 'pickaxe'){
-      const L = R*0.28, hlen = wp.reach*0.6, hx = L + hlen;
-      octx.fillStyle = '#5a3d22'; octx.fillRect(L, -1.8, hlen + 2, 3.6);                          // haft
-      octx.fillStyle = '#6e4a2c'; octx.fillRect(L, -1.8, hlen + 2, 1.3);
-      octx.fillStyle = '#8b9199';                                                                 // crescent head — pointed both ends, bowed forward, crossing the haft
-      octx.beginPath();
-      octx.moveTo(hx-2, -13); octx.quadraticCurveTo(hx+5, -5, hx+4, 0);
-      octx.quadraticCurveTo(hx+5, 4, hx+1, 10);
-      octx.quadraticCurveTo(hx-2, 4, hx-3, 0);
-      octx.quadraticCurveTo(hx-3, -6, hx-2, -13); octx.closePath(); octx.fill();
-      octx.fillStyle = '#c9ced5';                                                                 // lit forward edge
-      octx.beginPath();
-      octx.moveTo(hx-2,-13); octx.quadraticCurveTo(hx+5,-5,hx+4,0); octx.quadraticCurveTo(hx+5,4,hx+1,10);
-      octx.lineTo(hx,6); octx.quadraticCurveTo(hx+2,0,hx,-6); octx.closePath(); octx.fill();
-      octx.fillStyle = '#4a3320'; octx.beginPath(); octx.arc(hx-1, -1.5, 2.6, 0, 7); octx.fill();  // hub where the haft meets the head
-    }
-    else if (wkey === 'shovel'){
-      const L = R*0.28, hlen = wp.reach*0.62, hx = L + hlen;
-      octx.fillStyle = '#5a3d22'; octx.fillRect(L, -1.6, hlen, 3.2);                                // haft
-      octx.fillStyle = '#6e4a2c'; octx.fillRect(L, -1.6, hlen, 1.1);
-      octx.fillStyle = '#9fb0c4'; octx.beginPath();                                                  // flat spade blade at the tip
-      octx.moveTo(hx-2, -5); octx.quadraticCurveTo(hx+7, -4, hx+9, 0);
-      octx.quadraticCurveTo(hx+7, 6, hx-2, 7); octx.quadraticCurveTo(hx-5, 1, hx-2, -5);
-      octx.closePath(); octx.fill();
-      octx.fillStyle = 'rgba(255,255,255,0.35)'; octx.fillRect(hx-1, -3.5, 5, 1.6);                  // lit bevel
-    }
-    else if (wkey === 'spear'){
-      octx.rotate(-(d + arc));                                        // hand-place it — no swing thrust
-      const gx = s * R * 0.6, gy = -R * 0.85;                          // grip: about 40% up the shaft
-      octx.translate(gx, gy); octx.rotate(s * -0.42);                  // carried near-vertical, a touch forward
-      octx.fillStyle = '#5a3d22'; octx.fillRect(-1.3, -R * 1.55, 2.6, R * 2.9);     // shaft — sticks out both sides of the fist
-      octx.fillStyle = '#6e4a2c'; octx.fillRect(-1.3, -R * 1.55, 1, R * 2.9);
-      octx.fillStyle = '#3a2a1a'; octx.fillRect(-1.3, R * 1.2, 2.6, 2.4);           // butt cap
-      octx.fillStyle = '#c9ced5'; octx.beginPath();                                 // leaf blade at the top
-      octx.moveTo(-1.6, -R * 1.55); octx.lineTo(-4.2, -R * 1.55 - 8); octx.lineTo(0.6, -R * 1.55 - 8); octx.lineTo(-0.4, -R * 1.55); octx.closePath(); octx.fill();
-      octx.fillStyle = 'rgba(255,255,255,0.4)'; octx.fillRect(-1.4, -R * 1.55 - 7, 1, 7);
-    }
-    else if (wkey === 'hoe' && a._plow){
-      const L = R*0.28, len = wp.reach*0.66, hx = L + len;                                           // a two-handled plough: haft + steel share
-      octx.fillStyle = '#5a3d22'; octx.fillRect(L, -1.6, len, 3.2);
-      octx.fillStyle = '#6e4a2c'; octx.fillRect(L, -1.6, len, 1);
-      octx.fillStyle = '#3a2a1a'; octx.fillRect(hx - 3, -1.6, 2.4, 9);                               // upright handle
-      octx.fillStyle = '#9aa0a8'; octx.beginPath();                                                  // share (pointed blade)
-      octx.moveTo(hx - 2, 6); octx.lineTo(hx + 9, 8); octx.lineTo(hx - 2, 10); octx.closePath(); octx.fill();
-      octx.fillStyle = 'rgba(255,255,255,0.35)'; octx.fillRect(hx - 2, 6.5, 8, 1);
-    }
-    else if (wkey === 'hoe'){
-      const L = R*0.28, len = wp.reach*0.66, hx = L + len;
-      octx.fillStyle = '#5a3d22'; octx.fillRect(L, -1.3, len, 2.6);                                 // haft
-      octx.fillStyle = '#6e4a2c'; octx.fillRect(L, -1.3, len, 0.9);
-      octx.fillStyle = '#8b9199'; octx.fillRect(hx-1, -1, 2.6, 8);                                  // neck
-      octx.fillRect(hx-1, 6, 8, 2.6);                                                               // blade, turned forward
-      octx.fillStyle = 'rgba(255,255,255,0.3)'; octx.fillRect(hx-1, 6, 8, 1);
-    }
-    else if (wkey === 'fishrod'){
-      octx.rotate(-(d + arc));                                        // hand-place in actor-upright frame
-      const hx0 = s * R * 0.5, hy0 = -R * 0.5;                         // the fist
-      octx.strokeStyle = '#6e4a2c'; octx.lineWidth = 1.9; octx.lineCap = 'round';
-      if (a._fishing){
-        // rod out over the water, line dropping from the tip to a bobber on the surface
-        const tx = s * R * 3.0, ty = -R * 1.0;
-        octx.beginPath(); octx.moveTo(hx0, hy0 + R * 0.4);
-        octx.quadraticCurveTo((hx0 + tx) / 2, ty - R * 0.5, tx, ty); octx.stroke();
-        octx.strokeStyle = 'rgba(235,240,250,0.5)'; octx.lineWidth = 0.7;
-        octx.beginPath(); octx.moveTo(tx, ty); octx.lineTo(tx + s * 2, ty + R * 2.2); octx.stroke();
-        octx.fillStyle = '#d24a3a'; octx.beginPath(); octx.arc(tx + s * 2, ty + R * 2.2, 1.6, 0, 7); octx.fill();
-        octx.fillStyle = 'rgba(255,255,255,0.5)'; octx.beginPath(); octx.arc(tx + s * 2, ty + R * 2.25, 3, 0, 7); octx.stroke();   // faint ripple
-      } else {
-        // stowed: rod held up, line reeled in tight against the shaft
-        const tx = hx0 + s * R * 0.7, ty = -R * 2.7;
-        octx.beginPath(); octx.moveTo(hx0, hy0 + R * 0.4); octx.lineTo(tx, ty); octx.stroke();
-        octx.strokeStyle = 'rgba(235,240,250,0.4)'; octx.lineWidth = 0.5;           // line tucked along the rod
-        octx.beginPath(); octx.moveTo(hx0 + s * 2, hy0 + R * 0.2); octx.lineTo(tx + s * 1, ty + 1); octx.stroke();
-        octx.fillStyle = '#3a3a3a'; octx.beginPath(); octx.arc(hx0 + s * 2.5, hy0 + R * 0.1, 1.9, 0, 7); octx.fill();  // reel
-      }
-    }
-    else if (wkey === 'basket'){
-      octx.rotate(-(d + arc));                                                                      // ignore the swing pose — carried level
-      octx.fillStyle = '#8a6a3a'; octx.beginPath(); octx.ellipse(R*0.7, 5, 6, 4.6, 0, 0, 7); octx.fill();
-      octx.fillStyle = '#6a4f28'; octx.fillRect(R*0.7-6, 3, 12, 2);
-      octx.strokeStyle = '#6a4f28'; octx.lineWidth = 1; octx.beginPath(); octx.arc(R*0.7, 3, 6, Math.PI, 0); octx.stroke();
-      octx.fillStyle = '#b8394a'; for (const dx of [-2.5, 0.5, 3]) octx.fillRect(R*0.7+dx, 2.5, 1.8, 1.8);
-    }
-    if (wp._forged && !['spear', 'basket', 'hoe', 'fishrod'].includes(wkey)){   // a forged weapon's own trim: its chosen colour, and a glow tip for its element
-      const fg = wp._forged, len = wp.reach ? wp.reach * 0.7 : 14;
-      if (fg.col){ octx.fillStyle = fg.col; octx.globalAlpha = 0.9; octx.fillRect(R*0.3, -0.9, len, 1.8); octx.globalAlpha = 1; }
-      if (fg.fx){ octx.fillStyle = FX_BULLET_COLOR[fg.fx] || '#fff'; octx.globalAlpha = 0.55 + 0.3 * Math.sin(performance.now() / 110); octx.beginPath(); octx.arc(R*0.3 + len + 2, 0, 3.6, 0, 7); octx.fill(); octx.globalAlpha = 1; }
-    }
+    drawHeldWeapon(octx, a, R, d, arc, s, wp, wkey);
     octx.restore();
   }
 
@@ -27382,6 +27727,16 @@ function drawProp(p){
     for (let i = -1; i <= 1; i++){ octx.beginPath(); octx.moveTo(-w * 0.3, i * h * 0.16); octx.lineTo(w * 0.3, i * h * 0.16); octx.stroke(); }
     octx.fillStyle = '#8a7228'; octx.beginPath(); octx.ellipse(0, -h * 0.34, w * 0.2, h * 0.1, 0, 0, 7); octx.fill();   // open mouth
     octx.restore();
+  } else if (T === 'freezer'){                                                        // a chest freezer / drink cooler: pale metal box, frosted lid, a blue ICE band
+    octx.fillStyle = 'rgba(0,0,0,0.2)'; octx.fillRect(-w/2 + 1, h/2 - 2, w, 3);
+    octx.fillStyle = '#aebbc7'; octx.fillRect(-w/2, -h/2 + 4, w, h - 4);
+    octx.fillStyle = '#e4edf4'; octx.fillRect(-w/2, -h/2 + 4, w, h * 0.42);
+    octx.fillStyle = '#c8d6e2'; octx.fillRect(-w/2 - 1, -h/2 + 1, w + 2, 5);
+    octx.fillStyle = '#3a8ad8'; octx.fillRect(-w/2 + 2, h * 0.12, w - 4, 3.6);
+    octx.fillStyle = '#eaf6ff'; octx.font = 'bold 4px monospace'; octx.textAlign = 'center'; octx.fillText('ICE', 0, h * 0.12 + 3.2);
+    octx.fillStyle = '#4a5560'; octx.fillRect(-w/4, -h/2 + 6, w/2, 1.6);
+    octx.fillStyle = 'rgba(255,255,255,0.7)'; octx.fillRect(-w/2 + 2, -h/2 + 5, 3, 1.4); octx.fillRect(w/2 - 6, -h/2 + 6, 2, 1.4);
+    const mt = performance.now() / 1000; octx.fillStyle = 'rgba(220,242,255,0.35)'; for (let i = 0; i < 3; i++){ const k = (mt * 0.5 + i * 0.33) % 1; octx.beginPath(); octx.arc(-w/4 + i * w/4 + Math.sin(mt + i) * 2, -h/2 - k * 9, 1.6 + k * 2, 0, 7); octx.fill(); }   // cold mist drifting off the lid
   } else if (T === 'kennel'){                                                         // simple doghouse silhouette — whatever was locked in here is the point, not the box
     octx.fillStyle = '#8a6a3a'; octx.beginPath();
     octx.moveTo(-w/2, h/2); octx.lineTo(-w/2, -h*0.1); octx.lineTo(0, -h/2); octx.lineTo(w/2, -h*0.1); octx.lineTo(w/2, h/2); octx.closePath(); octx.fill();
@@ -29084,7 +29439,7 @@ window.__G = () => ({ player, enemies, props, pickups, bullets, calledShots, par
          get cityProps(){ return props.reduce((m,p)=>{ m[p.t]=(m[p.t]||0)+1; return m; }, {}); },
          get kick(){ return { n: kickBits.length, sample: kickBits.slice(-3).map(b=>({col:b.col, z:+b.z.toFixed(1), leaf:b.leaf})) }; },
          get roofs(){ return village ? village.roofs : []; }, get clouds(){ return { R: Math.max(VUW,VUH)*0.72, ccx: (cam.x+VUW/2)|0, ccy:(cam.y+VUH/2)|0, list: clouds.map(c=>({id:c.id,x:c.x|0,y:c.y|0,rx:c.rx|0,fade:+c.fade.toFixed(2)})) }; },
-         recomputeRoofs, checkCult, checkHQ, registerCultBuild, checkTownTier, townMissing, waterAt, riverCX, riverHW, lakeTypeAt, rebuildBridges, get riverKind(){ return RIVER_KIND; }, cityDistrictAt, cityDistrictRank, uniqueAt, cityCountryNo, mkLandmark, mkProp, openMutLab, mutateVillager, makeSlimeBoss, raiseSkeleton, convertZombie, mkVehicle, hurtProp, get trainRuns(){ return trainRuns; }, get helis(){ return helis; }, get heist(){ return heist; }, damageHeli, get rocketFlights(){ return rocketFlights; }, DISTRICT_INFO, get waterfall(){ return WATERFALL; }, get lakesList(){ return LAKES; }, get crittersList(){ return critters; }, hitCritters, biomeKit, BIOME_KITS, countryStyle, COUNTRY_STYLES, MAT_COL, stormStrike, beheadActor, get fxList(){ return fx; }, get headList(){ return heads; }, get missionRef(){ return mission; }, leaveMission, showRunRecap, get deathLoss(){ return _deathLoss; }, get pendingRecap(){ return pendingRunRecap; }, wagerReportRows, get wagerReport(){ return _wagerReport; }, rollWagers, WAGER_ODDS, WAGER_TIER, registerYardBuilds, YARD_BUILDINGS, openHelp, closeHelp, helpSections, get helpOpen(){ return helpOpen; }, rivalTick, rivalNodes, rivalBroken, maybeRivalRaid, WAGERS, UNIQUES, grantUnique, rollVillageEvent, openEventChoice, showVillageEvent, openWagers, wagerTick, calamityTick, drawCalamities, CAL, wagerPayMul, get runWagers(){ return runWagers; }, set runWagers(v){ runWagers = v; }, maybeCultRaid, maybeSpawnDarkShrine, darkShrineDrain, razeDarkShrine, cultCityTick, makeCultist, hurtProp, darkShrines, squadCap, finishGuardRoute, toggleGuardZoneMode, get guardRoutePts(){ return guardRoutePts; }, RESEARCH, researchLocked, doResearch, openResearch, drawResearch, setResearchTab(i){ researchTab = i; }, get researchOpen(){ return researchOpen; }, convictionCap, forgedId, parseForged, WEAPONS_RAW, openSmithy, closeSmithy, smithyEntries, forgeQuote, forgeApply, get smithyOpen(){ return smithyOpen; }, villagerCap, villageDayTick, TOWN_TIERS,
+         recomputeRoofs, checkCult, checkHQ, registerCultBuild, checkTownTier, townMissing, waterAt, riverCX, riverHW, lakeTypeAt, rebuildBridges, get riverKind(){ return RIVER_KIND; }, cityDistrictAt, cityDistrictRank, uniqueAt, cityCountryNo, mkLandmark, mkProp, openMutLab, mutateVillager, makeSlimeBoss, raiseSkeleton, convertZombie, mkVehicle, hurtProp, get trainRuns(){ return trainRuns; }, get helis(){ return helis; }, get heist(){ return heist; }, damageHeli, get rocketFlights(){ return rocketFlights; }, DISTRICT_INFO, get waterfall(){ return WATERFALL; }, get lakesList(){ return LAKES; }, get crittersList(){ return critters; }, hitCritters, biomeKit, BIOME_KITS, countryStyle, COUNTRY_STYLES, MAT_COL, stormStrike, beheadActor, get fxList(){ return fx; }, get headList(){ return heads; }, get missionRef(){ return mission; }, leaveMission, showRunRecap, get deathLoss(){ return _deathLoss; }, get pendingRecap(){ return pendingRunRecap; }, wagerReportRows, get wagerReport(){ return _wagerReport; }, rollWagers, WAGER_ODDS, WAGER_TIER, registerYardBuilds, YARD_BUILDINGS, openHelp, closeHelp, helpSections, get helpOpen(){ return helpOpen; }, rivalTick, rivalNodes, rivalBroken, maybeRivalRaid, WAGERS, UNIQUES, grantUnique, rollVillageEvent, openEventChoice, showVillageEvent, openWagers, wagerTick, calamityTick, drawCalamities, CAL, wagerPayMul, get runWagers(){ return runWagers; }, set runWagers(v){ runWagers = v; }, maybeCultRaid, maybeSpawnDarkShrine, darkShrineDrain, razeDarkShrine, cultCityTick, makeCultist, hurtProp, darkShrines, squadCap, finishGuardRoute, toggleGuardZoneMode, get guardRoutePts(){ return guardRoutePts; }, RESEARCH, researchLocked, doResearch, openResearch, drawResearch, setResearchTab(i){ researchTab = i; }, get researchOpen(){ return researchOpen; }, convictionCap, forgedId, parseForged, WEAPONS_RAW, openSmithy, closeSmithy, smithyEntries, squadDebrief, vStats, craftArmor, ARMOR, forgeQuote, forgeApply, get smithyOpen(){ return smithyOpen; }, villagerCap, villageDayTick, TOWN_TIERS,
          get cult(){ return village ? { on: !!village.cult, day: village.cultDay, hq: village.hq, hqDone: !!village.hqDone } : null; },
          saveVillage, toggleCraft, toggleBuild, toggleTravel, placeBuild,
          get mission(){ return mission; }, get offers(){ return _urgeOffers; },
