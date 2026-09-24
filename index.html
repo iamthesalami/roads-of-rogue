@@ -1729,16 +1729,16 @@ let sermonOpen = false, _sermon = null, _gift = null, _sermonRAF = 0, sctx = nul
 // matching object (from your pack / the hoard) → a short face-scene handover → +1 conviction,
 // a free dossier fragment, and one belief lets go. The gift auto-displays near their bed.
 const WANT = {
-  abandoned: { objs: ['carriage clock', 'snow globe'], ask: "I keep losing the days out here. I'd like something that... counts them.", thanks: "You remembered. Nobody remembers." },
-  unmourned: { objs: ['carriage clock', 'teddy bear'], ask: "There's someone I'd like a place to keep. A small place. That one would do.", thanks: "…thank you. I mean it. Thank you." },
-  disgrace:  { objs: ['desk lamp', 'record player'],   ask: "I'd like one thing in my corner that works. That I didn't break.", thanks: "It works. I didn't do anything to it and it just… works." },
-  unchosen:  { objs: ['record player', 'television set'], ask: "Just once I'd like the thing everyone gathers round to be mine.", thanks: "They'll all come and sit by it. By mine." },
-  runaway:   { objs: ['houseplant', 'snow globe'],     ask: "Something that stays exactly where I put it. That doesn't need watching.", thanks: "It'll just… be here. Every morning. That's all I wanted." },
-  caretaker: { objs: ['houseplant', 'teddy bear'],     ask: "I need something that needs me. Even a little. Even just water.", thanks: "I'll look after it. I'm good at that. It's the one thing." },
-  unseen:    { objs: ['record player', 'carriage clock'], ask: "The quiet in my room is very loud. Something to put in it?", thanks: "Now there's a sound in there that somebody chose. For me." },
-  debt:      { objs: ['carriage clock', 'desk lamp'],  ask: "I'd like one thing that's just… given. No strings. Can that be a thing?", thanks: "No strings. You said no strings. I'm holding you to that — happily." },
-  smallness: { objs: ['grandfather clock', 'television set'], ask: "Something big. Something that'll still be standing when I'm not.", thanks: "That'll outlast me by a century. And it's mine. It's got my name on it now." },
-  betrayed:  { objs: ['snow globe', 'teddy bear'],     ask: "Something that can't turn on me. That's a short list. Anything on it.", thanks: "It can't lie to me. It can't leave. I think I love it a bit." },
+  abandoned: { objs: ['carriage clock', 'snow globe', 'music box', 'hourglass', 'cuckoo clock'], ask: "I keep losing the days out here. I'd like something that... counts them.", thanks: "You remembered. Nobody remembers." },
+  unmourned: { objs: ['carriage clock', 'teddy bear', 'toy rabbit', 'music box', 'houseplant'], ask: "There's someone I'd like a place to keep. A small place. That one would do.", thanks: "…thank you. I mean it. Thank you." },
+  disgrace:  { objs: ['desk lamp', 'record player', 'trophy', 'arcade cabinet', 'armchair'],   ask: "I'd like one thing in my corner that works. That I didn't break.", thanks: "It works. I didn't do anything to it and it just… works." },
+  unchosen:  { objs: ['record player', 'television set', 'jukebox', 'retro TV', 'armchair'], ask: "Just once I'd like the thing everyone gathers round to be mine.", thanks: "They'll all come and sit by it. By mine." },
+  runaway:   { objs: ['houseplant', 'snow globe', 'firefly jar', 'goldfish bowl', 'toy rabbit'],     ask: "Something that stays exactly where I put it. That doesn't need watching.", thanks: "It'll just… be here. Every morning. That's all I wanted." },
+  caretaker: { objs: ['houseplant', 'teddy bear', 'goldfish bowl', 'toy rabbit', 'aquarium'],     ask: "I need something that needs me. Even a little. Even just water.", thanks: "I'll look after it. I'm good at that. It's the one thing." },
+  unseen:    { objs: ['record player', 'carriage clock', 'lava lamp', 'crystal ball', 'music box'], ask: "The quiet in my room is very loud. Something to put in it?", thanks: "Now there's a sound in there that somebody chose. For me." },
+  debt:      { objs: ['carriage clock', 'desk lamp', 'toaster', 'armchair', 'desk lamp'],  ask: "I'd like one thing that's just… given. No strings. Can that be a thing?", thanks: "No strings. You said no strings. I'm holding you to that — happily." },
+  smallness: { objs: ['grandfather clock', 'television set', 'gold statue', 'trophy', 'orrery'], ask: "Something big. Something that'll still be standing when I'm not.", thanks: "That'll outlast me by a century. And it's mine. It's got my name on it now." },
+  betrayed:  { objs: ['snow globe', 'teddy bear', 'crystal lamp', 'armchair', 'clockwork bird'],     ask: "Something that can't turn on me. That's a short list. Anything on it.", thanks: "It can't lie to me. It can't leave. I think I love it a bit." },
 };
 function openSermon(vid){
   const v = village && village.villagers.find(x => x.id === vid);
@@ -2006,7 +2006,8 @@ function giftGive(){
   // hand over the object
   if (player.holding){ if (village.hoard) village.hoard = village.hoard.filter(x => x !== player.holding); player.holding = null; }
   delete v.want; v.wantDay = village.day;
-  village.conviction = Math.min(convictionCap(), (village.conviction || 0) + 1);
+  const rareGift = MERCHANT_RARE.some(d => d[0] === s.objName);                             // an animated piece means more to them than a plain one
+  village.conviction = Math.min(convictionCap(), (village.conviction || 0) + (rareGift ? 2 : 1));
   // they open up a little — a free dossier fragment. Their beliefs DON'T shift: gifts buy
   // your own conviction back, the preaching / sit-down does the converting.
   if (d){ if (!d.wound){ const wd = WOUNDS[ensureWound(v)]; d.frags = Math.min(wd.frags.length, (d.frags || 0) + 1); if (d.frags >= wd.frags.length) d.wound = true; } }
@@ -4396,7 +4397,7 @@ function startNewGamePlus(){
   // bulky object slung over your shoulder from a village that (from the new one's perspective) no
   // longer exists. Position doesn't need setting here — enterZone('village') below always plants
   // the player on the new village's own canonical spawn point regardless of where they were.
-  if (player){ player.carrying = null; player.holding = null; savePlayer(); }
+  if (player){ player.carrying = null; player.holding = null; player.bedSpot = null; savePlayer(); }   // your bed stayed behind in the old country
   enterZone('village');
   flash('NEW GAME+' + ngPlus, '#ffe6a0', village.country.name + ' (' + countryStyle().name + ') awaits — start over, stronger than before');
 }
@@ -4454,18 +4455,24 @@ function smithySlotSet(e, id){
 // every villager can level up by surviving raids with the squad (XP per raid + per kill), which raises their HP, damage
 // and damage reduction; armour is crafted at the Smithy or recovered from won raids and worn from the Armory's Squad tab
 const ARMOR = {
-  leather: { name: 'Leather Vest', dr: 0.10, col: '#8a5a30', cost: { wood: 6 } },
-  chain:   { name: 'Chain Mail',   dr: 0.20, col: '#9aa2ac', cost: { stone: 8, favor: 4 } },
-  plate:   { name: 'Plate Armour', dr: 0.32, col: '#c9ced8', cost: { stone: 16, favor: 10 }, req: 'tempering' },
+  leather: { name: 'Leather Vest', slot: 'body',   dr: 0.10, col: '#8a5a30', cost: { wood: 6 } },
+  chain:   { name: 'Chain Mail',   slot: 'body',   dr: 0.20, col: '#9aa2ac', cost: { stone: 8, favor: 4 } },
+  plate:   { name: 'Plate Armour', slot: 'body',   dr: 0.32, col: '#c9ced8', cost: { stone: 16, favor: 10 }, req: 'tempering' },
+  cap:     { name: 'Iron Cap',     slot: 'helm',   dr: 0.05, col: '#8b9199', cost: { stone: 4 } },
+  helm:    { name: 'Steel Helm',   slot: 'helm',   dr: 0.09, col: '#c9ced8', cost: { stone: 8, favor: 2 } },
+  buckler: { name: 'Buckler',      slot: 'shield', dr: 0.06, col: '#8a5a30', cost: { wood: 5 } },
+  shield:  { name: 'Tower Shield', slot: 'shield', dr: 0.12, col: '#b8c0cc', cost: { wood: 8, stone: 4 } },
 };
+const ARMOR_SLOTS = { body: 'armor', helm: 'helm', shield: 'shield' };   // slot -> the villager-record field that holds it
 const VL_MAX = 12;
 const vLvl = rec => Math.min(VL_MAX, (rec && rec.lvl) || 1);
 const vXpNext = l => 60 + 40 * l;
 function vStats(rec){
-  const l = vLvl(rec), a = rec && ARMOR[rec.armor], lvlDr = Math.min(0.15, 0.012 * (l - 1));
-  return { lvl: l, hpMul: 1 + 0.10 * (l - 1), dmgMul: 1 + 0.07 * (l - 1), armorDR: a ? a.dr : 0, dr: Math.min(0.6, (a ? a.dr : 0) + lvlDr) };
+  const l = vLvl(rec), lvlDr = Math.min(0.15, 0.012 * (l - 1));
+  let adr = 0; if (rec) for (const f of ['armor', 'helm', 'shield']) if (ARMOR[rec[f]]) adr += ARMOR[rec[f]].dr;
+  return { lvl: l, hpMul: (1 + 0.10 * (l - 1)) * (rec && rec.golem ? 1.6 : 1), dmgMul: 1 + 0.07 * (l - 1), armorDR: adr, dr: Math.min(0.6, adr + lvlDr) };
 }
-function applyVetStats(e, rec){ const st = vStats(rec); e._lvl = st.lvl; e._lvlDmg = st.dmgMul; e._armorDR = st.dr; e._armor = (rec && rec.armor) || null; return st; }
+function applyVetStats(e, rec){ const st = vStats(rec); e._lvl = st.lvl; e._lvlDmg = st.dmgMul; e._armorDR = st.dr; e._armor = (rec && rec.armor) || null; e._helm = (rec && rec.helm) || null; e._shield = (rec && rec.shield) || null; return st; }
 function armorCostText(c){ return Object.keys(c).map(k => c[k] + ' ' + k).join(' + '); }
 function canCraftArmor(k){
   const a = ARMOR[k]; if (!a || !village || !player) return false;
@@ -4493,7 +4500,7 @@ function squadDebrief(won){
     if (up) ups.push(firstName(rec) + ' → Lv ' + rec.lvl);
   }
   if (won && (village.armorStock || []).length < 30){
-    const r = Math.random(), k = r < 0.6 ? 'leather' : r < 0.9 ? 'chain' : 'plate';
+    const r = Math.random(), r2 = Math.random(), k = r < 0.45 ? (r2 < 0.6 ? 'leather' : r2 < 0.9 ? 'chain' : 'plate') : r < 0.75 ? (r2 < 0.65 ? 'cap' : 'helm') : (r2 < 0.65 ? 'buckler' : 'shield');
     (village.armorStock ||= []).push(k);
     setTimeout(() => flash('Armour recovered: ' + ARMOR[k].name, '#c8b48a', 'waiting in the Armory'), 2800);
   }
@@ -4511,10 +4518,23 @@ function drawArmorOverlay(g, R, id, HX){
   else if (id === 'plate'){
     g.fillStyle = a.col; g.fillRect(-R * 0.92, -R * 1.72, R * 0.36, R * 0.42); g.fillRect(R * 0.56, -R * 1.72, R * 0.36, R * 0.42);          // pauldrons
     g.fillStyle = '#7a828e'; for (const rx of [-0.45, 0.45]) g.fillRect(R * rx - 0.6, -R * 1.5, 1.4, 1.4);
-    g.fillStyle = a.col; g.beginPath(); g.arc(HX + R * 0.5, -R * 2.5, R * 0.62, Math.PI, 0); g.closePath(); g.fill();                        // helm
-    g.fillStyle = '#3a4048'; g.fillRect(HX + R * 0.18, -R * 2.52, R * 0.64, R * 0.12);
   }
 }
+function drawHelmOverlay(g, R, id, HX){
+  const a = ARMOR[id]; if (!a) return;
+  g.fillStyle = a.col; g.beginPath(); g.arc(HX + R * 0.5, -R * 2.5, R * 0.64, Math.PI, 0); g.closePath(); g.fill();
+  g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(HX - R * 0.14, -R * 2.52, R * 1.28, R * 0.14);
+  g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(HX + R * 0.2, -R * 3.0, R * 0.3, R * 0.1);
+  if (id === 'helm'){ g.fillStyle = '#3a4048'; g.fillRect(HX + R * 0.46, -R * 2.5, R * 0.16, R * 0.5); g.fillStyle = '#b8402e'; g.fillRect(HX + R * 0.44, -R * 3.3, R * 0.14, R * 0.34); }   // nose guard + crest
+}
+function drawShieldOverlay(g, R, id){
+  const a = ARMOR[id]; if (!a) return;
+  g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.arc(-R * 0.93, -R * 1.1, R * (id === 'shield' ? 0.72 : 0.5) + 1, 0, 7); g.fill();
+  g.fillStyle = a.col; g.beginPath(); g.arc(-R * 0.95, -R * 1.12, R * (id === 'shield' ? 0.72 : 0.5), 0, 7); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.4)'; g.lineWidth = 1; g.beginPath(); g.arc(-R * 0.95, -R * 1.12, R * (id === 'shield' ? 0.6 : 0.4), 0, 7); g.stroke();
+  g.fillStyle = id === 'shield' ? '#d8b04a' : '#7a828e'; g.beginPath(); g.arc(-R * 0.95, -R * 1.12, R * 0.16, 0, 7); g.fill();
+}
+function drawGearSet(g, R, body, helm, shield, HX){ if (shield) drawShieldOverlay(g, R, shield); if (body) drawArmorOverlay(g, R, body, HX); if (helm) drawHelmOverlay(g, R, helm, HX); }
 function drawVetPortrait(cv, rec){
   const g = cv.getContext('2d'), W = cv.width, H = cv.height, R = 12, tn = performance.now() / 1000;
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
@@ -4525,7 +4545,7 @@ function drawVetPortrait(cv, rec){
   g.fillStyle = shirt; g.fillRect(-R * 0.62, -R * 1.7, R * 1.24, R * 1.0); g.fillRect(-R * 0.82, -R * 1.55, R * 0.28, R * 0.8); g.fillRect(R * 0.54, -R * 1.55, R * 0.28, R * 0.8);
   g.fillStyle = skin; g.fillRect(HX, -R * 2.55, R * 1.0, R * 0.95); g.fillStyle = hair; g.fillRect(HX, -R * 2.6, R * 1.0, R * 0.4);
   g.fillStyle = '#1a1a1a'; g.fillRect(-R * 0.22, -R * 2.0, 2, 2); g.fillRect(R * 0.08, -R * 2.0, 2, 2);
-  if (rec.armor) drawArmorOverlay(g, R, rec.armor, HX);
+  drawGearSet(g, R, rec.armor, rec.helm, rec.shield, HX);
   if (rec.armed && WEAPONS[rec.armed]){ const wp = WEAPONS[rec.armed]; g.save(); g.translate(R * 0.9, -R * 1.0); g.rotate(-0.5); try { drawHeldWeapon(g, { weapon: rec.armed, dir: 0, swing: 0, muzzle: 0, r: R, animT: tn }, R, 0, 0, 1, wp, wp._base || rec.armed); } catch (e) {} g.restore(); }
   try { drawMutOverlays(g, rec.mut || [], R, 1, 'S', HX, tn); } catch (e) {}
   g.restore();
@@ -4596,8 +4616,9 @@ function buildSquadUI(){
       + '<button class="eq' + (sel.pinned ? ' on' : '') + '" data-a2="pin">' + (sel.pinned ? '★ Marches on raids' : '☆ Bring on raids') + '</button></div></div>';
     html += '<p class="sub">WEAPON — ' + (sel.armed ? wn(sel.armed) : 'bare hands') + '</p><div class="list short">' + (sel.armed ? '<div class="rowline"><span class="lo">take it back to the rack</span><button class="eq" data-a2="unarm">Unequip</button></div>' : '')
       + (village.armory.length ? village.armory.map((id, i) => '<div class="rowline"><span class="lo">' + wn(id) + '</span><button class="eq" data-give="' + i + '">Give</button></div>').join('') : '<p class="sub">the rack is empty</p>') + '</div>';
-    html += '<p class="sub">ARMOUR — ' + (sel.armor ? ARMOR[sel.armor].name + ' (-' + Math.round(ARMOR[sel.armor].dr * 100) + '%)' : 'none') + '</p><div class="list short">' + (sel.armor ? '<div class="rowline"><span class="lo">take it off</span><button class="eq" data-a2="unwear">Remove</button></div>' : '')
-      + (village.armorStock.length ? village.armorStock.map((k, i) => '<div class="rowline"><span class="lo">' + ARMOR[k].name + ' (-' + Math.round(ARMOR[k].dr * 100) + '%)</span><button class="eq" data-wear="' + i + '">Wear</button></div>').join('') : '<p class="sub">no spare armour — forge some at the Smithy or win it back from raids</p>') + '</div>';
+    const worn = ['body', 'helm', 'shield'].map(sl => ({ sl, k: sel[ARMOR_SLOTS[sl]] })).filter(x => x.k);
+    html += '<p class="sub">GEAR — ' + (worn.length ? worn.map(x => ARMOR[x.k].name).join(' · ') : 'none') + '</p><div class="list short">' + worn.map(x => '<div class="rowline"><span class="lo">' + x.sl + ': ' + ARMOR[x.k].name + ' (-' + Math.round(ARMOR[x.k].dr * 100) + '%)</span><button class="eq" data-a2="unwear-' + x.sl + '">Remove</button></div>').join('')
+      + (village.armorStock.length ? village.armorStock.map((k, i) => '<div class="rowline"><span class="lo">' + ARMOR[k].slot + ': ' + ARMOR[k].name + ' (-' + Math.round(ARMOR[k].dr * 100) + '%)</span><button class="eq" data-wear="' + i + '">Wear</button></div>').join('') : '<p class="sub">no spare gear — forge some at the Smithy or win it back from raids</p>') + '</div>';
   }
   html += '<div class="foot"><button id="smithyclose">Leave</button></div></div>';
   $('smithy').innerHTML = html; bindArmoryTabs();
@@ -4608,11 +4629,11 @@ function buildSquadUI(){
     const a = b.dataset.a2;
     if (a === 'pin') sel.pinned = !sel.pinned;
     else if (a === 'unarm' && sel.armed){ village.armory.push(sel.armed); sel.armed = null; sel.gearSet = !!sel.armor; }
-    else if (a === 'unwear' && sel.armor){ village.armorStock.push(sel.armor); sel.armor = null; }
+    else if (a.startsWith('unwear-')){ const key = ARMOR_SLOTS[a.slice(7)]; if (key && sel[key]){ village.armorStock.push(sel[key]); sel[key] = null; } }
     live(); refresh();
   }));
   $('smithy').querySelectorAll('[data-give]').forEach(b => b.addEventListener('click', () => { const id = village.armory.splice(+b.dataset.give, 1)[0]; if (id === undefined) return; if (sel.armed) village.armory.push(sel.armed); sel.armed = id; sel.gearSet = true; live(); refresh(); }));
-  $('smithy').querySelectorAll('[data-wear]').forEach(b => b.addEventListener('click', () => { const k = village.armorStock.splice(+b.dataset.wear, 1)[0]; if (!k) return; if (sel.armor) village.armorStock.push(sel.armor); sel.armor = k; sel.gearSet = true; live(); refresh(); }));
+  $('smithy').querySelectorAll('[data-wear]').forEach(b => b.addEventListener('click', () => { const k = village.armorStock.splice(+b.dataset.wear, 1)[0]; if (!k) return; const key = ARMOR_SLOTS[ARMOR[k].slot || 'body']; if (sel[key]) village.armorStock.push(sel[key]); sel[key] = k; sel.gearSet = true; live(); refresh(); }));
   const pc = $('vetport'); if (pc && sel) drawVetPortrait(pc, sel);
   $('smithyclose').addEventListener('click', closeSmithy);
 }
@@ -4704,7 +4725,7 @@ function buildSmithyUI(){
     html += '<button data-a="fx" data-v=""' + (qn ? '' : ' disabled') + '>Remove infusion</button></div>';
     html += '<p class="sub">PAINT — recolours the weapon itself (1 favor)</p><div class="swatches">' + '<span class="sw' + (!f.col ? ' on' : '') + '" data-a="col" data-v="" style="background:repeating-linear-gradient(45deg,#3a2a1a 0 4px,#1a1208 4px 8px)" title="original colour"></span>' + FORGE_COLORS.map(c => '<span class="sw' + (f.col === c ? ' on' : '') + '" data-a="col" data-v="' + c + '" style="background:' + c + '" title="colour (1 favor)"></span>').join('') + '</div>';
   }
-  html += '<p class="sub">ARMOURER — forge armour for your people (' + (village.armorStock || []).length + ' in store)</p><div class="opts">' + Object.keys(ARMOR).map(k => { const a = ARMOR[k]; return '<button data-craft="' + k + '"' + (canCraftArmor(k) ? '' : ' disabled') + '>' + a.name + ' (-' + Math.round(a.dr * 100) + '% dmg) — ' + armorCostText(a.cost) + (a.req && !(village.research && village.research[a.req]) ? ' · needs Tempering' : '') + '</button>'; }).join('') + '</div>';
+  html += '<p class="sub">ARMOURER — forge armour for your people (' + (village.armorStock || []).length + ' in store)</p><div class="opts">' + Object.keys(ARMOR).map(k => { const a = ARMOR[k]; return '<button data-craft="' + k + '"' + (canCraftArmor(k) ? '' : ' disabled') + '>' + a.name + ' [' + a.slot + '] (-' + Math.round(a.dr * 100) + '% dmg) — ' + armorCostText(a.cost) + (a.req && !(village.research && village.research[a.req]) ? ' · needs Tempering' : '') + '</button>'; }).join('') + '</div>';
   html += '<div class="foot"><button id="smithyclose">Leave</button></div></div>';
   $('smithy').innerHTML = html;
   $('smithy').querySelectorAll('[data-craft]').forEach(b => b.addEventListener('click', () => { craftArmor(b.dataset.craft); buildSmithyUI(); }));
@@ -6416,15 +6437,22 @@ function villageDayTick(){
     if (r){ if (rcount[r] >= 2) m += 0.06; if (rt && rt.mood) m += rt.mood; if (V._raceFestDay === V.day && V._raceFestRace === r) m += 0.3;
       let feud = 0, friend = 0; for (const o in rcount){ if (o === r) continue; const rel = raceRel(r, o); if (rel === 'feud') feud++; else if (rel === 'friend') friend++; }
       m += Math.min(0.08, friend * 0.03) - Math.min(0.1, feud * 0.05); }
+    if (r && V.villagers.some(o => o.bound && o !== v && raceOf(o) === r)) m -= 0.12;            // seeing one of their own held bound
     if (gsPerk && gsPerk.mood) m += gsPerk.mood * gsMul;
     if (Object.keys(rcount).length >= 4) m += 0.05;                                            // a cosmopolitan village: everyone likes the variety
     if (V._hauntDay === V.day) m += (r === 'zombie' || r === 'vampire' || r === 'ghost') ? 0.2 : -0.25;
     return m;
   };
+  { const hasGuard = V.villagers.some(x => x.job === 'guard');                                                       // a bound labourer may slip away in the night (less likely with a guard about)
+    const runaways = V.villagers.filter(x => x.bound && x.boundDays > 1 && Math.random() < (x.mood < 0.75 ? 0.09 : 0.04) * (hasGuard ? 0.4 : 1));
+    if (runaways.length){ const gone = new Set(runaways.map(x => x.id)); V.villagers = V.villagers.filter(x => !gone.has(x.id)); for (const e of enemies) if (e.villager && gone.has(e._vid)) e.dead = true;
+      setTimeout(() => flash('Slipped away in the night', '#e0a05a', runaways.map(firstName).join(', ') + ' ran off before the term was up'), 2000); } }
+  const freedNow = []; setTimeout(() => { if (freedNow.length) flash('Debt worked off', '#c8e8a0', freedNow.join(', ') + (freedNow.length > 1 ? ' are' : ' is') + ' free now — and still here'); }, 2200);
   for (const v of V.villagers){
-    v.mood = clamp(0.9 + (R.wells ? 0.1 : 0) + (V._festivalDay === V.day ? 0.3 : 0) + (v.bed ? (R.comfort ? 0.5 : 0.34) : 0) - v.hungry * 0.25 + raceMoodFor(v), 0.3, 1.4);
+    if (v.boundDays > 0){ v.boundDays--; if (v.boundDays <= 0){ v.bound = false; freedNow.push(firstName(v)); } }
+    v.mood = clamp((v.freedEarly ? 0.1 : 0) + 0.9 + (R.wells ? 0.1 : 0) + (V._festivalDay === V.day ? 0.3 : 0) + (v.bed ? (R.comfort ? 0.5 : 0.34) : 0) - v.hungry * 0.25 + raceMoodFor(v) - (v.bound ? 0.25 : 0), 0.3, 1.4);
     const rt0 = RACE_TRAIT[raceOf(v)], jm = rt0 ? ((rt0.mult && rt0.mult[v.job]) || 1) * (rt0.work || 1) : 1;
-    const base = 2 * v.mood * ((v.mut && v.mut.some(m => (mutGift(m).k || {}).work)) ? 1.3 : 1) * jm;   // Sticky Hands, and your people's talents
+    const base = 2 * v.mood * ((v.mut && v.mut.some(m => (mutGift(m).k || {}).work)) ? 1.3 : 1) * jm * (v.bound ? 1.2 : 1) * (v.golem ? (v.job === 'miner' ? 1.6 : v.job === 'logger' ? 1.25 : 1) : 1);   // Sticky Hands, and your people's talents
     if (v.sick > 0){ v.sick--; continue; }                                   // laid up — no work today
     if (v.job === 'farmer'){ const y = Math.min(base * (R.plow ? (R.crops ? 1.75 : 1.5) : 1), Math.max(0, farmCap)); pFood += y; farmCap -= base; }
     else if (v.job === 'hunter') pFood += base * 1.5;
@@ -6463,7 +6491,7 @@ function villageDayTick(){
   vs.food += nb('granary') * 1; vs.research += nb('scriptorium') * 4; money += nb('market') * 8;
   const pCash = (R.ledger ? Math.floor(V.villagers.length * 0.6) : 0) + Math.round(pTrade * (1 + nb('market') * 0.2));   // The Ledger: a little cash a day, per villager; plus what the traders bring in (each market stall makes them 20% better)
   if (pCash) money += pCash;
-  const eat = Math.round(V.villagers.reduce((n, v) => n + ((RACE_TRAIT[raceOf(v)] || {}).eat ?? 1), 0) * (R.smokehouse ? 0.75 : 1));
+  const eat = Math.round(V.villagers.reduce((n, v) => n + (v.golem ? 0.3 : ((RACE_TRAIT[raceOf(v)] || {}).eat ?? 1)), 0) * (R.smokehouse ? 0.75 : 1));
   vs.food -= eat;
   const fed = vs.food >= 0; vs.food = Math.max(0, vs.food);
   for (const v of V.villagers){ if (fed) v.hungry = Math.max(0, v.hungry - 1); else if (!v.bed) v.hungry++; }
@@ -6507,12 +6535,13 @@ function villageDayTick(){
     for (const gp of (V.giftpiles || [])) for (const t of gp.items) giftable.add(t);
     if (player && player.holding && player.holding.t) giftable.add(player.holding.t);
     for (const v of V.villagers){
-      if (v.want || (v.wantDay != null && V.day - v.wantDay < 4)) continue;
-      if (Math.random() < 0.13){
+      if (v.want || (v.wantDay != null && V.day - v.wantDay < 2)) continue;
+      if (Math.random() < 0.3){
         const spec = WANT[WOUNDS[ensureWound(v)].theme] || WANT.smallness;
         const rwant = (RACE_WANTS[raceOf(v)] || []).filter(o => giftable.has(o));
         const avail = rwant.length && Math.random() < 0.5 ? rwant : spec.objs.filter(o => giftable.has(o));           // their people's taste, half the time
         if (avail.length) v.want = { obj: pick(avail) };
+        else if (Math.random() < 0.6) v.want = { obj: pick(spec.objs), seek: true };   // not in your hoard yet — a reason to go looking (merchant, city loot)
       }
     }
   }
@@ -6620,7 +6649,7 @@ function rollVillageEvent(V, forceId){
     else { const hit = V.villagers.filter(v => raceOf(v) === race); for (const v of hit) v.sick = 2; V._evt = { t: 'A plague among the ' + RACE_INFO[race].name.toLowerCase(), s: 'a sickness that only strikes ' + RACE_INFO[race].name.toLowerCase() + ' — ' + hit.length + ' laid up for two days (research Wells to blunt it)', c: '#b0c060' }; }
   }
   else if (id === 'monsterhunt') V._evt = { t: 'A beast prowls the treeline', s: 'something big is stalking the village edge — decide how to deal with it', c: '#e0a860', choice: 'monster' };
-  else if (id === 'stranger'){ const pp = randPersonRaced(); V._evt = { t: 'A stranger at the fire', s: pp.name + (pp.look && pp.look.race ? ' (' + RACE_INFO[pp.look.race].name.replace(/s$/, '') + ')' : '') + ' asks for shelter', c: '#c8e0f0', choice: 'stranger', person: pp }; }
+  else if (id === 'stranger'){ const pp = randPersonRaced(); V._evt = { t: 'A stranger at the fire', s: 'a traveller' + (pp.look && pp.look.race ? ' (' + RACE_INFO[pp.look.race].name.replace(/s$/, '').toLowerCase() + ')' : '') + ' is walking up to the fire — go and talk to them (E). They leave at dusk.', c: '#c8e0f0', person: pp, spot: findEventSpots(1, 60, 130, 30)[0] || { x: fireP.x + 70, y: fireP.y + 26 } }; }
   else if (id === 'envoy') V._evt = { t: 'An envoy is on his way', s: 'a diplomat from a distant realm is walking to the village — meet him and press E to talk (he leaves at dusk)', c: '#e0c8f0', spot: findEventSpots(1, 95, 170, 34)[0] || { x: fireP.x + 104, y: fireP.y + 16 } };
   if (V._evt) V._evt.id = id;
   V._today = V._evt ? Object.assign({ id, day: V.day, site: (gath && gath.site) || (gr || fireP), sites, gather: gath }, V._evt) : null;                       // the event of the day (drives the HUD chip, the decorations and the villagers' behaviour)
@@ -6673,17 +6702,51 @@ function makeMerchantStock(V){
   const stock = [], pool = ['bat', 'katana', 'spear', 'sledge', 'whip', 'prod', 'zapstaff', 'knife'];
   for (let i = 0; i < 3; i++){                                                                       // forged weapons: better tiers and elemental effects cost more
     const base = pick(pool), tier = 1 + Math.floor(Math.random() * 3), fx = Math.random() < 0.6 ? pick(Object.keys(MERCHANT_FX)) : null, bw = WEAPONS[base];
-    if (!bw) continue; stock.push({ k: 'weapon', id: forgedId(base, tier, fx, null), label: (fx ? MERCHANT_FX[fx] + ' ' : '') + bw.name + ' +' + tier, ico: bw.icon || '🗡️', cost: 110 + tier * 70 + (fx ? 90 : 0) });
+    if (!bw) continue; stock.push({ k: 'weapon', id: forgedId(base, tier, fx, null), label: (fx ? MERCHANT_FX[fx] + ' ' : '') + bw.name + ' +' + tier, ico: bw.icon || '🗡️', cost: Math.round((110 + tier * 70 + (fx ? 90 : 0)) * 2.4) });
   }
   const unowned = Object.keys(UNIQUES).filter(id => !(V.uniques && V.uniques[id]));
-  if (unowned.length && Math.random() < 0.3){ const id = pick(unowned); stock.push({ k: 'unique', id, label: UNIQUES[id].name + ' (unique)', ico: UNIQUES[id].icon || '✨', cost: 480 }); }
+  if (unowned.length && Math.random() < 0.3){ const id = pick(unowned); stock.push({ k: 'unique', id, label: UNIQUES[id].name + ' (unique)', ico: UNIQUES[id].icon || '✨', cost: 1300 }); }
   const present = {}; for (const v of V.villagers){ const r = raceOf(v); if (r) present[r] = 1; }                                       // each people in the village brings the merchant something of theirs
-  for (const r of Object.keys(present).slice(0, 3)){ const w = RACE_WARES[r]; if (w && Math.random() < 0.6){ const id = forgedId(w[0], 3, w[2] || null, null), bw = WEAPONS[w[0]]; if (bw) stock.push({ k: 'weapon', id, label: w[1] + ' +3', ico: bw.icon || '🗡️', cost: 300 + (w[2] ? 90 : 0) }); } }
-  if (Math.random() < 0.5) stock.push({ k: 'robot', label: 'A robot villager (lives and works like anyone else)', ico: '🤖', cost: 420 });
-  for (const [name, cost, ico] of MERCHANT_RARE.slice().sort(() => Math.random() - 0.5).slice(0, 3)) stock.push({ k: 'deco', id: name, label: name.replace(/^./, c => c.toUpperCase()) + ' (animated)', ico, cost });
+  for (const r of Object.keys(present).slice(0, 3)){ const w = RACE_WARES[r]; if (w && Math.random() < 0.6){ const id = forgedId(w[0], 3, w[2] || null, null), bw = WEAPONS[w[0]]; if (bw) stock.push({ k: 'weapon', id, label: w[1] + ' +3', ico: bw.icon || '🗡️', cost: Math.round((300 + (w[2] ? 90 : 0)) * 2.2) }); } }
+  if (Math.random() < 0.5) stock.push({ k: 'robot', label: 'A robot villager (lives and works like anyone else)', ico: '🤖', cost: 1100 });
+  if (Math.random() < 0.4) stock.push({ k: 'golem', label: 'A stone golem (tireless miner, very tough, eats little)', ico: '🗿', cost: 1600 });
+  if (Math.random() < 0.55){                                                                         // bound labourers: another people, cheap, work hard, resentful until their term ends
+    const races = Object.keys(RACE_INFO).filter(r => RACE_INFO[r].names).sort(() => Math.random() - 0.5).slice(0, 2);
+    for (const r of races) stock.push({ k: 'bound', race: r, label: 'A bound labourer — ' + RACE_INFO[r].name.toLowerCase() + ' (works hard, resentful, may run away; free after ' + BOUND_TERM + ' days)', ico: '⛓️', cost: 900 });
+  }
+  for (const [name, cost, ico] of MERCHANT_RARE.slice().sort(() => Math.random() - 0.5).slice(0, 3)) stock.push({ k: 'deco', id: name, label: name.replace(/^./, c => c.toUpperCase()) + ' (animated)', ico, cost: Math.round(cost * 2.2) });
+  { const seen = Object.assign({}, V.dnaEver || {}); for (const k in (V.dna || {})) if (V.dna[k] > 0) seen[k] = true;                 // essence of any boss you've beaten
+    for (const ty of Object.keys(seen).filter(k => MUT_TYPES[k]).sort(() => Math.random() - 0.5).slice(0, 2)) stock.push({ k: 'dna', type: ty, n: 3, label: '3 × ' + MUT_TYPES[ty].name + ' essence (boss DNA for the Mutation Lab)', ico: '🧬', cost: 650 }); }
   const common = pick(MERCHANT_DECOS); stock.push({ k: 'deco', id: common[0], label: common[0].replace(/^./, c => c.toUpperCase()), ico: '🏺', cost: common[1] });
   stock.push({ k: 'wood', label: '20 wood', ico: '🪵', cost: 30 }, { k: 'stone', label: '15 stone', ico: '🪨', cost: 30 });
   return stock;
+}
+const GOLEM_FIRST = ['Boulder', 'Basalt', 'Granite', 'Flint', 'Slate', 'Onyx', 'Cairn', 'Tor', 'Mica', 'Quartz', 'Rubble', 'Gneiss'], GOLEM_LAST = ['Stonebrow', 'Deepdelver', 'Mossback', 'Ironvein', 'Grindstone', 'the Patient', 'Longtomb', 'Bedrock'];
+const BOUND_TERM = 8;
+function joinPurchased(nv){
+  nv.quirk = rollQuirk(village.villagers, nv.gender);
+  village.villagers.push(nv);
+  const fire = props.find(q => q.t === 'campfire' && !q.dead) || { x: 0, y: -6 };
+  if (zone === 'village') spawnOneVillager(nv, village.villagers.length - 1, fire);
+  checkCult();
+}
+function newVillagerId(){ return 'v' + village.seed.toString(36) + '_' + village.villagers.length + '_' + village.day + '_' + (Math.random() * 1e4 | 0); }
+// a hulking stone being: big, slow to tire, tough as a soldier, barely eats — the second of the merchant's constructed folk
+function buyGolemVillager(){
+  const nm = pick(GOLEM_FIRST) + ' ' + pick(GOLEM_LAST);
+  joinPurchased({ id: newVillagerId(), name: nm, gender: 'm', skin: '#8a8f88', hair: '#5a7a3a', shirt: '#6a6e68', golem: true,
+    look: { hairStyle: 'bald', hat: 'golem', hatCol: '#7d827b', glasses: false, beard: null, mark: null, golem: true, torsoW: 1.34, torsoH: 1.12, rMul: 1.25 },
+    arrivedDay: village.day, job: 'idle', bed: null, mood: 1, hungry: 0, armed: null });
+  return nm;
+}
+// a person of another people, sold on: works harder than most (+20%) but starts resentful, and their own people in the village
+// take it badly while they're held; after BOUND_TERM days they have worked off the price and are simply a free villager
+function buyBoundVillager(race){
+  const p = randPerson(), ri = RACE_INFO[race], lk = applyRaceToLook(rollLook(p.gender), race, p.gender === 'f');
+  const nm = pick(ri.names) + ' ' + pick(LAST);
+  joinPurchased({ id: newVillagerId(), name: nm, gender: p.gender, skin: lk.raceSkin || p.skin, hair: lk.raceHair || p.hair, shirt: lk.raceShirt || p.shirt, look: lk,
+    bound: true, boundDays: BOUND_TERM, arrivedDay: village.day, job: 'idle', bed: null, mood: 0.7, hungry: 0, armed: null });
+  return nm;
 }
 function buyRobotVillager(){
   const nm = pick(ROBOT_FIRST) + ' ' + pick(ROBOT_LAST);
@@ -6712,12 +6775,15 @@ function openMerchantShop(){
     el.querySelectorAll('.trow').forEach(d => d.addEventListener('click', () => {
       const i = +d.dataset.i; if (i < 0){ close(); return; }
       const r = T.stock[i]; if (!r || r.sold || money < r.cost) return;
-      if (r.k === 'robot' && villagerAtCap()){ flash('No room for another villager', '#e0a05a', 'build more beds first'); return; }
+      if ((r.k === 'robot' || r.k === 'golem' || r.k === 'bound') && villagerAtCap()){ flash('No room for another villager', '#e0a05a', 'build more beds first'); return; }
       money -= r.cost; r.sold = true;
       if (r.k === 'weapon'){ village.armory.push(r.id); flash('Bought: ' + r.label, '#e0c080', 'on the weapon rack'); }
       else if (r.k === 'unique'){ grantUnique(r.id, 'the merchant\'s prize'); }
+      else if (r.k === 'golem'){ const nm = buyGolemVillager(); flash(nm + ' grinds to life', '#b8c0b0', 'a stone golem — tireless in the quarry, tough in a fight, barely eats'); }
+      else if (r.k === 'bound'){ const nm = buyBoundVillager(r.race); flash(nm + ' is put to work', '#c8a878', 'bound for ' + BOUND_TERM + ' days — hard-working but resentful, and their own people won\'t like it'); }
       else if (r.k === 'robot'){ const nm = buyRobotVillager(); flash(nm + ' powers up', '#8ad0ff', 'a robot villager — they live, eat, work and gossip like anyone else'); }
       else if (r.k === 'deco'){ (village.hoard = village.hoard || []).push({ t: r.id, seed: Math.floor(Math.random() * 900), x: Math.round(player.x + rand(-14, 14)), y: Math.round(player.y + rand(12, 26)), day: village.day }); flash('Bought: ' + r.label, '#e0c080', 'set down by your feet — place it in a home or a display spot'); }
+      else if (r.k === 'dna'){ village.dna = village.dna || {}; village.dna[r.type] = (village.dna[r.type] || 0) + r.n; registerMutLab(); flash('Bought: ' + r.label, '#9ad46a', (village.dna[r.type]) + ' ' + MUT_TYPES[r.type].name + ' essence held'); }
       else if (r.k === 'wood'){ village.stores.wood += 20; } else if (r.k === 'stone'){ village.stores.stone += 15; }
       A.S.thud && A.S.thud(); saveVillage(true); render();
     }));
@@ -7122,7 +7188,7 @@ function openEventChoice(kind){
     rows = [
       { ico: '🪵', txt: 'Buy 20 wood — $30', cost: 30, fn: () => { vs.wood += 20; } },
       { ico: '🪨', txt: 'Buy 15 stone — $30', cost: 30, fn: () => { vs.stone += 15; } },
-      { ico: '🗡️', txt: 'A mystery weapon — $90', cost: 90, fn: () => {
+      { ico: '🗡️', txt: 'A mystery weapon — $350', cost: 350, fn: () => {
         const unowned = Object.keys(UNIQUES).filter(id => !(village.uniques && village.uniques[id]));
         if (unowned.length && Math.random() < 0.2){ grantUnique(pick(unowned), 'the merchant\'s prize'); return; }
         const fx = Math.random() < 0.5 ? pick(['fire', 'ice', 'slime', 'acid', 'spark']) : null;
@@ -7143,15 +7209,18 @@ function openEventChoice(kind){
   } else if (kind === 'stranger'){
     const T0 = todayEvent(), pp = T0 && T0.person;
     title = 'A Stranger'; sub = pp ? pp.name + ' stands at the edge of the firelight' : 'a traveller waits';
+    const stranger = () => enemies.find(x => x._stranger && !x.dead);
+    const sendOff = (line, col) => { const se = stranger(); if (se){ se._env = 'leave'; popText(se.x, se.y - 26, line, col || '#c8e0f0', 3.2); } };
     rows = [
       { ico: '🏠', txt: 'Welcome them into the village', cost: 0, fn: () => {
         if (!pp || villagerAtCap()){ flash('No room', '#e0a05a', 'the village is full'); return; }
         const nv = { id: 'v' + village.seed.toString(36) + '_' + village.villagers.length + '_' + village.day + '_' + (Math.random() * 1e4 | 0), name: pp.name, gender: pp.gender, skin: pp.skin, hair: pp.hair, shirt: pp.shirt, look: pp.look, arrivedDay: village.day, job: 'idle', bed: null, mood: 1, hungry: 0, armed: null, homeCity: 'the road' };
         nv.quirk = rollQuirk(village.villagers, villagerGender(nv)); village.villagers.push(nv);
-        const fire = props.find(q => q.t === 'campfire' && !q.dead) || { x: 0, y: -6 }; spawnOneVillager(nv, village.villagers.length - 1, fire); checkCult();
+        const se = stranger(), fire = se ? { x: se.x, y: se.y } : (props.find(q => q.t === 'campfire' && !q.dead) || { x: 0, y: -6 }); if (se){ se.dead = true; se.corpseT = 99; }
+        spawnOneVillager(nv, village.villagers.length - 1, fire); checkCult();
         flash(pp.name + ' joins the village', '#c8e0f0', pp.look && pp.look.race ? RACE_INFO[pp.look.race].name.replace(/s$/, '') + ' — ' + ((RACE_TRAIT[pp.look.race] || {}).blurb || '') : 'another mouth to feed'); } },
-      { ico: '🪙', txt: 'Ask a toll to stay — $30 (they may refuse)', cost: 0, fn: () => { if (Math.random() < 0.5){ money += 30; flash('They pay the toll', '#e0c080', '+$30 — and move on'); } else flash('They walk away', '#c8b98a', 'insulted'); } },
-      { ico: '👋', txt: 'Send them on their way', cost: 0, fn: () => {} },
+      { ico: '🪙', txt: 'Ask a toll to stay — $30 (they may refuse)', cost: 0, fn: () => { if (Math.random() < 0.5){ money += 30; flash('They pay the toll', '#e0c080', '+$30 — and move on'); sendOff('"Fair enough. Here — and thanks."', '#e0c080'); } else { flash('They walk away', '#c8b98a', 'insulted'); sendOff('"Keep your fire, then."', '#c8b98a'); } } },
+      { ico: '👋', txt: 'Send them on their way', cost: 0, fn: () => { sendOff('"Safe travels, then."'); } },
     ];
   } else if (kind === 'envoy'){
     title = 'The Envoy'; sub = 'a courteous stranger from a distant realm, with an interest in your village';
@@ -7181,6 +7250,7 @@ function openEventChoice(kind){
     if (d.classList.contains('no')) return;
     const r = rows[+d.dataset.i]; if (r.cost) money -= r.cost;
     if (kind === 'envoy'){ const TT = todayEvent(); if (TT) TT.envoyDone = true; }
+    if (kind === 'stranger'){ const TT = todayEvent(); if (TT) TT.strangerDone = true; }
     close(); r.fn(); saveVillage(true); syncHUD();
   }));
 }
@@ -7391,6 +7461,7 @@ function drawAssign(){
     if (nTow || v.tower) rows.push({ act: 'tower', label: v.tower ? 'Back to patrol' : 'Man the watchtower', ico: 'guard', dim: !v.tower && taken >= nTow,
       sub: v.tower ? 'come down and walk the beat again' : taken >= nTow ? 'every watchtower already has a guard' : 'climb up and keep watch — shoots raiders' });
   }
+  if (v.bound) rows.push({ act: 'free', label: 'Set them free', ico: 'idle', sub: 'end their bond now — ' + v.boundDays + ' day' + (v.boundDays === 1 ? '' : 's') + ' left; they will remember it' });
   if (v.job === 'guard') rows.push({ act: 'guardzone', label: v.guardZone ? 'Move patrol area' : 'Set patrol area', ico: 'guard',
     sub: 'walk it, aim with the mouse, click to drop' });
   if (v.job === 'guard') rows.push({ act: 'guardroute', label: v.guardZone && v.guardZone.route ? 'Redraw patrol route' : 'Draw a patrol route', ico: 'guard',
@@ -7456,6 +7527,7 @@ function doAssign(rc){
     v.tower = !v.tower; for (const e of enemies) if (e._vid === v.id && !v.tower){ e._onTower = null; e._towerBack = true; }
     popText(player.x, player.y - 26, v.tower ? 'to the watchtower' : 'back on patrol', '#cde8b0'); saveVillage(true); closeAssign(); return;
   }
+  if (rc.act === 'free'){ v.bound = false; v.boundDays = 0; v.freedEarly = true; v.mood = Math.min(1.5, (v.mood || 1) + 0.3); popText(player.x, player.y - 26, firstName(v) + ' is free', '#c8e8a0', 2); flash(firstName(v) + ' is free', '#c8e8a0', 'released early — they will remember it'); saveVillage(true); syncHUD(); closeAssign(); return; }
   if (rc.act === 'chat'){ const vid = v.id; closeAssign(); openChat(vid); return; }
   if (rc.act === 'preach'){
     if (!canPreachTo(v)){ popText(player.x, player.y - 26, 'not now', '#ff8f8f'); return; }
@@ -7543,10 +7615,21 @@ function furnishDone(v, F){
   return false;
 }
 // the thank-you gift: sometimes a small decorative keepsake from their own things, set down at your feet
+let _lastErrandGift = null;
+// an unmissable 'that worked' confirmation for finished requests: jumps the banner queue, and points at any gift left on the ground
+function celebrateRequest(v, what, moreSub){
+  const gi = _lastErrandGift; _lastErrandGift = null;
+  const conv = village.cult ? '+1 conviction' : '+1 favor';
+  if (gi){ burst(gi.x, gi.y - 6, 22, '#ffe27a', 200); fx.push({ t: 'shock', x: gi.x, y: gi.y, r0: 4, r1: 34, life: 0.9, life0: 0.9, col: 'rgba(255,226,122,0.9)', w: 2 }); lights.push({ x: gi.x, y: gi.y, r: 60, col: [255, 226, 122], life: 1.2, t: 1.2 }); popText(gi.x, gi.y - 22, '★ ' + gi.obj + ' — a gift for you', '#ffe27a', 4); }
+  _flashQ.length = 0; clearTimeout(_flashTimer); _flashBusy = false;
+  flash('✓ REQUEST COMPLETE', '#9ff08a', firstName(v) + ' is delighted with ' + what + '  ·  ' + conv + '  ·  mood up' + (gi ? '  ·  they left you a ' + gi.obj + ' on the ground nearby — pick it up' : '') + (moreSub || ''));
+}
 function errandGift(v, chance, at){
   if (Math.random() > chance) return '';
   const obj = pick(OBJECTS_SMALL), ax = at ? at.x : player.x, ay = at ? at.y : player.y;
-  (village.hoard = village.hoard || []).push({ t: obj, x: Math.round(ax + rand(-14, 14)), y: Math.round(ay + rand(10, 24)), day: village.day });
+  const gx = Math.round(ax + rand(-14, 14)), gy = Math.round(ay + rand(10, 24));
+  (village.hoard = village.hoard || []).push({ t: obj, x: gx, y: gy, day: village.day });
+  _lastErrandGift = { obj, x: gx, y: gy };
   return ' They press ' + (/^[aeiou]/i.test(obj) ? 'an ' : 'a ') + obj + ' into your hands — "for your trouble."';
 }
 function chatGreeting(v){
@@ -7728,7 +7811,7 @@ function chatNeeds(v){
   const out = [];
   if (v.hungry > 0) out.push('"Food. Just food. There isn\'t enough to go round and I\'m not the only one going without."');
   if (!v.bed) out.push('"A roof, when you get the chance. Somewhere the wind doesn\'t find me at night."');
-  if (v.want) out.push('"I keep thinking about a ' + v.want.obj + '. Silly, I know. But if you ever came across one…"');
+  if (v.want){ const wo = v.want.obj, src = (typeof MERCHANT_DECOS !== 'undefined' && (MERCHANT_DECOS.some(d => d[0] === wo) || MERCHANT_RARE.some(d => d[0] === wo))) ? ' The merchant might have one.' : ' Maybe one turns up in the city.'; return '"I keep thinking about a ' + wo + '. Silly, I know. But if you ever came across one…"' + src + ' (carry it here and press E)'; }
   if (raceOf(v) && RACE_HOMESICK[raceOf(v)] && Math.random() < 0.3) out.push(RACE_HOMESICK[raceOf(v)]);
   if (!out.length) out.push('"Nothing I can\'t handle. You\'ve looked after us — mostly — so thank you."', '"I\'m fine. Really. Save it for someone who isn\'t."');
   return chatPick(v, out);
@@ -7787,6 +7870,55 @@ function updateEnvoy(e, dt){
   }
   moveActor(e, dt);
 }
+// ---- THE STRANGER AT THE FIRE: walks in from the edge of the village, waits by the fire for you to talk to them (E opens the welcome / toll / send-away
+// question), and if sent away (or ignored until dusk) you watch them walk off and disappear
+const STRANGER_BARKS = ['"Is there room by the fire?"', '"Long road. Longer night."', '"Mind if I warm my hands?"', '"Nobody told me the road ended here."', '"Excuse me — friend?"'];
+function strangerSpot(){ const T = todayEvent(), f = evtFire(); return (T && T.spot) || { x: f.x + 70, y: f.y + 26 }; }
+function dressAsPerson(e, pp){
+  applyLook(e);
+  const lk = pp.look || e._look; e._look = lk; e.gender = pp.gender; e.skin = (lk && lk.raceSkin) || pp.skin; e.hair = (lk && lk.raceHair) || pp.hair; e.shirt = (lk && lk.raceShirt) || pp.shirt;
+  const bt = faceTraits({ skin: pp.skin, hair: pp.hair, shirt: pp.shirt, gender: pp.gender, look: lk });
+  e.torsoW = clamp(bt.gth, 0.74, 1.5); e.torsoH = clamp(bt.h, 0.8, 1.26); e.r = Math.max(8, Math.round(12 * ((lk && lk.rMul) || 1) * (0.94 + 0.06 * bt.gth)));
+}
+function spawnStranger(atSpot){
+  const T = todayEvent(), S = strangerSpot(), fire = evtFire(), pp = T && T.person; if (!pp) return null;
+  let x = S.x, y = S.y;
+  if (!atSpot){ for (let i = 0; i < 20; i++){ const a = Math.random() * 6.283, d = rand(480, 560); x = fire.x + Math.cos(a) * d; y = fire.y + Math.sin(a) * d * 0.8; if (waterAt(x, y) < 0.05 && !solidBoxHit(x, y, 16, 16)) break; } }
+  const e = makeActor(x, y, 'civ'); dressAsPerson(e, pp);
+  Object.assign(e, { _stranger: true, _env: atSpot ? 'wait' : 'arrive', _home: { x, y }, civ: true, hp: 60, maxhp: 60, speed: 54, pants: '#3a3630', _name: pp.name, weapon: 'fists', vx: 0, vy: 0 });
+  enemies.push(e); if (T) T.strangerSeen = true; return e;
+}
+let _strT = 0;
+function updateStrangerEvent(dt){
+  if (!village || zone !== 'village') return;
+  const T = todayEvent(), sts = enemies.filter(x => x._stranger && !x.dead);
+  if (!T || T.id !== 'stranger'){ for (const e of sts){ e.dead = true; e.corpseT = 99; } return; }
+  _strT -= dt; if (_strT > 0) return; _strT = 1;
+  if (sts.length || T.strangerGone || T.strangerDone) return;
+  if (todLerp().night > 0.5 || (village.tod != null && village.tod < 0.23)) return;
+  spawnStranger(!!T.strangerSeen);
+}
+function updateStranger(e, dt){
+  const T = todayEvent(), S = strangerSpot(), night = todLerp().night;
+  e.animT += Math.hypot(e.vx, e.vy) * dt * 0.05;
+  if (e._env !== 'leave' && T && night > 0.5){ e._env = 'leave'; popText(e.x, e.y - 26, '"It grows dark — I\'ll find another fire."', '#c8e0f0', 3.4); }
+  if (e._env === 'wait'){
+    e.vx *= 0.8; e.vy *= 0.8;
+    if (player && dist2(player.x, player.y, e.x, e.y) < 150 * 150) e.dir = Math.atan2(player.y - e.y, player.x - e.x);
+    e._barkT = (e._barkT ?? 3) - dt; if (e._barkT <= 0){ e._barkT = rand(8, 14); popText(e.x, e.y - 26, pick(STRANGER_BARKS), '#c8e0f0', 3.2); }
+    e._promptT = (e._promptT || 0) - dt; if (e._promptT <= 0 && player && dist2(player.x, player.y, e.x, e.y) < 90 * 90){ e._promptT = 1.4; popText(e.x, e.y - 38, 'E — talk to the stranger', '#ffe08a', 1.5); }
+  } else {
+    const tgt = e._env === 'leave' ? e._home : S, a = Math.atan2(tgt.y - e.y, tgt.x - e.x), acc = Math.min(1, dt * 6);
+    e.dir = a; e.vx += (Math.cos(a) * e.speed - e.vx) * acc; e.vy += (Math.sin(a) * e.speed - e.vy) * acc;
+    const dd = dist2(e.x, e.y, tgt.x, tgt.y);
+    if (e._env === 'arrive' && dd < 14 * 14){ e._env = 'wait'; popText(e.x, e.y - 26, '"Hello there. Might I have a word?"', '#c8e0f0', 3.4); }
+    else if (e._env === 'leave' && dd < 26 * 26){ e.dead = true; e.corpseT = 99; if (T) T.strangerGone = true; return; }
+    e._stuckT = (e._stuckT || 0) + dt;
+    if (e._stuckT > 1){ if (dist2(e.x, e.y, e._lx ?? e.x, e._ly ?? e.y) < 36){ e._stuckN = (e._stuckN || 0) + 1; if (e._stuckN >= 5){ if (e._env === 'arrive'){ e.x = S.x; e.y = S.y; e._env = 'wait'; } else { e.dead = true; e.corpseT = 99; if (T) T.strangerGone = true; return; } } } else e._stuckN = 0; e._lx = e.x; e._ly = e.y; e._stuckT = 0; }
+  }
+  moveActor(e, dt);
+}
+function strangerNearby(){ return enemies.some(e => e._stranger && !e.dead && e._env === 'wait' && dist2(e.x, e.y, player.x, player.y) < 80 * 80); }
 function envoyNearby(){ return enemies.some(e => e._envoy && !e.dead && e._env === 'wait' && dist2(e.x, e.y, player.x, player.y) < 80 * 80); }
 function drawEnvoyBanner(a, R, s, face){                                                             // his purple banner, carried on his back
   const t = performance.now() / 1000, oc = octx, bx = face === 'N' ? R * 0.5 : face === 'S' ? -R * 0.9 : -s * R * 0.95;
@@ -7865,7 +7997,6 @@ function updateFurnishRequests(dt){
     const act = enemies.find(a => a.villager && a._vid === v.id), at = act ? { x: act.x, y: act.y } : (v.bed || null);
     const e = v.errand, line = chatFinishFurnish(v, at);
     if (act){ popText(act.x, act.y - 30, '"' + e.name.replace(/^an? /, 'A ') + '! For me?"', '#ffe27a', 3.2); burst(act.x, act.y - 12, 14, '#ffe27a', 180); }
-    flash(firstName(v) + ' loves the ' + (e.obj || e.prop), '#ffe27a', 'request complete — ' + (line.indexOf('press') >= 0 ? 'and they gave you a keepsake' : 'they\'re delighted'));
   }
 }
 function chatFinishFurnish(v, at){
@@ -7873,6 +8004,7 @@ function chatFinishFurnish(v, at){
   v.mood = Math.min(1.5, (v.mood || 1) + 0.4);
   if (village.cult){ village.conviction = Math.min(convictionCap(), (village.conviction || 0) + 1); } else village.stores.favor = (village.stores.favor | 0) + 1;
   const g = errandGift(v, 0.7, at);
+  celebrateRequest(v, 'the ' + (e.obj || e.prop || 'gift'));
   saveVillage(true); syncHUD(); A.S.thud && A.S.thud();
   if (_chatS) _chatS.pendingMood = 'weeping';
   return (e.thanks || '"Thank you."') + g;
@@ -7883,6 +8015,7 @@ function chatGive(v){
   v.mood = Math.min(1.5, (v.mood || 1) + 0.3);
   if (village.cult){ village.conviction = Math.min(convictionCap(), (village.conviction || 0) + 1); } else village.stores.favor = (village.stores.favor | 0) + 1;
   const g = errandGift(v, 0.25);
+  celebrateRequest(v, e.n + ' ' + e.res);
   savePlayer(); saveVillage(true); syncHUD(); A.S.thud && A.S.thud();
   return (e.thanks || '"Thank you."') + g;
 }
@@ -7923,12 +8056,12 @@ function chatFrame(){
   sermonBackdrop(s.scene, ease);
   const fx = SW / 2, fy = SH * 0.30 + (1 - ease) * SH * 0.14, fr = SH * 0.035 + ease * SH * 0.078;
   {   // the rest of the body: torso, shoulders and hanging arms down to the bottom of the scene (the face scene only draws a chest block)
-    const R = fr, chinY = fy + R * 1.28 * 1.06, sh = _tone(v.shirt || '#45454f', -0.16), shD = _tone(v.shirt || '#45454f', -0.34), sk = v.skin || '#e8b58c';
+    const R = fr, rg = faceRig({ skin: v.skin, hair: v.hair, shirt: v.shirt, gender: villagerGender(v), look: v.look }, fy, R), sw = rg.sw, chinY = rg.yS + R * 0.1, sh = _tone(v.shirt || '#45454f', -0.16), shD = _tone(v.shirt || '#45454f', -0.34), sk = v.skin || '#e8b58c';
     g0.save(); g0.globalAlpha = 0.55 + ease * 0.45;
-    g0.fillStyle = sh; g0.beginPath(); g0.moveTo(fx - R * 1.7, chinY - R * 0.1); g0.lineTo(fx + R * 1.7, chinY - R * 0.1); g0.lineTo(fx + R * 2.25, SH + 4); g0.lineTo(fx - R * 2.25, SH + 4); g0.closePath(); g0.fill();
+    g0.fillStyle = sh; g0.beginPath(); g0.moveTo(fx - sw, chinY - R * 0.1 + rg.slope); g0.lineTo(fx - sw * 0.5, chinY - R * 0.1 + rg.slope * 0.3); g0.lineTo(fx - rg.nw * 1.6, chinY - R * 0.1); g0.lineTo(fx + rg.nw * 1.6, chinY - R * 0.1); g0.lineTo(fx + sw * 0.5, chinY - R * 0.1 + rg.slope * 0.3); g0.lineTo(fx + sw, chinY - R * 0.1 + rg.slope); g0.lineTo(fx + sw * 1.32, SH + 4); g0.lineTo(fx - sw * 1.32, SH + 4); g0.closePath(); g0.fill();
     g0.fillStyle = shD; g0.fillRect(fx - R * 0.02, chinY + R * 0.5, Math.max(2, R * 0.05), SH);                          // centre seam
-    g0.fillStyle = 'rgba(0,0,0,0.16)'; g0.beginPath(); g0.moveTo(fx - R * 1.7, chinY - R * 0.1); g0.lineTo(fx - R * 1.2, chinY - R * 0.1); g0.lineTo(fx - R * 1.55, SH + 4); g0.lineTo(fx - R * 2.25, SH + 4); g0.closePath(); g0.fill();   // arm shadow, left
-    g0.beginPath(); g0.moveTo(fx + R * 1.7, chinY - R * 0.1); g0.lineTo(fx + R * 1.2, chinY - R * 0.1); g0.lineTo(fx + R * 1.55, SH + 4); g0.lineTo(fx + R * 2.25, SH + 4); g0.closePath(); g0.fill();
+    g0.fillStyle = 'rgba(0,0,0,0.16)'; g0.beginPath(); g0.moveTo(fx - sw, chinY - R * 0.1 + rg.slope); g0.lineTo(fx - sw * 0.7, chinY - R * 0.1 + rg.slope * 0.6); g0.lineTo(fx - sw * 0.91, SH + 4); g0.lineTo(fx - sw * 1.32, SH + 4); g0.closePath(); g0.fill();   // arm shadow, left
+    g0.beginPath(); g0.moveTo(fx + sw, chinY - R * 0.1 + rg.slope); g0.lineTo(fx + sw * 0.7, chinY - R * 0.1 + rg.slope * 0.6); g0.lineTo(fx + sw * 0.91, SH + 4); g0.lineTo(fx + sw * 1.32, SH + 4); g0.closePath(); g0.fill();
     g0.fillStyle = shD; g0.beginPath(); g0.moveTo(fx - R * 0.62, chinY - R * 0.1); g0.lineTo(fx, chinY + R * 0.75); g0.lineTo(fx + R * 0.62, chinY - R * 0.1); g0.closePath(); g0.fill();   // collar V
     g0.fillStyle = sk; g0.beginPath(); g0.moveTo(fx - R * 0.46, chinY - R * 0.1); g0.lineTo(fx, chinY + R * 0.5); g0.lineTo(fx + R * 0.46, chinY - R * 0.1); g0.closePath(); g0.fill();
     g0.restore();
@@ -7942,6 +8075,7 @@ function chatFrame(){
   g0.fillStyle = '#e6dcf0'; g0.font = 'bold 17px "Courier New",monospace'; g0.fillText(v.name, SW / 2, 34);
   g0.fillStyle = '#8a7e6a'; g0.font = '10px "Courier New",monospace';
   g0.fillText([JOB_META[v.job || 'idle'].label, v.hungry > 0 ? 'hungry' : null, v.bed ? 'housed' : 'no bed', v.mut && v.mut.length ? 'mutated' : null].filter(Boolean).join('  ·  '), SW / 2, 52);
+  if (v.want){ g0.fillStyle = '#ffd98a'; g0.font = 'bold 11px "Courier New",monospace'; g0.fillText('WANTS: a ' + v.want.obj + '  —  bring one over and press E  (+1 conviction)', SW / 2, 70); }
   let ty = fy + fr * 2.55;
   g0.font = '17px "Courier New",monospace';
   const closed = s.line === s.lineFull, tlines = _wrapLines(g0, '“' + s.lineFull + '”', Math.min(SW * 0.8, 780));
@@ -9536,7 +9670,7 @@ function spawnPuddle(x, y, r, distinct){
   if (distinct){ if (hazards.reduce((n, o) => n + (o.kind === 'puddle' ? 1 : 0), 0) < 40) addHazard('puddle', x, y, { r }); return; }   // a flood: separate pools, not merged into one
   for (const h of hazards){
     if (h.kind === 'puddle' && !h.dead && !h.frozen && dist2(h.x, h.y, x, y) < (h.r + 26) * (h.r + 26)){
-      h.r = Math.min(70, Math.max(h.r, r) + 3); h.life = 9999; h.life0 = 9999;
+      h.r = Math.min(150, Math.max(h.r, r) + 3); h.life = 9999; h.life0 = 9999;
       return;
     }
   }
@@ -9567,8 +9701,24 @@ function freezerBurst(x, y){
   }
   addHazard('frost', x, y, { r: 78, life: 9 });
 }
+// two puddles that overlap merge into one (area-conserving) — rain, floods and hydrants used to leave a scatter of tiny separate pools
+function mergePuddles(){
+  const ps = hazards.filter(h => h.kind === 'puddle' && !h.dead && !h.frozen);
+  for (let i = 0; i < ps.length; i++){
+    const a = ps[i]; if (a.dead) continue;
+    for (let j = i + 1; j < ps.length; j++){
+      const b = ps[j]; if (b.dead) continue;
+      if (dist2(a.x, a.y, b.x, b.y) < (a.r + b.r) * (a.r + b.r) * 0.5){
+        const ar = a.r * a.r, br = b.r * b.r, tot = ar + br;
+        a.x = (a.x * ar + b.x * br) / tot; a.y = (a.y * ar + b.y * br) / tot; a.r = Math.min(150, Math.sqrt(tot)); b.dead = true;
+      }
+    }
+  }
+}
+let _mergePT = 0;
 function updateHazards(dt){
   if (!hazards.length) return;
+  _mergePT -= dt; if (_mergePT <= 0){ _mergePT = 0.5; mergePuddles(); }
   for (const h of hazards){
     h.t += dt; h.life -= dt;
     const base = HAZ[h.kind] || HAZ.fire;
@@ -9587,7 +9737,10 @@ function updateHazards(dt){
       // burns through in a second, freeing anything it had tangled up
       if (Math.random() < dt * 3) for (const h2 of hazards){
         if (h2.dead) continue;
-        if (h2.kind === 'puddle' && dist2(h.x, h.y, h2.x, h2.y) < (h.r + h2.r + 16) * (h.r + h2.r + 16)){
+        if (h2.kind === 'frost' && dist2(h.x, h.y, h2.x, h2.y) < (h.r + h2.r) * (h.r + h2.r)){          // an open flame melts frost away
+          if (h2.life > 0.5) burst(h2.x, h2.y, 8, 'rgba(225,240,245,0.6)', 80); h2.life = Math.min(h2.life, 0.4);
+        } else if (h2.kind === 'puddle' && dist2(h.x, h.y, h2.x, h2.y) < (h.r + h2.r + 16) * (h.r + h2.r + 16)){
+          if (h2.frozen){ h2.frozen = false; burst(h2.x, h2.y, 8, 'rgba(225,240,245,0.6)', 80); }   // ice thaws into water first, then hisses away
           if (h2.life > 1) burst(h2.x, h2.y, 5, 'rgba(225,240,245,0.55)', 70);
           h2.life = Math.min(h2.life, 0.6);
         } else if ((h2.kind === 'gas' || h2.kind === 'oil') && !h2._ignited && dist2(h.x, h.y, h2.x, h2.y) < (h.r + h2.r) * (h.r + h2.r)){
@@ -9730,8 +9883,37 @@ function drawGoo(h, baseCol, highCol, bubbleCol){
   }
   octx.globalAlpha = baseAlpha;
 }
+// Every liquid puddle is painted into one offscreen layer and blitted once, so overlapping puddles read as one larger pool
+// (no darker overlap seams), and the whole layer is fairly transparent with soft, fading edges — wet ground you notice, not a stain.
+let _pudCv = null, _pudG = null;
+function drawPuddleLayer(now, camx, camy){
+  const list = [], pad = 90;
+  for (const h of hazards) if (h.kind === 'puddle' && !h.dead && !h.frozen && h.x + h.r * 1.7 > camx - 20 && h.x - h.r * 1.7 < camx + VUW + 20 && h.y + h.r > camy - 20 && h.y - h.r < camy + VUH + 20) list.push(h);
+  if (!list.length) return;
+  const w = Math.ceil(VUW + pad * 2), hh = Math.ceil(VUH + pad * 2);
+  if (!_pudCv || _pudCv.width !== w || _pudCv.height !== hh){ _pudCv = document.createElement('canvas'); _pudCv.width = w; _pudCv.height = hh; _pudG = _pudCv.getContext('2d'); }
+  const g = _pudG; g.clearRect(0, 0, w, hh); g.save(); g.translate(pad - camx, pad - camy);
+  for (const h of list){                                    // damp ground around each pool
+    const hr = h.r * 1.5, wg = g.createRadialGradient(h.x, h.y, h.r * 0.2, h.x, h.y, hr);
+    wg.addColorStop(0, 'rgba(24,46,76,0.42)'); wg.addColorStop(0.6, 'rgba(24,46,76,0.2)'); wg.addColorStop(1, 'rgba(24,46,76,0)');
+    g.fillStyle = wg; g.beginPath(); g.ellipse(h.x, h.y, hr, hr * 0.55, 0, 0, 7); g.fill();
+  }
+  for (const h of list){                                    // the water itself — fades to nothing at the rim
+    const gg = g.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r);
+    gg.addColorStop(0, 'rgba(125,183,240,0.8)'); gg.addColorStop(0.55, 'rgba(95,150,215,0.5)'); gg.addColorStop(1, 'rgba(80,130,195,0)');
+    g.fillStyle = gg; g.beginPath(); g.ellipse(h.x, h.y, h.r, h.r * 0.5, 0, 0, 7); g.fill();
+  }
+  g.restore();
+  octx.globalAlpha = 0.5; octx.drawImage(_pudCv, camx - pad, camy - pad); octx.globalAlpha = 1;
+  octx.lineWidth = 1;
+  for (const h of list){                                    // gentle ripples + a moving glint, kept faint
+    for (let i = 0; i < 2; i++){ const k = ((now / 1500) + h.x * 0.013 + i * 0.5) % 1, rr = h.r * (0.2 + 0.6 * k); octx.strokeStyle = 'rgba(225,244,255,' + (0.3 * (1 - k)) + ')'; octx.beginPath(); octx.ellipse(h.x, h.y, rr, rr * 0.5, 0, 0, 7); octx.stroke(); }
+    octx.fillStyle = 'rgba(235,248,255,0.32)'; octx.beginPath(); octx.ellipse(h.x - h.r * 0.2 + Math.sin(now / 900 + h.y) * h.r * 0.05, h.y - h.r * 0.12, h.r * 0.28, h.r * 0.06, -0.2, 0, 7); octx.fill();
+  }
+}
 function drawHazards(){
   const now = performance.now();
+  drawPuddleLayer(now, cam.x, cam.y);
   // view-culled, same as every other per-frame draw list (props/pickups/actors) — this never was
   // before, and puddles especially (near-permanent, up to 22 scattered across the whole explored
   // city) meant every single one got a full radial-gradient repaint every frame regardless of
@@ -9767,18 +9949,7 @@ function drawHazards(){
       for (let i = 0; i < 5; i++){ const a = i * 1.3 + h.x * 0.02; octx.moveTo(h.x, h.y); octx.lineTo(h.x + Math.cos(a) * h.r * 0.85, h.y + Math.sin(a) * h.r * 0.42); }
       octx.stroke();
       octx.fillStyle = 'rgba(255,255,255,0.8)'; octx.fillRect(h.x - h.r * 0.3, h.y - h.r * 0.16, 3, 1.5); octx.fillRect(h.x + h.r * 0.25, h.y + h.r * 0.08, 2, 1.5);
-    } else if (h.kind === 'puddle'){
-      // wet ground has to be obvious at a glance (it's what water/ice/electric combos key off): a dark, saturated
-      // halo of soaked ground around the pool, a bluer body, slow rippling rings and a moving glint
-      const hr = h.r * 1.6, wg = octx.createRadialGradient(h.x, h.y, h.r * 0.3, h.x, h.y, hr);
-      wg.addColorStop(0, 'rgba(20,42,72,0.34)'); wg.addColorStop(0.65, 'rgba(20,42,72,0.18)'); wg.addColorStop(1, 'rgba(20,42,72,0)');
-      octx.fillStyle = wg; octx.beginPath(); octx.ellipse(h.x, h.y, hr, hr * 0.55, 0, 0, 7); octx.fill();
-      const gg = octx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r);
-      gg.addColorStop(0, 'rgba(120,180,240,0.6)'); gg.addColorStop(0.7, 'rgba(85,140,205,0.38)'); gg.addColorStop(1, 'rgba(70,120,185,0.1)');
-      octx.fillStyle = gg; octx.beginPath(); octx.ellipse(h.x, h.y, h.r, h.r * 0.5, 0, 0, 7); octx.fill();
-      octx.lineWidth = 1;
-      for (let i = 0; i < 2; i++){ const k = ((now / 1500) + h.x * 0.013 + i * 0.5) % 1, rr = h.r * (0.2 + 0.7 * k); octx.strokeStyle = 'rgba(225,244,255,' + (0.55 * (1 - k)) + ')'; octx.beginPath(); octx.ellipse(h.x, h.y, rr, rr * 0.5, 0, 0, 7); octx.stroke(); }
-      octx.fillStyle = 'rgba(235,248,255,0.6)'; octx.beginPath(); octx.ellipse(h.x - h.r * 0.2 + Math.sin(now / 900 + h.y) * h.r * 0.05, h.y - h.r * 0.12, h.r * 0.32, h.r * 0.08, -0.2, 0, 7); octx.fill();
+    } else if (h.kind === 'puddle'){ /* drawn together as one merged layer — see drawPuddleLayer */
     } else if (h.kind === 'frost'){
       const fg = octx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r);
       fg.addColorStop(0, 'rgba(225,245,255,0.5)'); fg.addColorStop(0.7, 'rgba(190,228,250,0.28)'); fg.addColorStop(1, 'rgba(190,228,250,0)');
@@ -10504,14 +10675,17 @@ Object.assign(WEAPONS, {
       if (cellSolid(Math.floor(wx/CELL),Math.floor(wy/CELL))){ t.rootT=Math.max(t.rootT||0,2.2); burst(t.x,t.y,5,'#c8ccd4',120); popText(t.x,t.y-14,'PINNED','#c8ccd4',1); } } },
   bubblegun:{ name:'Bubble Gun',  reach:0, dmg:2,  rate:0.5,  knock:20,  kind:'gun', ammo:10, spread:0.03, pellets:1, bulletSpeed:420, icon:'🫧', projCol:'#bfe8ff',
     onHit:(t,a)=>{ if (!t.boss){ t.encT=Math.max(t.encT||0,2.6); t.vx*=0.2; t.vy*=0.2; burst(t.x,t.y,8,'#bfe8ff',120); popText(t.x,t.y-16,'*bloop*','#bfe8ff',1); } } },
-  taser:   { name:'Taser',       reach:0, dmg:8,  rate:0.5,  knock:80,  kind:'gun', ammo:12, spread:0.03, pellets:1, bulletSpeed:640, hitFx:'spark', icon:'⚡', projCol:'#ffe27a',
+  taser:   { name:'Taser',       reach:0, dmg:6,  rate:1.0,  knock:80,  kind:'gun', ammo:12, spread:0.03, pellets:1, bulletSpeed:640, hitFx:'spark', icon:'⚡', projCol:'#ffe27a',
     // the 40%-chance-of-a-short-stumble compromise (above) still let a full 1.0s lock re-land
     // before the last one wore off (shots every 0.5s), so a cop with a clean bead could still
     // chain-freeze you indefinitely — reported as "pinned in one spot, ground down". A real
     // diminishing-returns lockout now follows any full lock: no second full lock can land within
     // 1.6s of the last one, so at worst you get one freeze, then only the short stumble (still
     // dangerous, but you always get your movement back before the next one).
+    // second pass ("police tazers still suck"): against the PLAYER it is now one short jolt, then a hard 3.5s window where the
+    // taser cannot stun you at all (you still take its small damage, and can run, hide, or close in). Shots are also slower (1.0s) and lighter.
     onHit:(t,a)=>{ const now = performance.now() / 1000;
+      if (t === player){ if (t._tzAt && now - t._tzAt < 3.5) return; t._tzAt = now; t.stun = Math.max(t.stun, 0.6); return; }
       if (t._tzFullAt && now - t._tzFullAt < 1.6) t.stun = Math.max(t.stun, 0.3);
       else if (Math.random() < 0.4) t.stun = Math.max(t.stun, 0.3);
       else { t.stun = Math.max(t.stun, 1.0); t._tzFullAt = now; } } },
@@ -10707,7 +10881,7 @@ const GUN_HEADS = {
   slimegun:    { rate:0.34, spread:0.08, ammo:18, pellets:1, dm:0.85, speed:520, hitFx:'slime',  slow:true },
   acidspray:   { rate:0.16, spread:0.2,  ammo:30, pellets:2, dm:0.5,  speed:440, hitFx:'acid' },
   watergun:    { rate:0.11, spread:0.05, ammo:60, pellets:1, dm:0.5,  speed:460, hitFx:'water' },
-  taser:       { rate:0.5,  spread:0.03, ammo:12, pellets:1, dm:0.6,  speed:640, hitFx:'spark' },
+  taser:       { rate:1.0,  spread:0.03, ammo:12, pellets:1, dm:0.6,  speed:640, hitFx:'spark' },
 };
 const MELEE_DMG = { 1:14, 2:22, 3:32 };
 const GUN_DMG   = { 1:10, 2:16, 3:24 };
@@ -12480,13 +12654,53 @@ function faceTypeFor(ap){
   const id = LK.face || list[Math.abs(strHash(JSON.stringify(LK))) % list.length];
   return SHAPE_TYPES[id] || SHAPE_BASE;
 }
+// PER-PERSON FACE + BODY TRAITS: the base structures (chisel, pretty, ...) only nudged the same face by ~10%, and the close-up
+// body ignored a villager's build entirely, so everyone read as the same tall, narrow person. Everyone now gets a stable set of
+// individual traits (hashed from their look, so it never changes): a real height and girth (short-and-stocky, tall-and-gangly,
+// broad, slight...), head size, and much bigger swings in eye size/spacing/height/tilt/hoodedness, iris colour, brow weight and
+// slant, nose, mouth, chin and ear size. faceRig() turns them into the actual geometry both drawFace and the chat body share.
+const _traitCache = new Map();
+const IRIS_COLS = ['#5a3a22', '#3a2416', '#7a5a2a', '#3f7a8a', '#4f7a4a', '#6a7a8a', '#a0742a', '#2a3a5a', '#7a6a3a', '#8a4a2a'];
+function faceTraits(ap){
+  const LK = ap.look || {}, key = JSON.stringify(LK) + '|' + (ap.skin || '') + (ap.hair || '') + (ap.shirt || '') + (ap.gender || '');
+  let T = _traitCache.get(key); if (T) return T;
+  let sd = strHash(key) >>> 0;
+  const rnd = () => { sd = (sd + 0x6D2B79F5) >>> 0; let t = sd; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const rr = (a, b) => a + (b - a) * rnd(), ft0 = faceTypeFor(ap);
+  const arche = rnd();
+  let h = (LK.torsoH || 1) * rr(0.86, 1.14), gth = (LK.torsoW || 1) * rr(0.84, 1.18);
+  if (arche < 0.28){ h *= 0.8; gth *= 1.3; }             // short and stocky
+  else if (arche < 0.5){ h *= 1.18; gth *= 0.76; }       // tall and gangly
+  else if (arche < 0.64){ h *= 0.92; gth *= 1.14; }      // a bit squat
+  else if (arche < 0.76){ h *= 1.1; gth *= 1.05; }       // tall and solid
+  h = clamp(h, 0.7, 1.36); gth = clamp(gth, 0.68, 1.6);
+  const headW = rr(0.86, 1.18) * (0.94 + 0.08 * gth), headH = rr(0.86, 1.18) * (0.96 + 0.06 * h);
+  const ft = Object.assign({}, ft0, {
+    hw: ft0.hw * headW, hh: ft0.hh * headH,
+    jaw: clamp(ft0.jaw * rr(0.8, 1.22) + (gth - 1) * 0.14, 0.25, 0.95), chin: clamp(ft0.chin * rr(0.6, 1.6), 0.05, 1.7), cheek: ft0.cheek * rr(0.9, 1.12),
+    eyeS: ft0.eyeS * rr(0.78, 1.3), eyeDX: ft0.eyeDX * rr(0.82, 1.22), brow: ft0.brow * rr(0.6, 1.7), browH: ft0.browH * rr(0.78, 1.28),
+    noseL: ft0.noseL * rr(0.72, 1.34), noseW: ft0.noseW * rr(0.72, 1.38), mouthW: ft0.mouthW * rr(0.78, 1.28), lip: ft0.lip * rr(0.72, 1.45),
+  });
+  T = { ft, h, gth,
+    eyeWd: rr(0.86, 1.26), eyeHt: rr(0.74, 1.22), eyeLow: rr(-0.04, 0.1), tilt: rnd() < 0.5 ? rr(-0.55, 0.55) : 0, lidHeavy: rnd() < 0.38 ? rr(0.15, 0.6) : 0,
+    browTilt: rr(-1, 1), earS: rr(0.7, 1.75), iris: IRIS_COLS[(rnd() * IRIS_COLS.length) | 0],
+    dy: clamp(-(h - 1) * 0.9, -0.28, 0.32), neck: clamp((h - 0.92) * 1.5, -0.14, 0.66),
+    sw: 0.7 + 1.05 * gth, nw: 0.38 * (0.55 + 0.45 * gth), slope: clamp(0.5 - 0.35 * (gth - 0.7), 0.12, 0.55) };
+  if (_traitCache.size > 400) _traitCache.clear();
+  _traitCache.set(key, T); return T;
+}
+function faceRig(ap, cy, R){
+  const T = faceTraits(ap), ft = T.ft, cy2 = cy + R * T.dy, HH = R * 1.28 * ft.hh, chinY = cy2 + HH * 1.06;
+  return { T, ft, cy: cy2, chinY, yS: chinY - R * 0.12 + R * T.neck, sw: R * T.sw, nw: R * T.nw, slope: R * T.slope };
+}
 function drawFace(g, cx, cy, R, ap, f, t){
   t = t || 0;
   const P = Math.max(1, Math.round(R / 15));
   const SN = v => Math.round(v / P) * P;
   const rect = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(SN(x), SN(y), Math.max(P, SN(w)), Math.max(P, SN(h))); };
   const qv = f.quiver ? Math.sin(t * 33) * f.quiver * R * 0.028 : 0;
-  const ft = faceTypeFor(ap), LK = ap.look || null, race = LK && LK.race, robot = !!(LK && LK.robot), bald = race === 'lizard' || race === 'slime' || robot || BEAST_RACES.has(race);
+  const rig = faceRig(ap, cy, R), T = rig.T, ft = rig.ft; cy = rig.cy;
+  const LK = ap.look || null, race = LK && LK.race, robot = !!(LK && LK.robot), golem = !!(LK && LK.golem), bald = race === 'lizard' || race === 'slime' || robot || golem || BEAST_RACES.has(race);
   const skin = (race && LK.raceSkin) || ap.skin || '#e8b58c', hair = (race && LK.raceHair) || ap.hair || '#3a2a1a';
   const skL = _tone(skin, 0.13), skD = _tone(skin, -0.15), skDD = _tone(skin, -0.3);
   const hairL = _tone(hair, 0.18), hairD = _tone(hair, -0.28);
@@ -12498,9 +12712,12 @@ function drawFace(g, cx, cy, R, ap, f, t){
   if (race === 'ghost') g.globalAlpha = 0.55;                                   // ghosts are see-through in the close-ups too
 
   // shoulders + neck
-  rect(cx - R * 1.7, chinY - R * 0.12, R * 3.4, R * 1.1, _tone(ap.shirt || '#45454f', -0.16));
-  rect(cx - R * 0.95, chinY - R * 0.12, R * 1.9, R * 0.3, _tone(ap.shirt || '#45454f', -0.36));
-  rect(cx - R * 0.38, chinY - R * 0.5, R * 0.76, R * 0.6, skD);
+  { const yS = rig.yS, sw = rig.sw, nw = rig.nw, sl = rig.slope;
+    g.fillStyle = _tone(ap.shirt || '#45454f', -0.16); g.beginPath();
+    g.moveTo(cx - sw, yS + sl); g.lineTo(cx - sw * 0.5, yS + sl * 0.3); g.lineTo(cx - nw * 1.6, yS); g.lineTo(cx + nw * 1.6, yS); g.lineTo(cx + sw * 0.5, yS + sl * 0.3); g.lineTo(cx + sw, yS + sl);
+    g.lineTo(cx + sw, yS + R * 1.1); g.lineTo(cx - sw, yS + R * 1.1); g.closePath(); g.fill();
+    rect(cx - nw * 2.5, yS, nw * 5, R * 0.3, _tone(ap.shirt || '#45454f', -0.36));
+    rect(cx - nw, chinY - R * 0.5, nw * 2, yS - (chinY - R * 0.5) + R * 0.5, skD); }
 
   // hair behind (long, for 'f')
   if (hs === 'afro' && !bald){ g.fillStyle = hairD; g.beginPath(); g.arc(cx, cy - HH * 0.42, HW * 1.5, 0, 7); g.fill(); g.fillStyle = hair; g.beginPath(); g.arc(cx, cy - HH * 0.48, HW * 1.38, 0, 7); g.fill(); }
@@ -12529,10 +12746,10 @@ function drawFace(g, cx, cy, R, ap, f, t){
   g.restore();
 
   // ears
-  rect(cx - HW - P, cy - R * 0.02, P * 3, R * 0.42, skin);
-  rect(cx + HW - P * 2, cy - R * 0.02, P * 3, R * 0.42, skin);
-  rect(cx - HW, cy + R * 0.06, P * 1.5, R * 0.24, skDD);
-  rect(cx + HW - P * 1.5, cy + R * 0.06, P * 1.5, R * 0.24, skDD);
+  rect(cx - HW - P * T.earS, cy - R * 0.02, P * (1 + 2 * T.earS), R * 0.42 * T.earS, skin);
+  rect(cx + HW - P * 2, cy - R * 0.02, P * (1 + 2 * T.earS), R * 0.42 * T.earS, skin);
+  rect(cx - HW, cy + R * 0.06, P * 1.5, R * 0.24 * T.earS, skDD);
+  rect(cx + HW - P * 1.5, cy + R * 0.06, P * 1.5, R * 0.24 * T.earS, skDD);
 
   if (race === 'dwarf' && LK.beard){                                  // a great beard, cheeks to well below the chin
     g.fillStyle = hairD; g.beginPath(); g.moveTo(cx - HW * 0.98, cy + HH * 0.08); g.quadraticCurveTo(cx - HW * 1.05, chinY + R * 0.9, cx, chinY + R * 1.5); g.quadraticCurveTo(cx + HW * 1.05, chinY + R * 0.9, cx + HW * 0.98, cy + HH * 0.08); g.quadraticCurveTo(cx, cy + HH * 0.36, cx - HW * 0.98, cy + HH * 0.08); g.closePath(); g.fill();
@@ -12575,8 +12792,8 @@ function drawFace(g, cx, cy, R, ap, f, t){
   if (hs === 'mohawk' && !bald){ g.fillStyle = hair; g.beginPath(); g.moveTo(cx - HW * 0.24, cy - HH * 0.75); g.lineTo(cx - HW * 0.2, cy - HH * 1.9); g.lineTo(cx + HW * 0.2, cy - HH * 1.9); g.lineTo(cx + HW * 0.24, cy - HH * 0.75); g.closePath(); g.fill(); }
 
   // --- features ---
-  const eyeY = cy + R * 0.02 + qv * 0.3;
-  const eyeDX = R * 0.42 * ft.eyeDX, eyeW = R * 0.32 * ft.eyeS, eyeH = R * 0.22 * ft.eyeS;
+  const eyeY = cy + R * (0.02 + T.eyeLow) + qv * 0.3;
+  const eyeDX = R * 0.42 * ft.eyeDX, eyeW = R * 0.32 * ft.eyeS * T.eyeWd, eyeH = R * 0.22 * ft.eyeS * T.eyeHt;
   const browY = eyeY - R * 0.3 * ft.browH;
   const angry = f.brow < 0 ? -f.brow : 0, sad = f.brow > 0 ? f.brow : 0;
   const openEye = clamp(f.lid, 0.08, 1.25);
@@ -12587,14 +12804,19 @@ function drawFace(g, cx, cy, R, ap, f, t){
     rect(ex - eyeW, eyeY - eyeH, eyeW * 2, eyeH * 2, '#f2eee6');
     // iris + pupil (follow gaze)
     const ix = ex + f.gaze * eyeW * 0.6, iy = eyeY + f.gazeY * eyeH * 0.8, ir = eyeH * 1.05;
-    const irisC = { elf: '#2aa06a', lizard: '#ffe040', demon: '#ffee66', orc: '#e0402a', frost: '#e8fbff', slime: '#f8fff8', zombie: '#d8d8a0', vampire: '#e01a2a', cat: '#ffc040', dog: '#6a4a2a', fox: '#ffb040', rabbit: '#c04a6a' }[race] || (robot ? '#5affff' : _tone(hair, 0.06));
+    const irisC = { elf: '#2aa06a', lizard: '#ffe040', demon: '#ffee66', orc: '#e0402a', frost: '#e8fbff', slime: '#f8fff8', zombie: '#d8d8a0', vampire: '#e01a2a', cat: '#ffc040', dog: '#6a4a2a', fox: '#ffb040', rabbit: '#c04a6a' }[race] || (robot ? '#5affff' : golem ? '#ffb030' : T.iris);
     g.fillStyle = irisC; g.beginPath(); g.arc(ix, iy, ir, 0, 7); g.fill();
     g.fillStyle = '#100b0a'; if (race === 'lizard' || race === 'demon' || race === 'cat' || race === 'fox') g.fillRect(ix - ir * 0.16, iy - ir, ir * 0.32, ir * 2); else { g.beginPath(); g.arc(ix, iy, ir * 0.5, 0, 7); g.fill(); }
     if (f.tear < 0.4 && f.pallor < 0.1){ g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(SN(ix - ir * 0.6), SN(iy - ir * 0.65), P, P); }
     // upper lid — a skin shutter dropping from above
-    const shut = (1 - openEye) * eyeH * 2.2 + (openEye > 1 ? -(openEye - 1) * eyeH * 1.3 : 0);
+    const shut = (1 - openEye) * eyeH * 2.2 + (openEye > 1 ? -(openEye - 1) * eyeH * 1.3 : 0) + T.lidHeavy * eyeH * 1.4;   // heavy-lidded people never open all the way
     rect(ex - eyeW - P, eyeY - eyeH * 3, eyeW * 2 + P * 2, eyeH * 2 + P + Math.max(0, shut), skin);
     rect(ex - eyeW - P, eyeY - eyeH + Math.max(0, shut) - P, eyeW * 2 + P * 2, P, skDD);   // lash line
+    if (T.tilt){                                                                            // slanted eyes: the outer corner droops (tilt > 0) or lifts (tilt < 0)
+      const oxx = ex + side * eyeW; g.fillStyle = skin; g.beginPath();
+      if (T.tilt > 0){ g.moveTo(oxx + side * P, eyeY - eyeH - P); g.lineTo(oxx + side * P, eyeY - eyeH + eyeH * 2 * T.tilt); g.lineTo(ex, eyeY - eyeH - P); }
+      else { g.moveTo(oxx + side * P, eyeY + eyeH + P); g.lineTo(oxx + side * P, eyeY + eyeH + eyeH * 2 * T.tilt); g.lineTo(ex, eyeY + eyeH + P); }
+      g.closePath(); g.fill(); }
     if (openEye > 1.05) rect(ex - eyeW, eyeY - eyeH - P, eyeW * 2, P, '#f2eee6');           // wide: sclera above
     // lower lid rises with crying / a grimace
     const low = clamp(f.tear * 0.4 + Math.max(0, f.mouth) * 0.34 + Math.max(0, -f.mouth) * 0.15, 0, 0.7) * eyeH * 2;
@@ -12604,7 +12826,7 @@ function drawFace(g, cx, cy, R, ap, f, t){
     // brow
     const inner = ex - side * eyeW * 0.6, outer = ex + side * eyeW * 1.2;
     const innerY = browY - sad * R * 0.3 + angry * R * 0.18 + qv * 0.6;
-    const outerY = browY + sad * R * 0.04 - angry * R * 0.05 + R * 0.03;
+    const outerY = browY + sad * R * 0.04 - angry * R * 0.05 + R * 0.03 + T.browTilt * R * 0.08;
     g.strokeStyle = hairD; g.lineWidth = Math.max(1.6, P * 2 * ft.brow); g.lineCap = 'round';
     g.beginPath(); g.moveTo(SN(inner), SN(innerY)); if (ft.arch) g.quadraticCurveTo((inner + outer) / 2, Math.min(innerY, outerY) - R * 0.1 * ft.arch, SN(outer), SN(outerY)); else g.lineTo(SN(outer), SN(outerY)); g.stroke();
   }
@@ -12660,7 +12882,7 @@ function drawFace(g, cx, cy, R, ap, f, t){
   }
   if (LK && LK.glasses && !robot){ g.strokeStyle = '#1b1f27'; g.lineWidth = Math.max(1.6, P); for (const k of [-1, 1]){ g.beginPath(); g.arc(cx + k * eyeDX, eyeY, eyeW * 1.35, 0, 7); g.stroke(); } g.beginPath(); g.moveTo(cx - eyeDX + eyeW * 1.35, eyeY); g.lineTo(cx + eyeDX - eyeW * 1.35, eyeY); g.stroke(); g.fillStyle = 'rgba(180,210,235,0.2)'; for (const k of [-1, 1]){ g.beginPath(); g.arc(cx + k * eyeDX, eyeY, eyeW * 1.3, 0, 7); g.fill(); } }
   if (bdk === 'moustache' || bdk === 'full'){ g.fillStyle = hairD; g.beginPath(); g.moveTo(cx - mW * 0.9, mY - R * 0.16); g.quadraticCurveTo(cx, mY - R * 0.38, cx + mW * 0.9, mY - R * 0.16); g.quadraticCurveTo(cx + mW * 0.5, mY - R * 0.02, cx, mY - R * 0.14); g.quadraticCurveTo(cx - mW * 0.5, mY - R * 0.02, cx - mW * 0.9, mY - R * 0.16); g.closePath(); g.fill(); }
-  if (race || robot){
+  if (race || robot || golem){
     const earTip = (k, len, up) => { g.fillStyle = skin; g.beginPath(); g.moveTo(cx + k * HW, cy - R * 0.1); g.lineTo(cx + k * (HW + R * len), cy - R * up); g.lineTo(cx + k * HW, cy + R * 0.42); g.closePath(); g.fill(); g.fillStyle = skD; g.beginPath(); g.moveTo(cx + k * HW, cy + R * 0.02); g.lineTo(cx + k * (HW + R * len * 0.7), cy - R * up * 0.75); g.lineTo(cx + k * HW, cy + R * 0.3); g.closePath(); g.fill(); };
     const horn = k => { g.fillStyle = '#2a1a22'; g.beginPath(); g.moveTo(cx + k * HW * 0.35, cy - HH * 1.02); g.quadraticCurveTo(cx + k * HW * 1.0, cy - HH * 1.25, cx + k * HW * 1.05, cy - HH * 2.05); g.quadraticCurveTo(cx + k * HW * 0.62, cy - HH * 1.4, cx + k * HW * 0.82, cy - HH * 0.95); g.closePath(); g.fill(); g.fillStyle = '#e8d8c0'; g.beginPath(); g.moveTo(cx + k * HW * 1.05, cy - HH * 2.05); g.lineTo(cx + k * HW * 0.98, cy - HH * 1.78); g.lineTo(cx + k * HW * 0.86, cy - HH * 1.82); g.closePath(); g.fill(); };
     const spikes = (col, n, hh) => { g.fillStyle = col; for (let i = 0; i < n; i++){ const x = cx + (i - (n - 1) / 2) * HW * 0.5, h2 = hh * (i === (n - 1) / 2 ? 1.25 : 1); g.beginPath(); g.moveTo(x - HW * 0.2, cy - HH * 1.0); g.lineTo(x, cy - HH * 1.0 - R * h2); g.lineTo(x + HW * 0.2, cy - HH * 1.0); g.closePath(); g.fill(); } };
@@ -12699,6 +12921,14 @@ function drawFace(g, cx, cy, R, ap, f, t){
       if (race === 'cat' || race === 'fox'){ g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = Math.max(1, P * 0.8); for (const k of [-1, 1]) for (const dy of [0.42, 0.56]){ g.beginPath(); g.moveTo(cx + k * HW * 0.35, eyeY + R * dy); g.lineTo(cx + k * (HW + R * 0.5), eyeY + R * (dy - 0.06 + (dy > 0.5 ? 0.14 : -0.02))); g.stroke(); } }
       if (race === 'cat'){ g.strokeStyle = skD; g.lineWidth = Math.max(1.5, P); for (const dx of [-0.35, 0, 0.35]){ g.beginPath(); g.moveTo(cx + dx * HW, cy - HH * 0.98); g.lineTo(cx + dx * HW * 0.9, cy - HH * 0.66); g.stroke(); } }
       if (race === 'rabbit') rect(cx - P, mY, P * 2, R * 0.22, '#f8f4ec');
+    }
+    else if (golem){                                                                    // a stone face: heavy brow, deep sockets with a slow amber glow, cracks and moss
+      g.fillStyle = skDD; g.fillRect(cx - HW * 0.98, eyeY - eyeH * 2.6, HW * 1.96, eyeH * 1.6);
+      g.fillStyle = '#14100a'; for (const k of [-1, 1]) g.fillRect(cx + k * eyeDX - eyeW * 1.4, eyeY - eyeH * 1.3, eyeW * 2.8, eyeH * 2.6);
+      g.fillStyle = 'rgba(255,176,48,' + (0.72 + 0.28 * Math.sin(t * 2.2)).toFixed(2) + ')'; for (const k of [-1, 1]) g.fillRect(cx + k * eyeDX - eyeW * 0.8, eyeY - eyeH * 0.7, eyeW * 1.6, eyeH * 1.4);
+      g.strokeStyle = skDD; g.lineWidth = Math.max(1.4, P); g.beginPath(); g.moveTo(cx - HW * 0.55, cy - HH * 0.9); g.lineTo(cx - HW * 0.3, cy - HH * 0.4); g.lineTo(cx - HW * 0.52, cy + HH * 0.05); g.moveTo(cx + HW * 0.6, cy + HH * 0.2); g.lineTo(cx + HW * 0.36, cy + HH * 0.55); g.stroke();
+      g.fillStyle = '#5a7a3a'; for (const [dx, dy, w2] of [[-0.66, -0.9, 0.36], [0.36, -0.98, 0.3], [0.5, 0.42, 0.24]]) g.fillRect(cx + dx * HW, cy + dy * HH, HW * w2, R * 0.22);
+      for (let i = 0; i < 3; i++) rect(cx - R * 0.36, mY - P + i * P * 1.5, R * 0.72, P * 0.7, skDD);
     }
     else if (robot){ g.fillStyle = '#0c1216'; g.fillRect(cx - HW * 0.98, eyeY - R * 0.36, HW * 1.96, R * 0.72); g.fillStyle = 'rgba(90,255,255,0.85)'; for (const k of [-1, 1]) g.fillRect(cx + k * eyeDX - eyeW, eyeY - eyeH, eyeW * 2, eyeH * 2); g.fillStyle = skD; for (let i = 0; i < 4; i++) g.fillRect(cx - R * 0.4, mY - P + i * P * 1.6, R * 0.8, P * 0.8); g.fillStyle = (Math.floor(t * 2) % 2) ? '#ff4a3a' : '#7a1c16'; g.beginPath(); g.arc(cx, cy - HH * 1.25, R * 0.14, 0, 7); g.fill(); g.fillStyle = _tone(skin, -0.3); g.fillRect(cx - P * 0.5, cy - HH * 1.2, P, R * 0.2); }
   }
@@ -16589,8 +16819,9 @@ function spawnOneVillager(v, i, fire){
     a._look = v.look;
     if (v.look.race && !v.robot){ a.skin = v.look.raceSkin || a.skin; if (v.look.raceHair) a.hair = v.look.raceHair; if (v.look.raceShirt) a.shirt = v.look.raceShirt;
       village.racesSeen = village.racesSeen || {}; if (!village.racesSeen[v.look.race] && RACE_INFO[v.look.race]){ village.racesSeen[v.look.race] = 1; const rn = RACE_INFO[v.look.race].name; setTimeout(() => flash(rn + ' live here now', '#c8e8a0', v.name + ' — ' + ((RACE_TRAIT[v.look.race] || {}).blurb || 'a new folk has joined your village')), 1200); } }
-    a.torsoW = v.look.torsoW; a.torsoH = v.look.torsoH;
-    a.r = Math.max(8, Math.round(12 * (v.look.rMul || 1)));
+    { const bt = faceTraits({ skin: v.skin, hair: v.hair, shirt: v.shirt, gender: villagerGender(v), look: v.look });   // the same individual build the chat scene shows
+      a.torsoW = clamp(bt.gth, 0.74, 1.5); a.torsoH = clamp(bt.h, 0.8, 1.26);
+      a.r = Math.max(8, Math.round(12 * (v.look.rMul || 1) * (0.94 + 0.06 * bt.gth))); }
   }
   if (v.fromBoss){                                   // a captured city boss — keep some of the presence
     a.r = Math.max(a.r, 16); a.torsoW = 1.22; a.torsoH = 1.14; a.speed *= 0.92;
@@ -18069,6 +18300,7 @@ function breakNearbyErrandItem(x, y, r){
 }
 function explode(x, y, radius, dmg){
   shake(16);
+  for (const hz of hazards){ if (hz.dead) continue; if ((hz.kind === 'frost' || (hz.kind === 'puddle' && hz.frozen)) && dist2(hz.x, hz.y, x, y) < (radius + hz.r) * (radius + hz.r)){ hz.frozen = false; hz.life = Math.min(hz.life, 0.5); burst(hz.x, hz.y, 8, 'rgba(225,240,245,0.6)', 80); } }   // a blast melts ice and frost
   A.S.explo();
   lights.push({ x, y, r: radius * 2.2, col: [255, 150, 60], life: 0.35, t: 0.35 });
   lights.push({ x, y, r: radius * 3.2, col: [255, 230, 180], life: 0.1, t: 0.1 });          // the initial white-hot flash
@@ -18913,6 +19145,7 @@ function exitCar(wrecked){
 function tryInteract(){
   if (drivingCar){ exitCar(); return; }
   if (zone === 'village' && merchantNearby()){ openMerchantShop(); return; }
+  if (zone === 'village' && strangerNearby()){ openEventChoice('stranger'); return; }
   if (zone === 'village' && envoyNearby()){ openEventChoice('envoy'); return; }                      // the travelling merchant's stall
   if (zone === 'city' && !heist && !player.carrying && !player.holding && !player._rideRocket && !player._rideFerris){          // crack a safe
     for (const q of props){ if (q.t !== 'safe' || q.dead || q._cracked) continue; if (dist2(q.x, q.y, player.x, player.y) < 40 * 40){ startHeist(q); return; } }
@@ -19063,6 +19296,8 @@ function tryInteract(){
     if (dist2(p.x, p.y, player.x, player.y) < 46*46){ toggleTravel(true); return; }
   }
   if (zone === 'village'){
+    // a claimed bed that no longer exists here (a new country, a demolished bed) is no claim at all — otherwise you can never claim another
+    if (player.bedSpot && !props.some(b => !b.dead && b.t === 'bed' && Math.abs(player.bedSpot.x - b.x) < 6 && Math.abs(player.bedSpot.y - b.y) < 6)) player.bedSpot = null;
     // your own claimed bed → turn in (two-tap, no dialog). Checked first so a sleeping
     // villager parked next to it can't block you from sleeping.
     if (player.bedSpot){
@@ -19907,6 +20142,7 @@ function updateEnemy(e, dt){
   if (e.soldier){ updateSoldier(e, dt); return; }
   if (e._villageThreat){ updateVillageThreat(e, dt); return; }
   if (e._envoy){ updateEnvoy(e, dt); return; }
+  if (e._stranger){ updateStranger(e, dt); return; }
   if (e._trip){ updateTraderTrip(e, dt); return; }
 
   // ice hit a wet target — frozen solid, no AI, no attacks, until it thaws (see freezeActor).
@@ -21800,8 +22036,8 @@ function slimeDeath(t, from){
     return;
   }
   if (mission && mission.raid && mission.raid.kind === 'slime' && village){
-    village.dna = village.dna || {}; const n = 1 + (((t._sb && t._sb.tier) || 1) >= 3 ? 1 : 0), ty = K.dna, tname = (MUT_TYPES[ty] || {}).name || ty;
-    village.dna[ty] = (village.dna[ty] || 0) + n; registerMutLab(); saveVillage(true);
+    village.dna = village.dna || {}; village.dnaEver = village.dnaEver || {}; const n = 2 + ((t._sb && t._sb.tier) || 1) + (t._finalBoss ? 3 : 0), ty = K.dna, tname = (MUT_TYPES[ty] || {}).name || ty;
+    village.dna[ty] = (village.dna[ty] || 0) + n; village.dnaEver[ty] = true; registerMutLab(); saveVillage(true);
     flash(K.short + ' FALLS', K.col, 'the brood dissolves  ·  +' + n + ' ' + tname.toUpperCase() + ' DNA (' + village.dna[ty] + ' held)  ·  build a Mutation Lab at home');
   } else flash(K.short + ' FALLS', K.col, 'the brood dissolves');
 }
@@ -22658,7 +22894,7 @@ function drawSlimelet(a){
 function bossKindFor(node){
   if (_forceBossKind) return _forceBossKind;
   if (node && node.champion && BK[node.champion]) return node.champion;
-  if (node && node.capital){                                    // the capital's boss is guaranteed distinct from the common early-game slime, so the finale doesn't just repeat what you've already fought
+  if (node && node.capital){
     if (node._bossKind) return node._bossKind;
     const biomeK = BOSS_BY_BIOME[countryStyle().name], pool = BOSS_KINDS.filter(k => k !== 'slime');
     const k = (biomeK && biomeK !== 'slime') ? biomeK : pool[(strHash(String(node.id) + '|' + (village ? village.seed : 0)) >>> 0) % pool.length];
@@ -23801,6 +24037,14 @@ function drawWeather(){
     const rk = sheltered ? 0.18 : 1;
     ctx.fillStyle = `rgba(40,46,66,${0.15 * w.rain})`;
     ctx.fillRect(0, 0, W, H);
+    if (!sheltered && w.rain > 0.2){                // the ground is visibly wet: a cool sheen catching the sky, and ripples spreading on the pavement
+      const sg = ctx.createLinearGradient(0, H * 0.35, 0, H); sg.addColorStop(0, 'rgba(150,180,220,0)'); sg.addColorStop(1, `rgba(150,180,220,${0.13 * w.rain})`); ctx.fillStyle = sg; ctx.fillRect(0, H * 0.35, W, H * 0.65);
+      const rp = (w._rip = w._rip || []), nowR = performance.now();
+      if (rp.length < 60) for (let i = 0; i < (2 * w.rain) + 0.5 | 0; i++) rp.push({ x: Math.random() * W, y: H * 0.3 + Math.random() * H * 0.7, t0: nowR });
+      ctx.lineWidth = 1;
+      for (let i = rp.length - 1; i >= 0; i--){ const k = (nowR - rp[i].t0) / 700; if (k >= 1){ rp.splice(i, 1); continue; }
+        ctx.strokeStyle = `rgba(215,232,250,${0.55 * (1 - k) * w.rain})`; ctx.beginPath(); ctx.ellipse(rp[i].x, rp[i].y, 3 + k * 13, (3 + k * 13) * 0.45, 0, 0, 7); ctx.stroke(); }
+    }
     ctx.strokeStyle = `rgba(184,198,226,${0.5 * w.rain * rk})`;
     ctx.lineWidth = 1.1;
     ctx.beginPath();
@@ -23991,7 +24235,7 @@ function step(dt){
   updatePanicCars(dt);
   updateAmbientTraffic(dt);
   updateKennelPets(dt);
-  updateFurnishRequests(dt); updateEventFighters(dt); updateEnvoyEvent(dt); updateTraderTrips(dt);
+  updateFurnishRequests(dt); updateEventFighters(dt); updateEnvoyEvent(dt); updateStrangerEvent(dt); updateTraderTrips(dt);
   updateRollingBarrels(dt);
   updateRollingWheels(dt);
   updateRockets(dt);
@@ -26122,6 +26366,11 @@ function drawActorLook(a, R, s, face, HX, hairCol, phase){
     if (face === 'S'){ F(-R * 0.42, -R * 2.12, R * 0.84, R * 0.3); octx.fillStyle = '#5affff'; F(-R * 0.3, -R * 2.05, R * 0.18, R * 0.16); F(R * 0.12, -R * 2.05, R * 0.18, R * 0.16); octx.fillStyle = dk(a.skin); for (let i = 0; i < 3; i++) F(-R * 0.22, -R * 1.72 + i * 2, R * 0.44, 1); }
     else { F(s * R * 0.08, -R * 2.12, s * R * 0.46, R * 0.3); octx.fillStyle = '#5affff'; F(s * R * 0.32, -R * 2.05, s * R * 0.18, R * 0.16); octx.fillStyle = dk(a.skin); for (let i = 0; i < 2; i++) F(s * R * 0.16, -R * 1.72 + i * 2, s * R * 0.3, 1); }
   }
+  if (lk.golem && face !== 'N'){                      // a golem: dark sockets with amber eyes
+    octx.fillStyle = '#14100a';
+    if (face === 'S'){ F(-R * 0.4, -R * 2.12, R * 0.8, R * 0.3); octx.fillStyle = '#ffb030'; F(-R * 0.3, -R * 2.05, R * 0.18, R * 0.16); F(R * 0.12, -R * 2.05, R * 0.18, R * 0.16); }
+    else { F(s * R * 0.1, -R * 2.12, s * R * 0.42, R * 0.3); octx.fillStyle = '#ffb030'; F(s * R * 0.32, -R * 2.05, s * R * 0.18, R * 0.16); }
+  }
   if (lk.hat){
     const hc = lk.hatCol || '#b5463c';
     octx.fillStyle = hc;
@@ -26177,6 +26426,11 @@ function drawActorLook(a, R, s, face, HX, hairCol, phase){
         octx.fillStyle = dk(hc); F(-0.6, -R * 3.16, 1.2, R * 0.55);
         octx.fillStyle = (Math.floor(performance.now() / 450) % 2) ? '#ff4a3a' : '#7a1c16'; octx.beginPath(); octx.arc(0, -R * 3.2, 1.7, 0, 7); octx.fill();
         octx.fillStyle = dk(hc); F(HX - R * 0.14, -R * 2.02, R * 0.16, R * 0.38); F(HX + W1 - R * 0.02, -R * 2.02, R * 0.16, R * 0.38);   // ear bolts
+        break;
+      case 'golem':
+        F(HX - R * 0.06, -R * 2.6, W1 + R * 0.12, R * 0.32); octx.fillStyle = lt(hc); F(HX - R * 0.06, -R * 2.6, W1 + R * 0.12, 1.5);
+        octx.fillStyle = dk(hc); F(HX + R * 0.1, -R * 2.78, R * 0.22, R * 0.2); F(HX + W1 - R * 0.3, -R * 2.72, R * 0.2, R * 0.16);   // rock nubs
+        octx.fillStyle = '#5a7a3a'; F(HX + R * 0.02, -R * 2.66, R * 0.3, R * 0.12); F(HX + W1 - R * 0.34, -R * 2.62, R * 0.28, R * 0.1);   // moss
         break;
       case 'crown':
         F(HX + R * 0.06, -R * 2.62, W1 - R * 0.12, R * 0.18);
@@ -26740,7 +26994,7 @@ function drawActor(a){
     octx.fillStyle = 'rgba(255,255,255,0.35)'; octx.fillRect(HX + R*0.2, -R*2.95, R*0.3, R*0.1);
     if (a._isGuard){ octx.fillStyle = '#b8402e'; octx.fillRect(HX + R*0.44, -R*3.35, R*0.12, R*0.42); }   // guards get a plume
   }
-  if (a.soldier && a._armor && !a.dead) drawArmorOverlay(octx, R, a._armor, HX);
+  if (a.soldier && !a.dead && (a._armor || a._helm || a._shield)) drawGearSet(octx, R, a._armor, a._helm, a._shield, HX);
   if (a._spec && !a._headless) drawSpecParts(a, 'front');   // hat / face / neck / chest / waist / foot items
 
   // weapon — hidden while your hands are full (carrying a target/bulky item, or holding a
@@ -26882,6 +27136,7 @@ function drawActor(a){
       octx.moveTo(a.x, a.y - R - 16); octx.lineTo(a.x - 4, a.y - R - 21); octx.lineTo(a.x + 4, a.y - R - 21);
       octx.closePath(); octx.fill();
     }
+    if (a._lvl > 1 && (!a._isGuard || dist2(a.x, a.y, player.x, player.y) < 160 * 160)){ octx.fillStyle = '#ffd98a'; octx.font = 'bold 7px "Courier New",monospace'; octx.textAlign = 'center'; octx.fillText('Lv ' + a._lvl, a.x, a.y - R - (a._isGuard ? 17 : 24)); octx.textAlign = 'left'; }   // veterans wear their level
     if (a._isGuard && a._met === undefined) a._met = !!(village && village.villagers.some(v => v.id === a._vid && v.met));
     const _gd = a._isGuard ? Math.hypot(a.x - player.x, a.y - player.y) : 0;
     if (a._name && (!a._isGuard || (a._met && _gd < 120))){                     // permanent village guards follow the villager rule: name only once met, and only when you're close
@@ -29439,7 +29694,7 @@ window.__G = () => ({ player, enemies, props, pickups, bullets, calledShots, par
          get cityProps(){ return props.reduce((m,p)=>{ m[p.t]=(m[p.t]||0)+1; return m; }, {}); },
          get kick(){ return { n: kickBits.length, sample: kickBits.slice(-3).map(b=>({col:b.col, z:+b.z.toFixed(1), leaf:b.leaf})) }; },
          get roofs(){ return village ? village.roofs : []; }, get clouds(){ return { R: Math.max(VUW,VUH)*0.72, ccx: (cam.x+VUW/2)|0, ccy:(cam.y+VUH/2)|0, list: clouds.map(c=>({id:c.id,x:c.x|0,y:c.y|0,rx:c.rx|0,fade:+c.fade.toFixed(2)})) }; },
-         recomputeRoofs, checkCult, checkHQ, registerCultBuild, checkTownTier, townMissing, waterAt, riverCX, riverHW, lakeTypeAt, rebuildBridges, get riverKind(){ return RIVER_KIND; }, cityDistrictAt, cityDistrictRank, uniqueAt, cityCountryNo, mkLandmark, mkProp, openMutLab, mutateVillager, makeSlimeBoss, raiseSkeleton, convertZombie, mkVehicle, hurtProp, get trainRuns(){ return trainRuns; }, get helis(){ return helis; }, get heist(){ return heist; }, damageHeli, get rocketFlights(){ return rocketFlights; }, DISTRICT_INFO, get waterfall(){ return WATERFALL; }, get lakesList(){ return LAKES; }, get crittersList(){ return critters; }, hitCritters, biomeKit, BIOME_KITS, countryStyle, COUNTRY_STYLES, MAT_COL, stormStrike, beheadActor, get fxList(){ return fx; }, get headList(){ return heads; }, get missionRef(){ return mission; }, leaveMission, showRunRecap, get deathLoss(){ return _deathLoss; }, get pendingRecap(){ return pendingRunRecap; }, wagerReportRows, get wagerReport(){ return _wagerReport; }, rollWagers, WAGER_ODDS, WAGER_TIER, registerYardBuilds, YARD_BUILDINGS, openHelp, closeHelp, helpSections, get helpOpen(){ return helpOpen; }, rivalTick, rivalNodes, rivalBroken, maybeRivalRaid, WAGERS, UNIQUES, grantUnique, rollVillageEvent, openEventChoice, showVillageEvent, openWagers, wagerTick, calamityTick, drawCalamities, CAL, wagerPayMul, get runWagers(){ return runWagers; }, set runWagers(v){ runWagers = v; }, maybeCultRaid, maybeSpawnDarkShrine, darkShrineDrain, razeDarkShrine, cultCityTick, makeCultist, hurtProp, darkShrines, squadCap, finishGuardRoute, toggleGuardZoneMode, get guardRoutePts(){ return guardRoutePts; }, RESEARCH, researchLocked, doResearch, openResearch, drawResearch, setResearchTab(i){ researchTab = i; }, get researchOpen(){ return researchOpen; }, convictionCap, forgedId, parseForged, WEAPONS_RAW, openSmithy, closeSmithy, smithyEntries, squadDebrief, vStats, craftArmor, ARMOR, forgeQuote, forgeApply, get smithyOpen(){ return smithyOpen; }, villagerCap, villageDayTick, TOWN_TIERS,
+         recomputeRoofs, checkCult, checkHQ, registerCultBuild, checkTownTier, townMissing, waterAt, riverCX, riverHW, lakeTypeAt, rebuildBridges, get riverKind(){ return RIVER_KIND; }, cityDistrictAt, cityDistrictRank, uniqueAt, cityCountryNo, mkLandmark, mkProp, openMutLab, mutateVillager, makeSlimeBoss, raiseSkeleton, convertZombie, mkVehicle, hurtProp, get trainRuns(){ return trainRuns; }, get helis(){ return helis; }, get heist(){ return heist; }, damageHeli, get rocketFlights(){ return rocketFlights; }, DISTRICT_INFO, get waterfall(){ return WATERFALL; }, get lakesList(){ return LAKES; }, get crittersList(){ return critters; }, hitCritters, biomeKit, BIOME_KITS, countryStyle, COUNTRY_STYLES, MAT_COL, stormStrike, beheadActor, get fxList(){ return fx; }, get headList(){ return heads; }, get missionRef(){ return mission; }, leaveMission, showRunRecap, get deathLoss(){ return _deathLoss; }, get pendingRecap(){ return pendingRunRecap; }, wagerReportRows, get wagerReport(){ return _wagerReport; }, rollWagers, WAGER_ODDS, WAGER_TIER, registerYardBuilds, YARD_BUILDINGS, openHelp, closeHelp, helpSections, get helpOpen(){ return helpOpen; }, rivalTick, rivalNodes, rivalBroken, maybeRivalRaid, WAGERS, UNIQUES, grantUnique, rollVillageEvent, openEventChoice, showVillageEvent, openWagers, wagerTick, calamityTick, drawCalamities, CAL, wagerPayMul, get runWagers(){ return runWagers; }, set runWagers(v){ runWagers = v; }, maybeCultRaid, maybeSpawnDarkShrine, darkShrineDrain, razeDarkShrine, cultCityTick, makeCultist, hurtProp, darkShrines, squadCap, finishGuardRoute, toggleGuardZoneMode, get guardRoutePts(){ return guardRoutePts; }, RESEARCH, researchLocked, doResearch, openResearch, drawResearch, setResearchTab(i){ researchTab = i; }, get researchOpen(){ return researchOpen; }, convictionCap, forgedId, parseForged, WEAPONS_RAW, openSmithy, closeSmithy, smithyEntries, buyGolemVillager, buyBoundVillager, makeMerchantStock, squadDebrief, vStats, craftArmor, ARMOR, forgeQuote, forgeApply, get smithyOpen(){ return smithyOpen; }, villagerCap, villageDayTick, TOWN_TIERS,
          get cult(){ return village ? { on: !!village.cult, day: village.cultDay, hq: village.hq, hqDone: !!village.hqDone } : null; },
          saveVillage, toggleCraft, toggleBuild, toggleTravel, placeBuild,
          get mission(){ return mission; }, get offers(){ return _urgeOffers; },
