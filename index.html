@@ -872,8 +872,8 @@ const WINDOW_MATS = new Set();
 // so this has thousands of ids of headroom, not the dozen a byte-sized enum would allow.
 const CODEX_ID_BASE = 100;              // built-ins live at 0-11; discovered materials start here
 let CODEX_BY_ID = {};                   // runtime-only reverse lookup, rebuilt from village.codex on load
-const TEXTURE_HP       = { woven:20, thatch:14, rubble:80, cracked:35, panel:55, scaled:45, mesh:18, organic:30, smooth:50 };
-const TEXTURE_RESOURCE = { woven:'stick', thatch:'stick', organic:'stick', rubble:'stone', cracked:'stone', smooth:'stone', panel:'stone', scaled:'stone', mesh:'stone' };
+const TEXTURE_HP       = { grain:30, woven:20, thatch:14, rubble:80, cracked:35, panel:55, scaled:45, mesh:18, organic:30, smooth:50 };
+const TEXTURE_RESOURCE = { grain:'wood', woven:'stick', thatch:'stick', organic:'stick', rubble:'stone', cracked:'stone', smooth:'stone', panel:'stone', scaled:'stone', mesh:'stone' };
 // bring one codex entry's material fully to life: colour/height/hp tables, roof eligibility,
 // and a real crafting recipe + build-menu piece. Safe to call more than once for the same id
 // (e.g. on every village load) — it skips re-adding the RECIPES/BUILD_ITEMS rows if already there.
@@ -970,6 +970,22 @@ function discoverMaterial(name){
 }
 // call once per village load — brings every previously-discovered material back to life
 // (the colour/recipe tables above are runtime-only, so a fresh page load starts empty)
+// hand-picked wooden walls/floors unlocked by the Carpentry / Joinery research: each is a normal codex
+// material (same recipe/build-menu/save plumbing as a discovered one) with a fixed grain look, so
+// they persist and re-register on load through loadCodex with no extra code
+const WOOD_SETS = {
+  carpentry: [['Oak Plank','#a5763c','both'],['Birch Plank','#d8c9a4','both'],['Pine Plank','#c8985a','both'],['Cedar Plank','#a4553a','both'],['Whitewashed Plank','#e6e0d2','both'],['Charred Timber','#2c2622','both'],['Driftwood Plank','#a8a08e','both'],['Log Palisade','#6a4a2c','wall']],
+  joinery:   [['Walnut Plank','#4e3220','both'],['Mahogany Plank','#7a3a26','both'],['Ebony Plank','#231c1a','both'],['Redwood Plank','#933f2a','both'],['Parquet','#b98a52','floor'],['Herringbone Parquet','#8a5f34','floor']],
+};
+function registerWoodSet(id){
+  if (!village) return;
+  village.codex ||= { materials: {}, nextId: CODEX_ID_BASE };
+  for (const [name, c1, kind] of (WOOD_SETS[id] || [])){
+    const key = name.toLowerCase();
+    if (!village.codex.materials[key]) village.codex.materials[key] = { id: village.codex.nextId++, name, arc: { texture: 'grain', gap: 0.02, c1, c2: 'rgba(0,0,0,0.2)', id: 'wood:set' }, kind, day: village.day, uses: 0 };
+    registerCodexMaterial(village.codex.materials[key]);
+  }
+}
 function loadCodex(){
   if (!village || !village.codex) return;
   for (const key in village.codex.materials) registerCodexMaterial(village.codex.materials[key]);
@@ -6134,6 +6150,8 @@ const RESEARCH = [
   { id: 'drill',      branch: 'war',   name: 'Drill',        cost: 70, blurb: 'guards and mustered soldiers have +25% health' },
   { id: 'comfort',    branch: 'civic', name: 'Comforts',     cost: 80, blurb: 'housed villagers stay happy' },
   { id: 'paving',     branch: 'civic', name: 'Paving',       cost: 50, blurb: 'craft gravel / cobble / brick / flagstone / paved paths' },
+  { id: 'carpentry',  branch: 'civic', name: 'Carpentry',    cost: 50, blurb: 'craft oak / birch / pine / cedar / whitewashed / charred / driftwood walls and floors, and log palisades' },
+  { id: 'joinery',    branch: 'civic', name: 'Joinery',      cost: 70, req: ['carpentry'], blurb: 'craft dark walnut / mahogany / ebony / redwood walls and floors, plus parquet and herringbone floors' },
   { id: 'wells',      branch: 'civic', name: 'Wells',        cost: 60, req: ['comfort'], blurb: 'everyone is a little happier (and so, more productive)' },
 ];
 let researchTab = 0;
@@ -7838,6 +7856,7 @@ function doResearch(id){
   village.stores.favor = (village.stores.favor | 0) - (n.favor || 0);
   village.research[id] = true;
   if (id === 'paving') registerPaths();
+  if (id === 'carpentry' || id === 'joinery') registerWoodSet(id);
   const yb = YARD_BUILDINGS.find(b => b.res === id);
   registerYardBuilds();
   flash('Researched: ' + n.name, '#c9e0a0', n.blurb + (yb ? '  ·  you can now build a ' + yb.name + ' (C to craft, B to place)' : ''));
@@ -13358,6 +13377,7 @@ function loadVillage(){
       s.weaponCodex ||= { entries: {} }; s.weaponCodex.entries ||= {};
       s.npcCodex ||= { entries: {} }; s.npcCodex.entries ||= {};
       s.day = s.day || 0; s.tod = 0.2;   // always wake into a fresh morning on load
+      s.money ||= 0;
       return s; } }
   catch {}
   return freshVillage();
@@ -13507,6 +13527,7 @@ let _saveT = 0;
 function saveVillage(now){
   if (!village) return;
   if (!now){ clearTimeout(_saveT); _saveT = setTimeout(() => saveVillage(true), 800); return; }
+  village.money = money;   // cash was never actually part of the save — it lived only in the transient `money` global, wiped to 0 on every Continue/reload
   store.set('ror_village', JSON.stringify(village));
 }
 function noteEdit(cx, cy, m){
@@ -15958,8 +15979,16 @@ function propThrowStats(data){
   return PROP_THROW_STATS[data.propType] || { dmg: 8, knock: 360 };
 }
 function mkProp(x, y, w, h, t){
-  return { x, y, w, h, t, mat: PROP_MAT[t] || 'wood', hp: PROP_HP[t] || 18, maxhp: PROP_HP[t] || 18,
+  const p = { x, y, w, h, t, mat: PROP_MAT[t] || 'wood', hp: PROP_HP[t] || 18, maxhp: PROP_HP[t] || 18,
     solid: !PROP_NONSOLID.has(t), dead: false, vx: 0, vy: 0, fixed: FIXED_PROP.has(t) };
+  // most street/sidewalk-parked cars are spawned with no _facing of their own (only the parking-lot
+  // rows and named vehicles set one explicitly, right after this call, which just overwrites this).
+  // Leaving it undefined meant the car rendered at the drawCarShape fallback of 0 while parked, then
+  // "jumped" to face however the player was standing the moment they entered — reported as the car's
+  // direction snapping on entry. Giving it a real value here, up front, means there's nothing left to
+  // snap to later (enterCar already preserves whatever _facing a car already has).
+  if (t === 'car') p._facing = pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]);
+  return p;
 }
 // shove a prop unless it's rooted in place
 function shoveProp(p, dx, dy){ if (!p.fixed){ p.vx += dx; p.vy += dy; } }
@@ -16447,6 +16476,7 @@ function startGame(appearance){
   applyPlayerPerks();   // roguelite unlocks — Legacy Points survive wipeSave, so this can run before the village even exists
   kills = 0; score = 0; money = 0;
   enterZone('village');
+  money = village.money || 0;   // restore saved cash — a brand-new village has none yet, so this is still 0 for a real New Game
   if (appearance) savePlayer();   // persist the new look immediately, don't wait for the next autosave
   renderPortraitHUD();
 }
@@ -28915,7 +28945,7 @@ function dbgConquer(mode){
   else if (mode === 'capital'){ nodes.forEach(take); V.conquered = true; dbgSave(); if (typeof toggleRoster === 'function') toggleRoster(false); showWinScreen(); return; }
   dbgSave();
 }
-function dbgUnlockResearch(){ const V = dbgVillage(); if (!V) return; for (const r of RESEARCH) V.research[r.id] = true; if (V.research.paving) registerPaths(); dbgSave(); dbgSay('all research unlocked'); }
+function dbgUnlockResearch(){ const V = dbgVillage(); if (!V) return; for (const r of RESEARCH) V.research[r.id] = true; if (V.research.paving) registerPaths(); registerWoodSet('carpentry'); registerWoodSet('joinery'); dbgSave(); dbgSay('all research unlocked'); }
 function dbgApplyWagersNow(ids){
   if (zone !== 'city'){ dbgSay('only works while you are in a city — use "next trip" instead'); return; }
   runWagers = ids.slice(); resetCalamities(); _reinfT = null;
