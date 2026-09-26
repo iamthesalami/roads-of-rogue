@@ -4419,14 +4419,18 @@ function winStats(){
   ];
 }
 function buildWinUI(){
-  const v = village;
+  const v = village, fin = isFinalCountry(), er = v._endRace;
   const stats = winStats().map(([k, val]) => `<div class="stat"><span>${k}</span><b>${val}</b></div>`).join('');
+  const raceBlock = fin && er ? (er.race
+    ? `<p class="flavor" style="color:#ffe6a0;font-size:15px;margin-top:8px">A NEW WAY TO PLAY: <b>${RACE_SINGULAR[er.race] || er.race}</b> — pick it under Race when you create your next character.</p>`
+    : `<p class="flavor" style="color:#ffe6a0;margin-top:8px">You already hold every race — the world adds ${er.bonus} Legacy Points instead.</p>`) : '';
   $('winscreen').innerHTML = `<div class="panel">
     <h2>${v.country ? v.country.name : 'the country'} — conquered</h2>
-    <h1>The Country Is Yours</h1>
-    <p class="flavor">${pick(WIN_FLAVOR)}</p>
+    <h1>${fin ? 'The World Is Yours' : 'The Country Is Yours'}</h1>
+    <p class="flavor">${fin ? 'Six countries, one banner. There is nowhere left to go but back to the beginning — as someone new.' : pick(WIN_FLAVOR)}</p>
     <div class="stats">${stats}</div>
-    <button id="wincl">Continue</button>
+    ${raceBlock}
+    <button id="wincl">${fin ? 'Claim your legacy' : 'Onward'}</button>
   </div>`;
   $('wincl').addEventListener('click', closeWinScreen);
 }
@@ -4436,12 +4440,27 @@ let winOpen = false;
 // Escape (winOpen's Escape branch) so neither path can skip straight past it.
 function closeWinScreen(){
   winOpen = false; $('winscreen').classList.remove('open');
-  legacyForced = true;
+  if (!isFinalCountry()){                                               // between countries there is no Legacy shop any more: straight on to the next one
+    if (village && village.conquered) showNgPlusFlee(village.country ? village.country.name : 'the old country');
+    return;
+  }
+  legacyForced = true;                                                  // the campaign is complete: the ONE moment you may spend Legacy Points on permanent perks
   toggleLegacy(true);
-  flash('Spend your Legacy Points, or bank them — your call', '#c9a6f5', '');
+  flash('Spend your Legacy Points — the perks last into every future playthrough', '#c9a6f5', '');
+}
+const TOTAL_COUNTRIES = 6;
+const isFinalCountry = () => !!village && ((village.ngPlus || 0) + 1) >= TOTAL_COUNTRIES;
+// completing the whole campaign: a random race is added to the ones you can play, and the Legacy shop opens (for the first and only time until you finish again)
+function awardEndRace(){
+  const L = loadLegacy(), pool = Object.keys(RACE_INFO).filter(r => !(L.races || []).includes(r));
+  let got = null, bonus = 0;
+  if (pool.length){ got = pick(pool); L.races = (L.races || []).concat([got]); } else { bonus = 50; L.points += bonus; L.earned += bonus; }
+  L.ended = true; saveLegacy(L);
+  return { race: got, bonus };
 }
 function showWinScreen(){
   if (!village) return;
+  if (isFinalCountry() && !village._endRace){ village._endRace = awardEndRace(); }
   village._winSeen = true; saveVillage(true);
   winOpen = true; paused = true;
   for (const k in keys) keys[k] = false;
@@ -4475,9 +4494,14 @@ function toggleLegacy(force){
     // (see showNgPlusFlee) plays first; startNewGamePlus itself only runs once that's dismissed.
     const wasForced = legacyForced;
     legacyForced = false;
-    if (wasForced && village && village.conquered) showNgPlusFlee(village.country ? village.country.name : 'the old country');
+    if (wasForced && village && village.conquered){ if (isFinalCountry()) finishCampaign(); else showNgPlusFlee(village.country ? village.country.name : 'the old country'); }
     else if (!player) openTitle();
   }
+}
+function finishCampaign(){
+  if (village){ village._finished = true; saveVillage(true); }
+  flash('Your legend is complete', '#ffe6a0', 'start a new game to play again — with everything you have earned');
+  openTitle();
 }
 // New Game+ skeleton — see toggleLegacy's close branch for the trigger. Deliberately minimal for
 // now: a fresh country (genCountry already folds `ngPlus` into its own seed — see there — so the
@@ -12965,7 +12989,31 @@ function moleBurst(x, y, isExit){
 for (const t of PLAYER_TRAITS) if (!t._repriced){ t._repriced = true; t.cost = 35 + Math.max(0, (t.cost || 3) - 3) * 10; }
 const PLAYER_TRAIT_BY_ID = Object.fromEntries(PLAYER_TRAITS.map(t => [t.id, t]));
 const LEGACY_SLOT_COST = [0, 0, 60, 120];   // cost to own N slots total (index = slot count); slots 1-2 are free
-function defaultLegacy(){ return { points: 0, earned: 0, unlocked: [], equipped: [], slots: 2 }; }
+function defaultLegacy(){ return { points: 0, earned: 0, unlocked: [], equipped: [], slots: 2, races: [], ended: false }; }
+// user: finishing the whole campaign awards a random race to keep as a playable race. Each gives a modest gift (nothing here changes the balance much — it's a new way to play).
+const RACE_SINGULAR = { elf: 'Elf', dwarf: 'Dwarf', orc: 'Orc', lizard: 'Lizardfolk', demon: 'Demon', slime: 'Slimefolk', frost: 'Frostkin', cat: 'Catfolk', dog: 'Dogfolk', fox: 'Foxfolk', rabbit: 'Rabbitfolk', ghost: 'Ghost', zombie: 'Zombie', vampire: 'Vampire' };
+const PLAYER_RACE_GIFT = {
+  elf:    { desc: 'Elven grace: you move 12% faster and dash 10% further.', mods: { speedMul: 1.12, dashMul: 1.1 } },
+  dwarf:  { desc: 'Stout and hardy: +60 max health.', hpBonus: 60 },
+  orc:    { desc: 'Brutish: your hits knock enemies back 45% harder, and +30 max health.', mods: { knockMul: 1.45 }, hpBonus: 30 },
+  lizard: { desc: 'Cold-blooded reflexes: dash 25% further and move 8% faster.', mods: { dashMul: 1.25, speedMul: 1.08 } },
+  demon:  { desc: 'Infernal: +40 max health and a much harder shove.', mods: { knockMul: 1.3 }, hpBonus: 40 },
+  slime:  { desc: 'Gooey: +50 max health.', hpBonus: 50 },
+  frost:  { desc: 'Frostblood: +40 max health and a slightly harder shove.', mods: { knockMul: 1.15 }, hpBonus: 40 },
+  cat:    { desc: 'Nimble: dash 35% further and move 5% faster.', mods: { dashMul: 1.35, speedMul: 1.05 } },
+  dog:    { desc: 'Loyal and eager: move 12% faster and +20 max health.', mods: { speedMul: 1.12 }, hpBonus: 20 },
+  fox:    { desc: 'Sly: move 10% faster and dash 15% further.', mods: { speedMul: 1.1, dashMul: 1.15 } },
+  rabbit: { desc: 'Quick: move 18% faster.', mods: { speedMul: 1.18 } },
+  ghost:  { desc: 'Wispy: dash 45% further and move 6% faster.', mods: { dashMul: 1.45, speedMul: 1.06 } },
+  zombie: { desc: 'Rotten tough: +80 max health.', hpBonus: 80 },
+  vampire:{ desc: 'Undying grace: +40 max health and move 9% faster.', mods: { speedMul: 1.09 }, hpBonus: 40 },
+};
+const _racePerkCache = {};
+function racePerkFor(id){
+  if (!PLAYER_RACE_GIFT[id]) return null;
+  if (!_racePerkCache[id]) _racePerkCache[id] = Object.assign({ id: 'race_' + id, name: (RACE_SINGULAR[id] || id) + ' blood', icon: '🧬', _race: true }, PLAYER_RACE_GIFT[id]);
+  return _racePerkCache[id];
+}
 function loadLegacy(){
   try { const s = JSON.parse(store.get('ror_legacy') || 'null'); if (s && typeof s === 'object') return Object.assign(defaultLegacy(), s); } catch {}
   return defaultLegacy();
@@ -12976,7 +13024,7 @@ function saveLegacy(L){ store.set('ror_legacy', JSON.stringify(L)); }
 function awardLegacy(n, why){
   if (!n) return;
   const L = loadLegacy(); L.points += n; L.earned += n; saveLegacy(L);
-  flash('+' + n + ' legacy point' + (n === 1 ? '' : 's'), '#c9a6f5', why || 'spend it on a perk back home (L)');
+  flash('+' + n + ' legacy point' + (n === 1 ? '' : 's'), '#c9a6f5', (why || '') + (why ? '  ·  ' : '') + 'banked — spend them when you complete all ' + TOTAL_COUNTRIES + ' countries');
 }
 // recompute the player's live perk state from whatever's equipped — safe to call any time
 // (on login and every time the Legacy panel changes the loadout). Never compounds: HP bonus is
@@ -12988,6 +13036,7 @@ function applyPlayerPerks(){
   let traits = (L.equipped || []).map(id => PLAYER_TRAIT_BY_ID[id]).filter(Boolean).concat((player._tempTraits || []).filter(t => !_tOff.includes(t.id)));
   const _off = (village && village.powersOff) || [];
   for (const id of (village && village.powers) || []){ if (_off.includes(id)) continue; const t = PLAYER_TRAIT_BY_ID[id]; if (t && !traits.includes(t)) traits.push(t); }          // champion powers last the whole playthrough (unless you've switched one off in the settings screen)
+  if (player._raceId){ const rp = racePerkFor(player._raceId); if (rp && !traits.includes(rp)) traits.push(rp); }        // your race's gift
   player._traits = traits;
   let speedMul = 1, rateMul = 1;
   let dashMul = 1, knockMul = 1;
@@ -13050,7 +13099,7 @@ function buildTraitSettingsUI(){
   el.innerHTML = traits.map(t => {
     const slot = actives.indexOf(t);
     const key = slot === 0 ? 'Q' : slot === 1 ? 'F' : null;
-    const src = ((village && village.powers) || []).includes(t.id) ? 'champion power — kept for this whole playthrough' : tempIds.has(t.id) ? 'this run only — quest reward' : 'equipped Legacy perk';
+    const src = t._race ? 'your race' : ((village && village.powers) || []).includes(t.id) ? 'champion power — kept for this whole playthrough' : tempIds.has(t.id) ? 'this run only — quest reward' : 'equipped Legacy perk';
     const isPower = ((village && village.powers) || []).includes(t.id);
     return '<div class="trait-row"><b>' + (t.icon || '') + ' ' + t.name + '</b>' + (key ? ' <span class="tkey">[' + key + ']</span>' : '') +
       ' <span class="tsrc">(' + src + ')</span>' + (isPower ? ' <button class="eq pwbtn" data-pw="' + t.id + '" style="margin-left:6px">Switch off</button>' : tempIds.has(t.id) ? ' <button class="eq tmpbtn" data-tmp="' + t.id + '" style="margin-left:6px">Switch off</button>' : '') + '<div class="tfull">' + (t.desc || '') + '</div></div>';
@@ -13691,11 +13740,13 @@ CHAR_OPTIONS.waist = [ { id:'', label:'None' }, { id:'belt', label:'Belt', col:'
 CHAR_OPTIONS.foot = [ { id:'', label:'Default' }, { id:'boots', label:'Boots', col:'#2b2b30' }, { id:'sneakers', label:'Sneakers', col:'#f4f4f4' },
   { id:'heels', label:'Heels', col:'#c8202a' }, { id:'wellies', label:'Wellies', col:'#2a8a3a' }, { id:'sandals', label:'Sandals', col:'#8a5a2a' },
   { id:'bare', label:'Barefoot' }, { id:'bigshoes', label:'Clown Shoes', col:'#c22' } ];
-const CC_LABELS = { gender:'Gender', body:'Body', skin:'Skin', hair:'Hair colour', shirt:'Shirt', pants:'Pants', hat:'Hat', face:'Face', style:'Hair style', top:'Top', neck:'Neck', back:'Back', waist:'Waist', foot:'Shoes' };
-function defaultCharDraft(){ return { gender:0, body:1, skin:0, hair:1, shirt:0, pants:0, hat:0, face:0, style:0, top:0, neck:0, back:0, waist:0, foot:0 }; }
+const CC_LABELS = { race:'Race', gender:'Gender', body:'Body', skin:'Skin', hair:'Hair colour', shirt:'Shirt', pants:'Pants', hat:'Hat', face:'Face', style:'Hair style', top:'Top', neck:'Neck', back:'Back', waist:'Waist', foot:'Shoes' };
+CHAR_OPTIONS.race = [{ id: '', label: 'Human' }];
+function refreshRaceOptions(){ const L = loadLegacy(); CHAR_OPTIONS.race = [{ id: '', label: 'Human' }].concat((L.races || []).filter(r => RACE_INFO[r]).map(r => ({ id: r, label: RACE_SINGULAR[r] || r }))); }
+function defaultCharDraft(){ return { race:0, gender:0, body:1, skin:0, hair:1, shirt:0, pants:0, hat:0, face:0, style:0, top:0, neck:0, back:0, waist:0, foot:0 }; }
 let charDraft = defaultCharDraft();
 function draftToAppearance(d){
-  const body = CHAR_OPTIONS.body[d.body], hat = CHAR_OPTIONS.hat[d.hat], face = CHAR_OPTIONS.face[d.face];
+  const body = CHAR_OPTIONS.body[d.body], hat = CHAR_OPTIONS.hat[d.hat], face = CHAR_OPTIONS.face[d.face], rid = (CHAR_OPTIONS.race[d.race || 0] || {}).id || '', RI = rid ? RACE_INFO[rid] : null;
   const hairCol = CHAR_OPTIONS.hair[d.hair].col;
   const parts = [];
   if (hat.id) parts.push({ slot:'hat', item:hat.id, size:'m', color: hat.col || '#8a8a92' });
@@ -13705,9 +13756,9 @@ function draftToAppearance(d){
     parts.push({ slot, item:o.id, size:'m', color: slot === 'head' ? hairCol : (o.col || '#8a8a92') });
   }
   return {
-    gender: CHAR_OPTIONS.gender[d.gender].id, skin: CHAR_OPTIONS.skin[d.skin].col, hair: hairCol,
+    gender: CHAR_OPTIONS.gender[d.gender].id, skin: RI ? RI.skin[0] : CHAR_OPTIONS.skin[d.skin].col, hair: RI && RI.hair ? RI.hair[0] : hairCol,
     shirt: CHAR_OPTIONS.shirt[d.shirt].col, pants: CHAR_OPTIONS.pants[d.pants].col,
-    torsoW: body.torsoW, torsoH: body.torsoH, parts,
+    torsoW: body.torsoW, torsoH: body.torsoH, parts, race: rid || null,
   };
 }
 // static front-facing render, shared by the HUD portrait and the creator preview — mirrors
@@ -14157,6 +14208,7 @@ function drawCharPreview(){
 function buildCharCreateRows(){
   const el = document.getElementById('cc-rows'); el.innerHTML = '';
   for (const cat of Object.keys(CHAR_OPTIONS)){
+    if (cat === 'race' && CHAR_OPTIONS.race.length < 2) continue;                       // no other race unlocked yet: nothing to choose
     const row = document.createElement('div'); row.className = 'cc-row';
     const swatchy = ['skin','hair','shirt','pants'].includes(cat);
     row.innerHTML = `<label>${CC_LABELS[cat]}</label><button type="button" class="cc-arr" data-cat="${cat}" data-dir="-1">‹</button>` +
@@ -14180,6 +14232,7 @@ function refreshCharCreateUI(){
   drawCharPreview();
 }
 function openCharCreate(){
+  refreshRaceOptions();
   closeTitle();
   charDraft = defaultCharDraft();
   charCreateOpen = true;
@@ -14337,6 +14390,7 @@ function openTitle(){
   renderTitleProfiles();
   drawTitleArt(performance.now());
   document.getElementById('title-continue').style.display = hasSave() ? '' : 'none';
+  { const lb = document.getElementById('title-legacy'); if (lb){ const on = !!loadLegacy().ended; lb.style.opacity = on ? '1' : '0.5'; lb.textContent = on ? 'Legacy' : 'Legacy (locked)'; } }
   document.getElementById('titleScreen').classList.add('open');
 }
 function closeTitle(){ titleOpen = false; document.getElementById('titleScreen').classList.remove('open'); }
@@ -14347,6 +14401,13 @@ function applyAppearance(p, ap){
   p.skin = ap.skin; p.hair = ap.hair; p.shirt = ap.shirt; p.pants = ap.pants; p.gender = ap.gender;
   p.torsoW = ap.torsoW; p.torsoH = ap.torsoH;
   p._spec = { parts: ap.parts, onHit: 'blood' };
+  p._raceId = ap.race && RACE_INFO[ap.race] ? ap.race : null;
+  p._look = null;
+  if (p._raceId){                                                                     // the race's own look: ears / horns / tail / scales, drawn like a villager of that people
+    const lk = applyRaceToLook({ hairStyle: ap.gender === 'f' ? 'long' : 'short', hat: null, hatCol: '#888', glasses: false, beard: null, mark: null, torsoW: 1, torsoH: 1, rMul: 1 }, p._raceId, ap.gender === 'f');
+    lk.raceSkin = ap.skin; if (ap.hair) lk.raceHair = ap.hair; lk.torsoW = p.torsoW || 1; lk.torsoH = p.torsoH || 1; lk.rMul = 1;
+    p._look = lk;
+  }
 }
 
 // hand-authored reference roster (always present; roster.js adds on top)
@@ -15431,7 +15492,7 @@ function savePlayer(){
   store.set('ror_player', JSON.stringify({ ver: SAVE_VER, level: p.level, xp: p.xp, xpNext: p.xpNext,
     maxhp: p.maxhp, dmgBonus: p.dmgBonus || 0, res: p.res, mats: p.mats, quick: p.quick, pack: p.pack, bedSpot: p.bedSpot || null,
     appearance: { skin: p.skin, hair: p.hair, shirt: p.shirt, pants: p.pants, gender: p.gender,
-      torsoW: p.torsoW || 1, torsoH: p.torsoH || 1, parts: (p._spec && p._spec.parts) || [] } }));
+      torsoW: p.torsoW || 1, torsoH: p.torsoH || 1, parts: (p._spec && p._spec.parts) || [], race: p._raceId || null } }));
 }
 function loadPlayerInto(p){
   let s; try { s = JSON.parse(store.get('ror_player') || 'null'); } catch {}
@@ -19031,6 +19092,7 @@ function startGame(appearance){
 }
 // wipe the village + player progression and start over
 function wipeSave(appearance){
+  { const L = loadLegacy(); if (L.ended){ L.ended = false; saveLegacy(L); } }
   store.set('ror_village', ''); store.set('ror_player', '');
   for (let i = 0; i < AUTO_KEEP; i++) store.set('ror_auto_' + i, '');
   for (let i = 0; i < 3; i++) store.set('ror_slot_' + i, '');
@@ -32810,7 +32872,7 @@ function syncHUD(){
     if (hasSave() && !(await showConfirm('This will erase your current village and progress. Continue?'))) return;
     openCharCreate();
   });
-  $('title-legacy').addEventListener('click', () => toggleLegacy(true));
+  $('title-legacy').addEventListener('click', () => { if (!loadLegacy().ended){ flash('Legacy perks unlock when you complete all ' + TOTAL_COUNTRIES + ' countries', '#c9a6f5', 'your points are banked until then'); return; } toggleLegacy(true); });
   $('title-settings').addEventListener('click', () => toggleSettings(true));
   $('title-help').addEventListener('click', () => openHelp());
   $('set-help').addEventListener('click', () => openHelp());
