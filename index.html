@@ -12986,9 +12986,9 @@ function moleBurst(x, y, isExit){
 }
 // user: "I've accumulated 76 legacy points just during testing — make the legacy perks MUCH more expensive, 35 minimum." Perks were 3-6 points; they now run 35 (the cheapest)
 // up to 65 (the strongest): 35 + 10 per old cost tier above 3. Extra loadout slots are scaled to match.
-for (const t of PLAYER_TRAITS) if (!t._repriced){ t._repriced = true; t.cost = 35 + Math.max(0, (t.cost || 3) - 3) * 10; }
+for (const t of PLAYER_TRAITS) if (!t._repriced){ t._repriced = true; t.cost = 140 + Math.max(0, (t.cost || 3) - 3) * 40; }   // rescaled: Legacy can now only be spent once, at the end of the full 6-country campaign (~500 points earned across it), so perks cost 140 (cheapest) to ~260
 const PLAYER_TRAIT_BY_ID = Object.fromEntries(PLAYER_TRAITS.map(t => [t.id, t]));
-const LEGACY_SLOT_COST = [0, 0, 60, 120];   // cost to own N slots total (index = slot count); slots 1-2 are free
+const LEGACY_SLOT_COST = [0, 0, 240, 480];   // cost to own N slots total (index = slot count); slots 1-2 are free
 function defaultLegacy(){ return { points: 0, earned: 0, unlocked: [], equipped: [], slots: 2, races: [], ended: false }; }
 // user: finishing the whole campaign awards a random race to keep as a playable race. Each gives a modest gift (nothing here changes the balance much — it's a new way to play).
 const RACE_SINGULAR = { elf: 'Elf', dwarf: 'Dwarf', orc: 'Orc', lizard: 'Lizardfolk', demon: 'Demon', slime: 'Slimefolk', frost: 'Frostkin', cat: 'Catfolk', dog: 'Dogfolk', fox: 'Foxfolk', rabbit: 'Rabbitfolk', ghost: 'Ghost', zombie: 'Zombie', vampire: 'Vampire' };
@@ -21716,6 +21716,8 @@ function tryInteract(){
       for (const p of props){
         if (p.dead || p.t !== 'bed' || Math.abs(player.bedSpot.x - p.x) > 4 || Math.abs(player.bedSpot.y - p.y) > 4) continue;
         if (dist2(p.x, p.y, player.x, player.y) >= 40 * 40) continue;
+        // user: stop sleeping over and over just to collect the daily resources — you can only turn in once the sun starts to set
+        if (village && village.tod != null && village.tod < 0.62){ flash('Not tired yet', '#b9c4e0', 'the day is young — you can turn in once the sun starts to set'); return; }
         if (!player._sleepArmed || performance.now() - player._sleepArmed > 3500){
           player._sleepArmed = performance.now();
           flash('Sleep until morning?', '#b9c4e0', 'press E again to turn in');
