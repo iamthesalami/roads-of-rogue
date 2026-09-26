@@ -98,7 +98,7 @@
      never actually caught because the verification screenshot didn't have any perk active with
      enough content to visibly collide). top:180 clears the minimap's real bottom edge with margin. */
   body.editing #traithud{display:none !important}
-  #wagerhud{position:fixed;left:50%;transform:translateX(-50%);top:50px;z-index:9;gap:8px;flex-direction:row;flex-wrap:nowrap;justify-content:center;align-items:flex-start;max-width:78vw;pointer-events:none}
+  #wagerhud{position:fixed;right:270px;top:10px;z-index:9;gap:6px;flex-direction:column;flex-wrap:nowrap;justify-content:flex-start;align-items:flex-end;max-width:260px;pointer-events:none}   /* beside the minimap (250px wide + 10px margin), stacked — used to sit top-centre over the wanted level */
   #wagerhud .wchip{background:rgba(48,20,12,.88);border:1px solid #e0a84a;border-radius:4px;padding:3px 8px;font-size:10px;color:#ffe0b0;line-height:1.35;text-align:center;max-width:250px;flex:0 1 auto}
   #wagerhud .wchip b{display:block;color:#ffb060;letter-spacing:.5px}
   #wagerhud .wchip span{display:block;opacity:.9}
@@ -9583,7 +9583,7 @@ function drawObjectiveHUD(){
     const segs = u.kind === 'kidnap' ? (mission.escort ? [{ c: RC.target, t: 'walk them to the road home' }] : [{ c: RC.target, t: 'sweet-talk them if nobody\'s watching, or pay $' + recruitPrice() + ' (E)' }, { c: RC.force, t: 'or knock them out and carry' }])
       : u.kind === 'errand' ? [{ c: RC.target, t: 'lift it off the holder (E, from behind)' }, { c: RC.force, t: 'or take it by force' }]
       : u.kind === 'money' ? [{ c: RC.other, t: 'hack ATMs (H)' }, { c: RC.other, t: 'crack locked buildings' }, { c: RC.other, t: 'lift wallets (E, from behind)' }, { c: RC.force, t: 'or shake people down' }]
-      : u.kind === 'groceries' ? [{ c: RC.other, t: 'hack fridges (H)' }, { c: RC.other, t: "lift shoppers' bags (E, from behind)" }, { c: RC.force, t: 'or raid a shop' }]
+      : u.kind === 'groceries' ? [{ c: RC.other, t: 'hack fridges (H)' }, { c: RC.other, t: "lift shoppers' bags (E, from behind)" }, { c: RC.other, t: 'buy at market stalls (E, $20)' }, { c: RC.force, t: 'or raid a shop' }]
       : u.kind === 'rescue' ? (mission.escort ? [{ c: RC.target, t: 'walk them to the road home' }] : [{ c: RC.target, t: 'pick the lock (E, 5s)' }, { c: RC.other, t: 'hack it (H)' }, { c: RC.node, t: 'take the key guard\'s key' }, { c: RC.force, t: 'or smash the cell' }])
       : u.kind === 'grudge' ? [{ c: RC.target, t: 'knock them out' }, { c: RC.house, t: 'wreck their house' }, { c: RC.car, t: 'steal their car' }, { c: RC.police, t: '…into ' + ((mission.grudge && mission.grudge.police && mission.grudge.police.name) || 'the police station') }] : null;
     if (segs) drawRouteLine(segs);
@@ -14979,7 +14979,7 @@ function updateDistrictTag(dt){
     _distTagEl.style.cssText = 'position:fixed;top:52px;left:50%;transform:translateX(-50%);text-align:center;font:11px monospace;color:#e8e0c8;letter-spacing:2px;text-shadow:0 1px 3px #000;pointer-events:none;z-index:20;opacity:0;transition:opacity .6s';
     document.body.appendChild(_distTagEl);
   }
-  { const wh = $('wagerhud'); _distTagEl.style.top = ((wh && wh.style.display !== 'none' && wh.offsetHeight) ? Math.round(wh.getBoundingClientRect().bottom + 6) : 52) + 'px'; }   // sits under the mutator chips when there are any
+  { const wh = $('wagerhud'); _distTagEl.style.top = '52px'; }   // sits under the mutator chips when there are any
   const ccx = Math.floor(player.x / CSPAN), ccy = Math.floor(player.y / CSPAN), d = cityDistrictAt(ccx, ccy);
   if (d !== _distTagKey){ _distTagKey = d; const i = DISTRICT_INFO[d]; _distTagEl.innerHTML = '<b style="font-size:13px">' + i.name.toUpperCase() + '</b><br><span style="opacity:.7;letter-spacing:1px">' + i.sub + '</span>'; _distTagEl.style.opacity = '1'; _distTagT = 4; }
   if (_distTagT > 0){ _distTagT -= dt; if (_distTagT <= 0) _distTagEl.style.opacity = '0'; }
@@ -15784,7 +15784,7 @@ function enterZone(name){
   document.getElementById('wanted').style.display = 'none';
   buildMode = false; packOpen = false; craftOpen = false; travelOpen = false;
   craftGround = []; craftOpts = []; viewZoom = 1; viewZoomT = 1; buildOptScroll = 0; buildOptRects = []; ambient = []; clouds = []; steam = []; thrownItems = []; hazards = []; grenades = []; kickBits = []; _gtCache = null;
-  specialProps = []; warningCars = []; panicCars = []; kennelPets = []; ambientCars = []; rollingBarrels = []; rollingWheels = []; helis = []; heist = null; _heistLoot = 0; slimePools = []; slimeGlobs = []; slimeFx = []; bossShots = []; FERRIS_PADS.length = 0; if (player) player._rideFerris = null; trainRuns = []; runawayTrains = []; trainWrecks = []; RAIL_LINES.length = 0; if (player) player._rideRocket = null; rocketFlights = []; rocketDebris = []; ROCKET_PADS.length = 0; drivingCar = null;
+  specialProps = []; warningCars = []; panicCars = []; kennelPets = []; ambientCars = []; rollingBarrels = []; rollingWheels = []; helis = []; heist = null; _heistLoot = 0; slimePools = []; slimeGlobs = []; slimeFx = []; bossShots = []; FERRIS_PADS.length = 0; rideFun.length = 0; if (player) player._rideFerris = null; trainRuns = []; runawayTrains = []; trainWrecks = []; RAIL_LINES.length = 0; if (player) player._rideRocket = null; rocketFlights = []; rocketDebris = []; ROCKET_PADS.length = 0; drivingCar = null;
   weather.mode = 'clear'; weather.t = 0; weather.hold = rand(14, 30); weather.rain = 0; weather.sun = 0; weather.flash = 0; weather.drops.length = 0; weather.over = 0; weather.fog = 0; weather.windy = false;
   $('craftbar').classList.remove('on'); $('crafthint').classList.remove('on');
   $('pack').classList.remove('open'); $('travel').classList.remove('open');
@@ -16435,10 +16435,10 @@ const AMBIENT_CAR_CAP = 3;   // at most this many of those are out driving thems
 const PLAIN_CAR_TARGET = 3;
 // one bit of the country's own greenery for a city lot or pavement: a tree, shrub or rock from its kit
 // fountains, statues, market stalls, benches, shipping containers — solid city landmarks (variant in _lm)
-const ROCKET_PADS = [], FERRIS_PADS = [];
+const ROCKET_PADS = [], FERRIS_PADS = [], rideFun = [];   // rideFun: hacked rides mid-tantrum
 const RAIL_LINES = []; let trainRuns = [], _trT = 20, runawayTrains = [], trainWrecks = [];                       // rail yard tracks + trains that thunder through
 const LANDMARK_DIM = { train: [100, 26], plane: [88, 64], rocket: [62, 46], pagoda: [138, 40], hedge: [46, 12], column: [14, 12], umbrella: [22, 14], crane: [44, 22], grave: [13, 10], dish: [30, 20], cart: [30, 16], fountain: [44, 30], statue: [20, 18], stall: [38, 18], bench: [26, 9], container: [54, 22], firetruck: [72, 28], ferris: [72, 20], carousel: [124, 64] };
-const LM_HP = { ferris: 320, carousel: 240, pagoda: 700 };                         // the rides can be wrecked — with consequences (see destroyRide)
+const LM_HP = { ferris: 320, carousel: 240, pagoda: 700, cart: 70, stall: 90 };                         // the rides can be wrecked — with consequences (see destroyRide)
 function mkLandmark(x, y, lm){
   const d = LANDMARK_DIM[lm], pr = mkProp(x, y, d[0], d[1], 'landmark');
   pr._lm = lm; pr.fixed = true; pr.hp = pr.maxhp = LM_HP[lm] || 9999; if (lm === 'rocket') ROCKET_PADS.push(pr); if (lm === 'ferris'){ pr._wa = 0; FERRIS_PADS.push(pr); } return pr;
@@ -18272,7 +18272,12 @@ function tryPickpocket(){
     A.S.swing();
     if (L.obj){ mission.gotObject = true; vic.hasObject = null; noteAlt('errand', 'lifted it without a fight'); flash('Got the ' + mission.urge.obj, '#8fe0a5', 'they never felt a thing — now head for the road home'); }
     else if (L.keys){ player.keys = player.keys || {}; for (const k of vic._keys) player.keys[k] = true; vic._keysTaken = true; popText(player.x, player.y - 28, 'lifted a keyring', '#e8d08a', 1.3); }
-    else if (L.bag){ vic._bagTaken = true; noteAlt('groceries', 'lifted the shopping'); if (mission) mission.food = (mission.food || 0) + vic._bag; popText(player.x, player.y - 28, '+' + vic._bag + ' groceries', '#8fe0a5', 1.3); }
+    else if (L.bag){
+      vic._bagTaken = true; const bk = bagContents(vic), bn = vic._bag;
+      if (bk === 'cash'){ const c = (12 + (Math.random() * 14 | 0)) * bn; money += c; noteAlt('money', 'lifted a bag'); popText(player.x, player.y - 28, 'lifted a bag  +$' + c, '#e8d08a', 1.3); }
+      else if (bk === 'mats'){ const m = pick(['wood', 'stone', 'stick']); player.res[m] = (player.res[m] || 0) + 2 * bn; syncHUD(); noteAlt('groceries', 'lifted the shopping'); popText(player.x, player.y - 28, 'lifted a bag  +' + 2 * bn + ' ' + m, '#c9c9d2', 1.3); }
+      else { noteAlt('groceries', 'lifted the shopping'); if (mission) mission.food = (mission.food || 0) + bn; popText(player.x, player.y - 28, '+' + bn + ' groceries', '#8fe0a5', 1.3); }
+    }
     else { vic._walletTaken = true; noteAlt('money', 'clever hands'); const cash = 6 + (Math.random() * 20 | 0); money += cash; popText(player.x, player.y - 28, 'lifted a wallet  +$' + cash, '#e8d08a', 1.3); }
     return true;
   }
@@ -20913,6 +20918,19 @@ function updateDefences(dt){
   }
   _gateWas = shut;
 }
+// shoppers and pedestrians carry bags — food, cash or bits and bobs. Startle or hurt them and the bag goes flying; lift it from behind and it's yours quietly.
+function bagContents(e){ return e._bagKind || 'food'; }
+function dropBag(e){
+  if (!e || !e._bag || e._bagTaken) return;
+  e._bagTaken = true;
+  const k = bagContents(e), n = 1 + e._bag + (Math.random() < 0.4 ? 1 : 0);
+  for (let i = 0; i < n; i++){
+    const w = k === 'mats' ? pick(['log', 'stone', 'stick']) : k === 'cash' ? 'cash' : 'food';
+    pickups.push({ x: Math.round(e.x + rand(-20, 20)), y: Math.round(e.y + rand(-8, 16)), w, taken: false });
+  }
+  burst(e.x, e.y - 6, 8, k === 'cash' ? '#ffe27a' : k === 'mats' ? '#b0a090' : '#ffb6d0', 130);
+  popText(e.x, e.y - 30, pick(['"MY BAG!"', '"Aaah! My shopping!"', '"Take it, take it!"']), '#ffb070', 1.5);
+}
 function hurtProp(p, dmg, from){
   if (p.dead) return;
   if (p.t === 'landmark' && p._lm === 'train'){                              // hit a parked train and it takes off
@@ -20987,6 +21005,13 @@ function hurtProp(p, dmg, from){
       else updateQuestHUD();   // "(N left)" in the tracker panel needs to actually count down
     }
     if (p.t === 'landmark' && (p._lm === 'ferris' || p._lm === 'carousel')){ destroyRide(p); return; }
+    if (p.t === 'landmark' && (p._lm === 'cart' || p._lm === 'stall')){                 // a food cart / market stall smashed open: the goods spill out
+      const nf = 3 + (Math.random() * 3 | 0);
+      for (let i = 0; i < nf; i++) pickups.push({ x: Math.round(p.x + rand(-24, 24)), y: Math.round(p.y + 10 + rand(0, 18)), w: 'food', taken: false });
+      if (Math.random() < 0.6) for (let i = 0, n = 1 + (Math.random() * 2 | 0); i < n; i++) pickups.push({ x: Math.round(p.x + rand(-18, 18)), y: Math.round(p.y + 12 + rand(0, 14)), w: 'cash', taken: false });
+      burst(p.x, p.y, 16, '#e8603a', 200); burst(p.x, p.y, 10, '#8ac04a', 160); burst(p.x, p.y, 8, '#c8a070', 140); A.S.thud(); makeNoise(p.x, p.y, 220, 0.5);
+      popText(p.x, p.y - 26, 'SPLAT!', '#ffb070', 1.4); noteAlt('groceries', 'smashed a food cart'); return;
+    }
     if (p.t === 'landmark' && p._lm === 'pagoda'){                                     // the temple collapses in a rolling blast, burning
       explode(p.x, p.y, 200, 70);
       for (let i = -2; i <= 2; i++){ const ex = p.x + i * 44, ey = p.y + rand(-14, 14); setTimeout(() => { if (zone === 'city') explode(ex, ey, 110, 40); }, 140 + (i + 2) * 150); addHazard('fire', ex, ey, { r: 46, life: 25 }); }
@@ -21296,6 +21321,7 @@ function attack(a){
 
 function damage(t, dmg, from, knock, noHeat){
   if (t.dead) return;
+  if (t._bag && !t._bagTaken && t.civ && !t.villager) dropBag(t);
   if (t === player && (player._hidden || player._tunnel)) return;      // nothing can touch you in the bin / the pipes
   if (t.villager && village){
     const _rec = village.villagers.find(v => v.id === t._vid);
@@ -21463,6 +21489,7 @@ function spawnIceStatue(t, loot){
 
 function killActor(t, from, noHeat){
   if (t.dead) return;
+  if (t._bag && !t._bagTaken && t.civ && !t.villager) dropBag(t);
   t.dead = true; t.corpseT = 0;
   // user: "if you accidentally kill the target of the kidnap missions - can you announce that the
   // target is dead and then direct the player towards the exit." Only the actual live mission
@@ -21819,6 +21846,15 @@ function tryInteract(){
   if (zone === 'village' && pickUpDecor()) return;                                                    // pick up a nearby decoration
   if (zone === 'city' && !heist && !player.carrying && !player.holding && !player._rideRocket && !player._rideFerris){          // crack a safe
     for (const q of props){ if (q.t !== 'safe' || q.dead || q._cracked) continue; if (dist2(q.x, q.y, player.x, player.y) < 40 * 40){ startHeist(q); return; } }
+  }
+  if (zone === 'city' && mission && mission.urge && mission.urge.kind === 'groceries' && !player.carrying && !player.holding && !player._rideRocket && !player._rideFerris){   // just buy some, from a market stall
+    for (const q of props){
+      if (q.t !== 'landmark' || q._lm !== 'stall' || q.dead || dist2(q.x, q.y + 10, player.x, player.y) > 62 * 62) continue;
+      if ((q._sold || 0) >= 4){ popText(q.x, q.y - 26, '"sold out!"', '#ffd0a0', 1.2); return; }
+      if (money < 20){ popText(q.x, q.y - 26, '"$20 a bag, love."', '#ffd0a0', 1.4); return; }
+      money -= 20; q._sold = (q._sold || 0) + 1; mission.food = (mission.food || 0) + 1; A.S.coin && A.S.coin();
+      popText(player.x, player.y - 28, '+1 groceries  -$20', '#8fe0a5', 1.3); noteAlt('groceries', 'paid for it, like a citizen'); syncHUD(); return;
+    }
   }
   if (zone === 'city' && !player.carrying && !player.holding && !player._rideRocket && !player._rideFerris){        // the ferris wheel: one full turn
     for (const pad of FERRIS_PADS){ if (pad.dead || !props.includes(pad)) continue; if (dist2(pad.x, pad.y + 10, player.x, player.y) < 90 * 90){ boardFerris(pad); return; } }
@@ -23099,7 +23135,7 @@ function updateEnemy(e, dt){
       e._rtWait = (e._rtWait || 0) - dt;
       if (e._rtWait <= 0){ e._rtWait = 3 + Math.random() * 3; assignRoutine(e); if (!e._rt && (e._rtTries = (e._rtTries || 0) + 1) > 6) e._rt = null; }
     }
-    if (e._bag === undefined) e._bag = (zone === 'city' && mission && mission.urge && mission.urge.kind === 'groceries' && !e.isTarget && Math.random() < 0.3) ? 1 + (Math.random() < 0.4 ? 1 : 0) : 0;   // with a groceries errand on, some shoppers carry a bag you can lift
+    if (e._bag === undefined){ const shop = zone === 'city' && mission && mission.urge && mission.urge.kind === 'groceries'; e._bag = (zone === 'city' && !e.isTarget && !e.villager && Math.random() < (shop ? 0.45 : 0.2)) ? 1 + (Math.random() < 0.4 ? 1 : 0) : 0; if (e._bag) e._bagKind = shop ? 'food' : (() => { const r = Math.random(); return r < 0.4 ? 'food' : r < 0.75 ? 'cash' : 'mats'; })(); }   // with a groceries errand on, some shoppers carry a bag you can lift
     // copycat: a civilian who wanders right up to something absurd lying on the ground has a small
     // chance to just... pick it up. Turns them hostile (to the player specifically, same as any
     // other "civilian fights back" case) wielding whatever they found — the game already lets a
@@ -23137,7 +23173,7 @@ function updateEnemy(e, dt){
     // over a spot with nowhere sensible to go), since fleeing at full speed clears 150 units in
     // well under a second
     const spooked = !e._follow && canSee && pd < 150 && threatening && !player.dead;
-    if (spooked) e._fleeT = 5;
+    if (spooked){ e._fleeT = 5; if (e._bag && !e._bagTaken && Math.random() < dt * 1.5) dropBag(e); }
     if (e._report){                                        // a witness on the phone to the police — keeps backing away while they talk
       e._report.t -= dt; e._fleeT = Math.max(e._fleeT || 0, 0.5);
       if (e._report.t <= 0) finishReport(e);
@@ -24500,7 +24536,7 @@ function drawHeist(){
   octx.fillStyle = 'rgba(0,0,0,0.7)'; octx.fillRect(x - 1, y - 1, 34, 7); octx.fillStyle = '#ffd070'; octx.fillRect(x, y, 32 * k, 5); octx.strokeStyle = '#fff2b0'; octx.lineWidth = 1; octx.strokeRect(x - 0.5, y - 0.5, 33, 6);
 }
 let helis = [];
-function updateFerris(dt){ for (const q of FERRIS_PADS) if (!q.dead) q._wa = (q._wa || 0) + (q._boost ? 0.4 : 0.12) * dt; }
+function updateFerris(dt){ for (const q of FERRIS_PADS) if (!q.dead) q._wa = (q._wa || 0) + ((q._boost ? 0.4 : 0.12) + (q._turbo || 0) * 2.4) * dt; }
 function spawnHelicopter(x, y){
   const h = { x, y, a: Math.random() * 6.283, ang: 0, rot: 0, hp: 240, maxhp: 240, alt: 64, state: 'approach', cd: 2, burst: 0, bcd: 0, drop: 8, _calm: 0, sw: 0, t: 0 };
   helis.push(h); return h;
@@ -25675,7 +25711,7 @@ function spawnSlimeRaid(node, sx, sy){
 }
 function updateRockets(dt){
   if (zone !== 'city' || !player) return;
-  updateHelicopters(dt); updateFerris(dt); updateHeist(dt); updateSlimeFx(dt);
+  updateHelicopters(dt); updateFerris(dt); updateRideFun(dt); updateHeist(dt); updateSlimeFx(dt);
   if (player && !player._rideFerris && !player._rideRocket){ for (const q of FERRIS_PADS) if (!q.dead && dist2(q.x, q.y + 10, player.x, player.y) < 120 * 120){ tip('ferris', 'Ferris wheel', '#ffd070', 'Press E at the base of the big wheel to ride once around.'); break; } }
   updateCityTrains(dt);
   _rkT -= dt;
@@ -28605,6 +28641,42 @@ function dropDisguise(msg){
   if (msg) popText(player.x, player.y - 26, msg, '#ffd0a0', 1.4);
 }
 // hacking a police cruiser's radio: dispatch is told the suspect was apprehended — your wanted level drops to nothing and the cops on the chase stand down
+// ---- the fairground rides: hack them and they go completely berserk — the riders' pockets, picnics and candy floss come flying off ----
+const RIDE_SCREAMS = ['"WHEEEEEE!"', '"MAKE IT STOP!"', '"I LEFT THE OVEN ON!"', '"MUMMY!!"', '"IM GOING TO BE SICK"', '"BEST DAY EVER!"', '"FASTER!"', '"MY HAT!"'];
+function updateRideFun(dt){
+  for (let i = rideFun.length - 1; i >= 0; i--){
+    const r = rideFun[i], p = r.p;
+    if (zone !== 'city' || p.dead || !props.includes(p)){ if (p) p._turbo = 0; rideFun.splice(i, 1); continue; }
+    r.t += dt;
+    const ramp = Math.min(1, r.t / 1.2) * (r.t > r.life - 1.6 ? Math.max(0, (r.life - r.t) / 1.6) : 1);
+    p._turbo = ramp; if (r.k === 'carousel') p._spinA = (p._spinA || 0) + ramp * 9 * dt;
+    r.nx -= dt;
+    if (r.nx <= 0 && r.t < r.life - 1){
+      r.nx = rand(0.45, 0.85);
+      const a = rand(0, 6.283), d = rand(50, 120), x = p.x + Math.cos(a) * d, y = p.y + 36 + Math.sin(a) * d * 0.45;
+      popText(p.x + rand(-50, 50), p.y - (r.k === 'ferris' ? 150 + rand(0, 40) : 60 + rand(0, 20)), pick(RIDE_SCREAMS), '#ffe6a0', 1.4);
+      const w = Math.random() < 0.55 ? 'food' : 'cash';
+      pickups.push({ x, y, w, taken: false }); burst(x, y - 26, 6, w === 'food' ? '#ffb6d0' : '#ffe27a', 110);
+      if (Math.random() < 0.3) makeNoise(p.x, p.y, 200, 0.3);
+    }
+    if (r.t >= r.life){ p._turbo = 0; rideFun.splice(i, 1); popText(p.x, p.y - 50, r.k === 'ferris' ? 'everyone is very dizzy' : '*hic*', '#d8e4c0', 1.8); }
+  }
+}
+function startRideTantrum(p, k){
+  p._hacked = true; rideFun.push({ p, k, t: 0, life: 9, nx: 0.3 });
+  A.S.thud(); shake(3); makeNoise(p.x, p.y, 380, 0.8);
+  popText(p.x, p.y - (k === 'ferris' ? 120 : 56), k === 'ferris' ? 'MAXIMUM SPIN' : 'THE HORSES HAVE OPINIONS', '#ff9ae0', 1.8);
+  noteAlt('groceries', 'hacked the fair — picnic baskets rained down'); noteAlt('money', 'the riders pockets emptied');
+}
+HACKS.lm_ferris = { time: 2.4, ok: p => !p._hacked && !(p._turbo > 0), run(p){ startRideTantrum(p, 'ferris'); } };
+HACKS.lm_carousel = { time: 2.2, ok: p => !p._hacked && !(p._turbo > 0), run(p){ startRideTantrum(p, 'carousel'); } };
+// market stalls: hack the produce display and it all comes tumbling down (free groceries, a very loud vendor)
+HACKS.lm_stall = { time: 1.6, ok: p => !p._hacked, run(p){
+  p._hacked = true;
+  for (let i = 0; i < 4; i++) pickups.push({ x: Math.round(p.x + rand(-26, 26)), y: Math.round(p.y + 14 + rand(0, 16)), w: 'food', taken: false });
+  burst(p.x, p.y, 16, '#e8603a', 200); burst(p.x, p.y, 10, '#8ac04a', 160); A.S.thud(); makeNoise(p.x, p.y, 200, 0.5);
+  popText(p.x, p.y - 30, 'PRODUCE AVALANCHE!', '#ffb070', 1.6); noteAlt('groceries', 'the market stall collapsed');
+} };
 HACKS.lm_fountain = { time: 2.4, ok: p => !p._hacked, run(p){
   p._hacked = true; A.S.splash(); shake(3);
   burst(p.x, p.y, 26, '#8fd8c0', 260); burst(p.x, p.y, 12, '#ffffff', 200);
@@ -32635,7 +32707,7 @@ function drawProp(p){
         octx.fillStyle = '#f0e8d0'; octx.fillRect(-hw + 2, h / 2 + 8, 30, 8); octx.fillStyle = '#c8402e'; octx.fillRect(-hw + 2, h / 2 + 8, 30, 1.6); octx.fillStyle = '#20202a'; for (let k = 0; k < 6; k++) octx.fillRect(-hw + 5 + k * 4, h / 2 + 11, 2.4, 3);
       }
     } else if (lm === 'carousel'){                                        // a full-size merry-go-round
-      const ang = tn * 0.7, rx = w / 2 - 2, ry = h / 2 - 2;
+      const ang = tn * 0.7 + (p._spinA || 0), rx = w / 2 - 2, ry = h / 2 - 2;
       octx.fillStyle = 'rgba(0,0,0,0.22)'; octx.beginPath(); octx.ellipse(0, 6, rx + 8, ry + 5, 0, 0, 7); octx.fill();
       octx.fillStyle = '#5a3a26'; octx.beginPath(); octx.ellipse(0, 6, rx, ry, 0, 0, 7); octx.fill(); octx.fillStyle = '#c8a070'; octx.beginPath(); octx.ellipse(0, 0, rx - 3, ry - 5, 0, 0, 7); octx.fill();
       octx.strokeStyle = '#f0c030'; octx.lineWidth = 2; octx.beginPath(); octx.ellipse(0, 0, rx - 7, ry - 10, 0, 0, 7); octx.stroke();
