@@ -193,6 +193,10 @@
   #titleScreen,#charCreate{position:fixed;inset:0;background:rgba(4,4,10,.86);display:none;z-index:25;
     align-items:center;justify-content:center}
   #titleScreen.open,#charCreate.open{display:flex}
+  #title-bg{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;z-index:0;display:block}
+  #titleScreen .panel{position:relative;z-index:1}
+  #titleScreen .panel{background:rgba(14,14,22,.86);backdrop-filter:blur(1.5px)}
+  body.nohud #hud,body.nohud #traithud,body.nohud #wagerhud,body.nohud #toast,body.nohud #wanted,body.nohud #help{display:none!important}
   #titleScreen .panel,#charCreate .panel{background:#14141c;border:2px solid #3a3a4c;padding:24px 28px;
     box-shadow:0 12px 44px rgba(0,0,0,.6)}
   #title-art{display:block;width:100%;height:auto;image-rendering:pixelated;border:2px solid #3a3a4c;
@@ -428,6 +432,21 @@
     padding:10px 0;font-family:inherit;font-size:13px;letter-spacing:2px;cursor:pointer;text-transform:uppercase}
   #winscreen button:hover{border-color:#ffe6a0;color:#fff}
 
+  #tutorial{position:fixed;inset:0;background:rgba(2,4,10,.92);display:none;z-index:45;align-items:center;justify-content:center;font-family:inherit}
+  #tutorial.open{display:flex}
+  #tutorial .panel{background:radial-gradient(ellipse at 50% -10%,#16303c,#0c1218 72%);border:2px solid #4a9aba;width:min(94vw,640px);max-height:94vh;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;padding:16px 20px 14px;box-shadow:0 10px 50px rgba(0,0,0,.8);text-align:left}
+  #tutorial h2{margin:0 0 8px;font-size:17px;letter-spacing:3px;color:#8ad4f0;text-align:center}
+  #tutorial canvas{display:block;width:100%;height:auto;max-height:180px;image-rendering:pixelated;border:1px solid #2a4a5a;margin:0 auto 10px;background:#0a1016}
+  #tutorial .body{font-size:13px;line-height:1.5;color:#d2e2ec;min-height:118px}
+  #tutorial .body p{margin:0 0 8px} #tutorial .body ul{margin:4px 0 4px 18px;padding:0}
+  #tutorial .tk{display:inline-block;min-width:18px;text-align:center;padding:1px 6px;border:1px solid #6a9ab0;border-bottom-width:3px;border-radius:3px;background:#1c2a34;color:#f0f8ff;font-size:11px;font-weight:bold}
+  #tutorial .dots{text-align:center;margin:8px 0 10px;letter-spacing:6px;color:#3a5a6a;font-size:14px} #tutorial .dots b{color:#8ad4f0}
+  #tutorial .nav{display:flex;gap:8px;align-items:center}
+  #tutorial .nav button{flex:1;background:#1a2c38;border:2px solid #4a9aba;color:#e2f2fa;font:inherit;font-size:13px;letter-spacing:1px;padding:8px 10px;cursor:pointer}
+  #tutorial .nav button:hover{border-color:#ffe6a0;color:#fff}
+  #tutorial .nav button:disabled{opacity:.35;cursor:default}
+  #tutorial .nav .skip{flex:0 0 auto;background:transparent;border:1px solid #4a5a64;color:#9ab0bc;font-size:11px}
+  #tutorial .note{margin-top:8px;text-align:center;font-size:11px;color:#7a92a0}
   #help{position:fixed;inset:0;background:rgba(2,2,8,.94);display:none;z-index:30;align-items:center;justify-content:center;font-family:inherit}
   #help.open{display:flex}
   #help .panel{text-align:left;background:#12161c;border:2px solid #4a7a9a;width:min(96vw,860px);height:min(90vh,640px);display:flex;flex-direction:column;box-shadow:0 10px 50px rgba(0,0,0,.8)}
@@ -700,6 +719,7 @@
     </p>
     <div class="btn-row" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
       <button class="act" id="set-help" type="button">help (F1)</button>
+      <button class="act" id="set-tutorial" type="button">tutorial</button>
       <button class="act" id="set-quit" type="button">quit to menu</button>
       <button class="act" id="set-export" type="button">export save</button>
       <button class="act" id="set-import" type="button">import save</button>
@@ -721,7 +741,17 @@
   </div>
 </div>
 
+<div id="tutorial"><div class="panel">
+  <h2 id="tut-title"></h2>
+  <canvas id="tut-art" width="380" height="130"></canvas>
+  <div class="body" id="tut-body"></div>
+  <div class="dots" id="tut-dots"></div>
+  <div class="nav"><button id="tut-back" type="button">‹ Back</button><button id="tut-next" type="button">Next ›</button><button class="skip" id="tut-skip" type="button">Skip tutorial</button></div>
+  <div class="note">You can replay this any time from the main menu → Tutorial (or Settings).</div>
+</div></div>
+
 <div id="titleScreen">
+  <canvas id="title-bg"></canvas>
   <div class="panel" style="min-width:320px">
     <canvas id="title-art" width="340" height="150"></canvas>
     <h1>ROADS OF ROGUE</h1>
@@ -730,6 +760,7 @@
     <div style="display:flex;flex-direction:column;gap:8px">
       <button class="act big" id="title-continue" type="button">Continue</button>
       <button class="act big" id="title-new" type="button">New Game</button>
+      <button class="act big" id="title-tutorial" type="button">Tutorial</button>
       <button class="act big" id="title-legacy" type="button">Legacy</button>
       <button class="act big" id="title-help" type="button">Help</button>
       <button class="act big" id="title-settings" type="button">Settings</button>
@@ -2074,7 +2105,7 @@ function giftFrame(){
   g0.fillStyle = '#8a7e6a'; g0.font = '10px "Courier New",monospace';
   g0.fillText('they asked for a ' + s.objName, SW / 2, 52);
   let ty = fy + fr * 2.4;
-  g0.fillStyle = '#dccfec'; g0.font = '15px "Courier New",monospace';
+  g0.fillStyle = '#f0e6fa'; g0.font = '16px "Courier New",monospace';
   const closed = s.line === s.lineFull;
   for (const ln of _wrapLines(g0, '“' + s.line + (closed ? '”' : ''), SW * 0.7)){ g0.fillText(ln, SW / 2, ty); ty += 21; }
 
@@ -2311,17 +2342,17 @@ function sermonFrame(){
   g0.fillStyle = '#1a1420'; g0.fillRect(bx, 44, bw, 8);
   g0.fillStyle = rf > 0.5 ? '#8a6a9a' : rf > 0.22 ? '#b98cff' : '#e2a4d4';
   g0.fillRect(bx, 44, bw * rf, 8);
-  g0.fillStyle = '#7a6a8a'; g0.font = '9px "Courier New",monospace';
-  g0.fillText('their resolve', SW / 2, 66);
+  g0.fillStyle = '#c0b0d4'; g0.font = '12px "Courier New",monospace';
+  g0.fillText('their resolve', SW / 2, 70);
 
   let ty = fy + fr * 2.35;
   if (s.phase === 'play' && s.tell){
-    g0.fillStyle = 'rgba(204,184,224,0.8)'; g0.font = 'italic 12px "Courier New",monospace';
+    g0.fillStyle = '#e2d2f2'; g0.font = 'italic 14px "Courier New",monospace';
     g0.fillText('[ ' + s.tell + ' ]', SW / 2, ty); ty += 17;
     g0.fillStyle = '#e8c07a'; g0.font = 'bold 13px "Courier New",monospace';
     g0.fillText('▸ ' + (VULN_NAME[s.live] || s.live), SW / 2, ty); ty += 15;
-    g0.fillStyle = 'rgba(232,192,122,0.7)'; g0.font = '10px "Courier New",monospace';
-    g0.fillText(VULN_NUDGE[s.live] || '', SW / 2, ty); ty += 22;
+    g0.fillStyle = '#f0d49a'; g0.font = '12px "Courier New",monospace';
+    g0.fillText(VULN_NUDGE[s.live] || '', SW / 2, ty); ty += 24;
   }
   g0.fillStyle = '#dccfec'; g0.font = '15px "Courier New",monospace';
   const closed = s.line === s.lineFull;
@@ -2337,10 +2368,10 @@ function sermonFrame(){
     _sermonRects.push(r);
   } else if (s.phase === 'play'){
     const cards = s.hand, per = cards.length > 6 ? 4 : cards.length > 4 ? 3 : Math.max(1, cards.length);
-    const cw = Math.min(220, (SW - 40) / per) - 10, ch = 54;
+    const cw = Math.min(240, (SW - 40) / per) - 10, ch = 66;
     const nrows = Math.ceil(cards.length / per);
     const y0 = SH - 14 - nrows * (ch + 8);
-    g0.fillStyle = '#7a6a8a'; g0.font = '10px "Courier New",monospace'; g0.textAlign = 'center';
+    g0.fillStyle = '#c0b0d4'; g0.font = '12px "Courier New",monospace'; g0.textAlign = 'center';
     g0.fillText('read their face  ·  play what fits  ·  ' + Math.max(0, s.patience) + ' patience', SW / 2, y0 - 9);
     cards.forEach((c, i) => {
       const col = i % per, row = (i / per) | 0;
@@ -2351,14 +2382,14 @@ function sermonFrame(){
       g0.setLineDash(c.gamble ? [4, 3] : []);
       g0.strokeStyle = c.gamble ? '#8a6432' : c.kind === 'wound' ? '#9a5686' : '#4a3a5a';
       g0.lineWidth = 2; g0.strokeRect(x, y, cw, ch); g0.setLineDash([]);
-      g0.textAlign = 'left'; g0.fillStyle = c.kind === 'wound' ? '#eac8e6' : '#d8cce8'; g0.font = '10px "Courier New",monospace';
-      let ly = y + 14;
-      for (const ln of _wrapLines(g0, c.label, cw - 16).slice(0, 2)){ g0.fillText(ln, x + 8, ly); ly += 11; }
-      if (c.gamble){ g0.fillStyle = '#c89a5a'; g0.font = '8px "Courier New",monospace'; g0.fillText('HEARSAY · ' + c.srcName, x + 8, y + ch - 6); }
+      g0.textAlign = 'left'; g0.fillStyle = c.kind === 'wound' ? '#f6d8f2' : '#efe6fa'; g0.font = '12px "Courier New",monospace';
+      let ly = y + 16;
+      for (const ln of _wrapLines(g0, c.label, cw - 16).slice(0, 2)){ g0.fillText(ln, x + 8, ly); ly += 14; }
+      if (c.gamble){ g0.fillStyle = '#e8b878'; g0.font = '10px "Courier New",monospace'; g0.fillText('HEARSAY · ' + c.srcName, x + 8, y + ch - 7); }
       else {
         const reach = (c.vuln || []).map(v => (VULN_NAME[v] || v).toLowerCase()).join(' · ');
-        g0.fillStyle = '#7a6c8c'; g0.font = '8px "Courier New",monospace';
-        g0.fillText('↳ ' + reach, x + 8, y + ch - 6);
+        g0.fillStyle = '#b4a4c8'; g0.font = '10px "Courier New",monospace';
+        g0.fillText('↳ ' + reach, x + 8, y + ch - 7);
       }
       _sermonRects.push({ act: 'card', i, sx: x, sy: y, sw: cw, sh: ch });
     });
@@ -2377,7 +2408,7 @@ function sermonFrame(){
     const wb = { sx: 16, sy: SH - 40, sw: 150, sh: 26, act: 'withdraw' };
     g0.fillStyle = '#1a1622'; g0.fillRect(wb.sx, wb.sy, wb.sw, wb.sh);
     g0.strokeStyle = '#4a3a5a'; g0.lineWidth = 1.5; g0.strokeRect(wb.sx, wb.sy, wb.sw, wb.sh);
-    g0.fillStyle = '#9a8aa8'; g0.font = '11px "Courier New",monospace';
+    g0.fillStyle = '#d0c0e0'; g0.font = '12px "Courier New",monospace';
     g0.fillText('← walk away', wb.sx + wb.sw / 2, wb.sy + 17);
     _sermonRects.push(wb);
   }
@@ -2880,7 +2911,7 @@ addEventListener('keydown', e => {
     return;
   }
   if (['1','2','3','4','5'].includes(k) && player) equipQuick(+k - 1);
-  if (k === 'g' && player && zone === 'village' && village && village.cult && !paused) muster();
+  if (k === 'g' && player && zone === 'village' && village && (village.cult || (village.squad && village.squad.length) || enemies.some(e => e.soldier && !e._isGuard && !e.dead)) && !paused) muster();   // a squad carried into a new country has no cult yet — G must still stand them down
   if (k === 'q' && player && !paused) usePlayerActive(0);
   if (k === 'f' && player && !paused) usePlayerActive(1);
   if ([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
@@ -3187,6 +3218,165 @@ const $ = id => document.getElementById(id);
 // they can't drift out of date; the prose sections are hand-written. Opens from the title screen,
 // the pause menu, or F1 at any time.
 let helpOpen = false, _helpSec = 'start', _helpQ = '';
+// ================= THE TUTORIAL =================
+// user: "PLEASE make it skippable and then always playable from the main menu". A short illustrated walkthrough (8 pages). Offered automatically the first time you start a new game,
+// skippable on every page (Skip button or Esc), and replayable any time from the title screen or the Settings menu. It never touches your save.
+let tutOpen = false, tutPage = 0, _tutRAF = 0, _tutFromGame = false;
+const TK = t => '<span class="tk">' + t + '</span>';
+const TUT_LOOKS = [{ skin: '#f0c9a0', shirt: '#3f7fd0', pants: '#28324a', hair: '#3a2a1a' }, { skin: '#e0b58c', shirt: '#8a44b8', pants: '#28324a', hair: '#5a3a22' }, { skin: '#d99b6c', shirt: '#3aa06a', pants: '#28324a', hair: '#1c1c22' }, { skin: '#c98a5c', shirt: '#c8a23a', pants: '#28324a', hair: '#3a2a1a' }];
+function tutGround(c, W, H, gy, top, bot){
+  const g = c.createLinearGradient(0, 0, 0, gy); g.addColorStop(0, top); g.addColorStop(1, bot); c.fillStyle = g; c.fillRect(0, 0, W, gy);
+  c.fillStyle = '#1a2a1a'; c.fillRect(0, gy, W, H - gy); c.fillStyle = 'rgba(255,255,255,0.04)'; for (let x = 0; x < W; x += 14) c.fillRect(x, gy + 6 + (x * 7) % 12, 6, 2);
+}
+function tutFire(c, x, gy, t){
+  c.fillStyle = '#4a4a54'; for (let i = 0; i < 7; i++){ const a = i / 7 * 6.283; c.fillRect(x + Math.cos(a) * 9 - 2, gy - 2 + Math.sin(a) * 3, 4, 3); }
+  const fl = 8 + Math.sin(t * 0.012) * 2; c.fillStyle = '#ff8a2a'; c.beginPath(); c.moveTo(x - 6, gy - 2); c.lineTo(x, gy - 2 - fl - 6); c.lineTo(x + 6, gy - 2); c.fill();
+  c.fillStyle = '#ffe27a'; c.beginPath(); c.moveTo(x - 3, gy - 2); c.lineTo(x, gy - 2 - fl); c.lineTo(x + 3, gy - 2); c.fill();
+  c.fillStyle = 'rgba(255,160,60,0.14)'; c.beginPath(); c.arc(x, gy - 6, 38, 0, 7); c.fill();
+}
+let _tutMapImg = null;
+function tutMapImg(){ if (!_tutMapImg){ _tutMapImg = new Image(); _tutMapImg.src = 'tut_map.png'; } return _tutMapImg; }
+// a little looping diagram: [icon, label] nodes round a ring with a pulse travelling along it
+function tutCycle(c, t, W, H, nodes){
+  const cx = W / 2, cy = H / 2 + 2, rx = W * 0.36, ry = H * 0.34, n = nodes.length, pulse = (t * 0.00022) % 1;
+  c.strokeStyle = 'rgba(140,200,230,0.35)'; c.lineWidth = 2; c.beginPath(); c.ellipse(cx, cy, rx, ry, 0, 0, 7); c.stroke();
+  const pa = -Math.PI / 2 + pulse * 6.283; c.fillStyle = '#ffe27a'; c.beginPath(); c.arc(cx + Math.cos(pa) * rx, cy + Math.sin(pa) * ry, 4, 0, 7); c.fill();
+  nodes.forEach(([ic, lb, col], i) => {
+    const a = -Math.PI / 2 + i / n * 6.283, x = cx + Math.cos(a) * rx, y = cy + Math.sin(a) * ry, lit = Math.abs(((i / n) - pulse + 1.5) % 1 - 0.5) < 0.1;
+    c.fillStyle = lit ? col : '#16242e'; c.strokeStyle = col; c.lineWidth = 2; c.beginPath(); c.arc(x, y, 15, 0, 7); c.fill(); c.stroke();
+    c.font = '15px sans-serif'; c.textAlign = 'center'; c.fillStyle = '#fff'; c.fillText(ic, x, y + 5);
+    c.font = 'bold 10px monospace'; c.fillStyle = '#d2e2ec'; c.fillText(lb, x, y + (Math.sin(a) < -0.9 ? -21 : 28));
+  });
+  c.textAlign = 'left';
+}
+const TUT_PAGES = [
+  { title: 'Welcome to Roads of Rogue', art(c, t, W, H){
+      tutGround(c, W, H, 100, '#1c1436', '#7a3a6a'); c.fillStyle = '#20162a'; for (const [x, w, h] of [[250, 34, 60], [280, 40, 78], [318, 30, 50], [346, 34, 66]]) c.fillRect(x, 100 - h, w, h);
+      c.fillStyle = '#ffd24a'; for (const [x, y] of [[262, 52], [296, 40], [330, 62], [358, 50]]) c.fillRect(x, y, 3, 3);
+      tutFire(c, 70, 100, t); drawRunner(c, 150 + Math.sin(t * 0.006) * 3, 104, Math.sin(t * 0.012), TUT_LOOKS[0], false, false); drawRunner(c, 36, 104, 0, TUT_LOOKS[1], false, false); drawRunner(c, 104, 104, 0, TUT_LOOKS[2], false, false);
+    }, html: `<p>You are a poor fool with a <b>village</b> at home and a <b>city</b> full of trouble down the road.</p>
+    <ul><li>Build up your village and bring people into it.</li><li>Head into the city for loot, favours and fights.</li><li>Take over the country city by city — then move on to the next. Six countries make a complete campaign.</li></ul>
+    <p>This tutorial takes about two minutes. Everything in it is also in the Help screen (${TK('F1')}).</p>` },
+  { title: 'Moving and fighting', art(c, t, W, H){
+      tutGround(c, W, H, 100, '#14182a', '#3a3a5a'); const sw = (t * 0.008) % 6.283;
+      drawRunner(c, 130, 104, Math.sin(t * 0.014), TUT_LOOKS[0], false, false);
+      c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 3; c.beginPath(); c.arc(146, 82, 22, -0.9 + Math.sin(sw) * 0.3, 0.9 + Math.sin(sw) * 0.3); c.stroke();
+      drawRunner(c, 214, 104, Math.sin(t * 0.007), { skin: '#c98a5c', shirt: '#b5563c', pants: '#3a2f28', hair: '#1c1c22' }, false, false);
+      c.fillStyle = '#e04a4a'; c.fillRect(200, 40, 28 * (0.6 + 0.4 * Math.sin(t * 0.003)), 4);
+    }, html: `<ul><li>${TK('W')} ${TK('A')} ${TK('S')} ${TK('D')} move · ${TK('Shift')} sprint · ${TK('Space')} dash</li>
+    <li>${TK('J')} or click to attack · ${TK('K')} to kick · ${TK('1')}–${TK('5')} pick a weapon · ${TK('Tab')} backpack</li>
+    <li>${TK('E')} is the everything key: talk, pick up, open doors, use the thing you're standing next to.</li></ul>
+    <p>Fights are messy on purpose — try fire, water and electricity together. Knocked-out people can be carried.</p>` },
+  { title: 'Your village', art(c, t, W, H){
+      tutGround(c, W, H, 100, '#3a5a8a', '#a8c8e8'); tutFire(c, 190, 100, t);
+      c.fillStyle = '#6a4a30'; c.fillRect(30, 50, 70, 50); c.fillStyle = '#8a3a2a'; c.beginPath(); c.moveTo(24, 50); c.lineTo(65, 26); c.lineTo(106, 50); c.fill(); c.fillStyle = '#2a1a10'; c.fillRect(58, 72, 14, 28);
+      c.fillStyle = '#6a4a30'; c.fillRect(280, 58, 60, 42); c.fillStyle = '#8a3a2a'; c.beginPath(); c.moveTo(274, 58); c.lineTo(310, 34); c.lineTo(346, 58); c.fill();
+      drawRunner(c, 150, 104, Math.sin(t * 0.004), TUT_LOOKS[1], false, false); drawRunner(c, 236, 104, 0, TUT_LOOKS[3], false, false); drawRunner(c, 214, 108, 0, TUT_LOOKS[0], false, false);
+    }, html: `<p>The <b>campfire</b> is home. Walk up to a villager and press ${TK('E')} to give them a <b>job</b> or a <b>bed</b>.</p>
+    <ul><li><b>Beds and roofs</b> keep people happy and working. <b>Food</b> keeps them here — hungry villagers walk out.</li>
+    <li>The <b>Study</b> (press ${TK('E')} at it) turns research points into new abilities — including things that only unlock as you reach new countries.</li>
+    <li>The day only turns over when you <b>sleep</b>: claim a bed, and press ${TK('E')} twice at it once the sun starts to set. That's when everyone works, eats and events happen.</li></ul>` },
+  { title: 'Craft and build', art(c, t, W, H){
+      tutGround(c, W, H, 100, '#1a2a1a', '#2a3a2a'); c.fillStyle = '#0c1509';
+      const items = [['WALL', '#8a5a34'], ['FLOOR', '#c8a060'], ['WALL', '#5a5a64'], ['FLOOR', '#6a8a5a'], ['WIN', '#8ac0d8']];
+      items.forEach(([tag, col], i) => { const x = 22 + i * 68; c.fillStyle = '#0c1509'; c.fillRect(x, 24, 56, 56); c.strokeStyle = '#9ad46a'; c.lineWidth = 2; c.strokeRect(x, 24, 56, 56); c.fillStyle = col; c.fillRect(x + 10, 34, 36, 36);
+        c.fillStyle = 'rgba(0,0,0,0.25)'; if (tag === 'WALL') for (let k = 0; k < 4; k++) c.fillRect(x + 10 + k * 9, 34, 1, 36); else c.fillRect(x + 10, 52, 36, 1);
+        c.font = 'bold 9px monospace'; c.fillStyle = tag === 'WALL' ? '#e8a060' : tag === 'FLOOR' ? '#6ab0e8' : '#8ae0f0'; c.fillText(tag, x + 4, 33); });
+    }, html: `<ul><li>Press ${TK('C')} to <b>craft</b>: drag materials from the bottom strip onto the ground, then click a recipe. Use the <b>tabs</b> (Walls, Floors, Furnish…) to find things.</li>
+    <li>Press ${TK('B')} to <b>build</b>: pick a piece, click to place it, right-click to remove it. Removing a bed or table gives the whole item back so you can rearrange freely.</li>
+    <li>Enclose a room with walls and a door and it gets a roof. A bed inside a roofed room counts as housing.</li></ul>` },
+  { title: 'City runs and quests', art(c, t, W, H){
+      tutGround(c, W, H, 100, '#14101e', '#4a2a3a'); c.fillStyle = '#7a5a34'; c.fillRect(60, 60, 5, 40); c.fillStyle = '#a07a44'; c.fillRect(44, 52, 40, 14); c.fillStyle = '#2a1a10'; c.font = 'bold 9px monospace'; c.fillText('CITY', 52, 63);
+      c.fillStyle = '#20162a'; for (const [x, w, h] of [[150, 44, 70], [198, 36, 88], [238, 48, 56], [290, 40, 80], [334, 36, 62]]) c.fillRect(x, 100 - h, w, h);
+      c.fillStyle = '#ffd24a'; for (const [x, y] of [[160, 44], [206, 30], [250, 56], [300, 40], [344, 52]]) c.fillRect(x, y, 3, 3);
+      drawRunner(c, 100 + Math.sin(t * 0.005) * 6, 104, Math.sin(t * 0.012), TUT_LOOKS[0], false, false);
+    }, html: `<p>The <b>signpost</b> by your village leads to the city. Before you go, sit by the fire — your thoughts turn into <b>quests</b>:</p>
+    <ul><li><b>Bring someone home</b> — kidnap them, pay them, or sweet-talk them when nobody is watching.</li>
+    <li><b>Free someone from jail</b> — find the cell, then pick the lock (${TK('E')} hold), hack it (${TK('H')}), take the guard's key, or smash it.</li>
+    <li><b>Money, groceries, an object, a grudge</b> — each has several ways to do it, and the clever ways pay more.</li></ul>
+    <p>When you're done, head for the coloured road home. Wagers make a run harder for a bigger reward.</p>` },
+  { title: 'Sneaking and hacking', art(c, t, W, H){
+      tutGround(c, W, H, 100, '#101820', '#243444'); c.fillStyle = '#3a3a44'; c.fillRect(170, 46, 12, 54); c.fillStyle = '#5a5a66'; c.fillRect(168, 44, 16, 4);
+      drawRunner(c, 260, 104, Math.sin(t * 0.004) * 0.6, { skin: '#c98a5c', shirt: '#2f4fa0', pants: '#1c2438', hair: '#1c1c22' }, false, false);
+      c.fillStyle = 'rgba(255,90,60,0.22)'; c.beginPath(); c.moveTo(258, 74); c.arc(258, 74, 92, Math.PI - 0.7, Math.PI + 0.7); c.closePath(); c.fill();
+      drawRunner(c, 110, 104, 0, TUT_LOOKS[0], false, false); c.fillStyle = '#7fffb0'; c.font = 'bold 12px monospace'; c.fillText('H', 200, 60); c.strokeStyle = '#7fffb0'; c.strokeRect(194, 50, 16, 14);
+    }, html: `<p>People in the city have eyes. Guards and civilians build up <b>suspicion</b> when they notice you — watch their posture and the cone in front of them. Break line of sight, hide behind walls, or knock out witnesses before they phone the police.</p>
+    <ul><li>Press ${TK('H')} next to machines (ATMs, fridges, cars, cameras, fountains…) and stand still to <b>hack</b> them. Each does something different.</li>
+    <li>Locked doors can be picked (${TK('E')} hold) or hacked. Things you research at the Study make hacking faster and longer-ranged.</li></ul>` },
+  { title: 'Taking over a country', artH: 222, art(c, t, W, H){
+      const im = tutMapImg();
+      if (im.complete && im.naturalWidth){ c.imageSmoothingEnabled = true; c.drawImage(im, 0, 0, W, H); c.imageSmoothingEnabled = false; }
+      else { tutGround(c, W, H, 130, '#10202c', '#1a3444'); c.fillStyle = '#9ab'; c.font = '11px monospace'; c.fillText('loading map…', 10, 20); }
+    }, html: `<p>Once you have a Study, an HQ and some followers, the <b>campaign map</b> opens (${TK('M')}, or from the signpost). Each dot is a city — <b>green ✓</b> ones are yours, the red one is in <b>revolt</b>, the <b>ringed</b> one is the capital.</p>
+    <ul><li>Pick a city next to one you hold and <b>raid</b> it. Each has a ruling faction, a <b>boss</b> and a twist.</li>
+    <li>Held cities pay <b>tribute</b> but lose <b>order</b> (the % under each name) — post a <b>governor</b> (click the city) or it revolts.</li>
+    <li>Take the <b>capital</b> and the country is yours. You keep your research, powers and a few chosen villagers, and set out for a new country.</li></ul>` },
+  { title: 'Bosses, essence and mutations', art(c, t, W, H){
+      tutGround(c, W, H, 100, '#1a1030', '#3a1a4a'); const bx = 96, by = 104, k = 1 + Math.sin(t * 0.004) * 0.04;
+      c.save(); c.translate(bx, by); c.scale(1.5 * k, 1.5 * k); drawRunner(c, 0, 0, Math.sin(t * 0.005) * 0.4, { skin: '#7ab060', shirt: '#5a2a6a', pants: '#2a1a34', hair: '#2a4a1a' }, false, false); c.restore();
+      c.fillStyle = 'rgba(160,255,90,0.5)'; for (let i = 0; i < 9; i++){ const ph = ((t * 0.0006 + i * 0.11) % 1); c.fillRect(bx + 22 + ph * 150 + Math.sin(i * 3 + ph * 6) * 6, 70 - Math.sin(ph * 3.14) * 22 + i % 3 * 4, 3, 3); }
+      c.fillStyle = '#1c3a1a'; c.strokeStyle = '#6ab03a'; c.lineWidth = 2; c.fillRect(268, 44, 78, 56); c.strokeRect(268, 44, 78, 56); c.font = '24px sans-serif'; c.fillStyle = '#b6f05a'; c.textAlign = 'center'; c.fillText('☣', 307, 82); c.font = 'bold 9px monospace'; c.fillText('MUTATION LAB', 307, 40); c.textAlign = 'left';
+      drawRunner(c, 366, 104, 0, { skin: '#9ad06a', shirt: '#3a8a4a', pants: '#28324a', hair: '#1a4a1a' }, false, false);
+    }, html: `<p>Every city boss can be <b>killed</b> or, if you break their guard and they yield, <b>captured</b> (${TK('E')}) — a captured boss comes home as a pre-armed recruit.</p>
+    <ul><li>Each boss type drops its own <b>essence (DNA)</b>. You only keep it if you finish the takeover and <b>get home alive</b>. Traders sometimes sell it too.</li>
+    <li>Build a <b>Mutation Lab</b> (it unlocks once you have a cult or any DNA) and press ${TK('E')} at it. Spend essence to mutate a villager — a <b>random new look and a random gift</b>. Each person has a limited number of mutation slots.</li>
+    <li>Gifts are permanent, so spend essence on the villagers you plan to keep — the ones on your raid squad.</li></ul>` },
+  { title: 'The war cycle', artH: 200, art(c, t, W, H){
+      tutCycle(c, t, W, H, [['🏛', 'raid a city', '#e0b850'], ['🧬', 'boss essence', '#b6f05a'], ['☣', 'mutate', '#6ab03a'], ['⚒', 'forge gear', '#ffb46e'], ['⭐', 'level up', '#8ad4f0']]);
+    }, html: `<p>Your village and the campaign feed each other. The loop:</p>
+    <ul><li><b>1. Pick your squad.</b> At the <b>Weapon rack</b> (${TK('E')}), open the <i>Squad &amp; gear</i> tab and click ★ on the villagers who march with you. <b>Barracks</b> raise how many. ${TK('G')} musters them for the raid.</li>
+    <li><b>2. Arm them.</b> The <b>Blacksmith</b> (unlocks after your first city) upgrades weapons (+20% damage per tier), infuses them with Fire, Ice, Spark, Acid or Slime, and recolours them. Send the result to the rack, then choose each villager's weapon and armour. Armour is forged at the Smithy or looted from raids.</li>
+    <li><b>3. Raid.</b> Squad members who survive earn XP per raid and per kill and <b>level up</b> — more health, damage and defence. Keep your veterans alive.</li>
+    <li><b>4. Bring the spoils home.</b> Boss essence goes to the <b>Mutation Lab</b>, captured bosses join the village, and won cities pay tribute you spend on better gear. Then pick the next city.</li></ul>` },
+  { title: 'The long game', art(c, t, W, H){
+      tutGround(c, W, H, 100, '#1c1436', '#3a2a5a'); for (let i = 0; i < 6; i++){ const x = 50 + i * 54, on = i < 1 + Math.floor((t / 1200) % 6); c.fillStyle = on ? '#ffd24a' : '#3a3a4a'; c.beginPath(); for (let k = 0; k < 10; k++){ const a = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? 6 : 14; c.lineTo(x + Math.cos(a) * r, 58 + Math.sin(a) * r); } c.closePath(); c.fill(); }
+      c.fillStyle = '#c9a6f5'; c.font = 'bold 11px monospace'; c.fillText('6 countries', 148, 96);
+    }, html: `<ul><li>A full campaign is <b>six countries</b>. Each new country brings tougher enemies, new research to unlock, and better rewards.</li>
+    <li>Finish all six and you're awarded a <b>random playable race</b> for future characters, and it's the one time you can spend your <b>Legacy points</b> on permanent perks.</li>
+    <li>Your game saves automatically. <b>Settings</b> lets you export a save file — worth doing before you experiment.</li></ul>
+    <p>Stuck? ${TK('F1')} opens the Help screen any time, with search. New systems also pop up a short tip the first time you meet them.</p>` },
+];
+function drawTutArt(now){
+  if (!tutOpen) return;
+  const cv = document.getElementById('tut-art'); if (cv){ const c = cv.getContext('2d'); c.imageSmoothingEnabled = false; c.clearRect(0, 0, cv.width, cv.height);
+    try { TUT_PAGES[tutPage].art(c, now, cv.width, cv.height); } catch (e) { /* art is decoration only */ } }
+  _tutRAF = requestAnimationFrame(drawTutArt);
+}
+function tutRender(){
+  const p = TUT_PAGES[tutPage];
+  { const cv = document.getElementById('tut-art'); if (cv){ const h = p.artH || 130; if (cv.height !== h) cv.height = h; cv.style.maxHeight = h > 130 ? '270px' : ''; } }
+  $('tut-title').textContent = p.title; $('tut-body').innerHTML = p.html;
+  $('tut-dots').innerHTML = TUT_PAGES.map((_, i) => i === tutPage ? '<b>●</b>' : '○').join('');
+  $('tut-back').disabled = tutPage === 0;
+  $('tut-next').textContent = tutPage === TUT_PAGES.length - 1 ? 'Start playing ›' : 'Next ›';
+}
+function tutStep(d){
+  if (d > 0 && tutPage >= TUT_PAGES.length - 1){ closeTutorial(); return; }
+  tutPage = clamp(tutPage + d, 0, TUT_PAGES.length - 1); tutRender();
+}
+function openTutorial(fromGame){
+  if (tutOpen) return;
+  tutOpen = true; tutPage = 0; _tutFromGame = !!fromGame && !!player && !titleOpen;
+  if (_tutFromGame) paused = true;
+  for (const k in keys) keys[k] = false;
+  $('tutorial').classList.add('open'); tutRender(); cancelAnimationFrame(_tutRAF); _tutRAF = requestAnimationFrame(drawTutArt);
+}
+function closeTutorial(){
+  if (!tutOpen) return;
+  tutOpen = false; $('tutorial').classList.remove('open'); cancelAnimationFrame(_tutRAF);
+  try { store.set('ror_tut_seen', '1'); } catch (e) {}
+  for (const k in keys) keys[k] = false;
+}
+function maybeOfferTutorial(){ let seen = null; try { seen = store.get('ror_tut_seen'); } catch (e) {} if (!seen) setTimeout(() => openTutorial(true), 1400); }
+window.addEventListener('keydown', e => {                                  // while the tutorial is up it owns the keyboard
+  if (!tutOpen) return;
+  if (e.ctrlKey || e.metaKey || /^F\d+$/.test(e.key)) return;
+  const k = e.key;
+  if (k === 'Escape') closeTutorial();
+  else if (k === 'ArrowRight' || k === 'Enter' || k === ' ') tutStep(1);
+  else if (k === 'ArrowLeft') tutStep(-1);
+  e.preventDefault(); e.stopImmediatePropagation();
+}, true);
 const HK = t => '<span class="k">' + t + '</span>';
 function helpSections(){
   const S = [];
@@ -11857,6 +12047,7 @@ Object.assign(WEAPONS, {
 // those are device preferences, not save data, and shouldn't need re-setting per profile.
 let activeProfile = 'default';
 try { activeProfile = localStorage.getItem('ror_active_profile') || 'default'; } catch {}
+try { const sw = sessionStorage.getItem('ror_switch_profile'); if (sw){ sessionStorage.removeItem('ror_switch_profile'); activeProfile = sw; localStorage.setItem('ror_active_profile', sw); } } catch {}   // set by switchProfile() right before a reload
 function scopedKey(k){
   if (activeProfile === 'default' || typeof k !== 'string' || !k.startsWith('ror_')) return k;
   if (k === 'ror_profiles' || k === 'ror_active_profile') return k;   // the profile registry itself is always global
@@ -11885,6 +12076,13 @@ function loadProfiles(){
 }
 function saveProfiles(list){ try { localStorage.setItem('ror_profiles', JSON.stringify(list)); } catch {} }
 function getActiveProfile(){ return activeProfile; }
+let _sessionPlayed = false;   // a game has run in this page load, so its state is still in memory (village, research, recipes, codex…)
+// switching profile after playing: reload the page so nothing from the previous profile's game leaks into the next one's Continue
+function switchProfile(id){
+  if (id === activeProfile) return false;
+  if (_sessionPlayed){ try { sessionStorage.setItem('ror_switch_profile', id); } catch { setActiveProfile(id); } location.reload(); return true; }
+  setActiveProfile(id); return false;
+}
 function setActiveProfile(id){ activeProfile = id; try { localStorage.setItem('ror_active_profile', id); } catch {} }
 function addProfile(name){
   const id = 'p' + Date.now().toString(36) + (Math.random() * 1e4 | 0).toString(36);
@@ -14287,7 +14485,7 @@ function renderTitleProfiles(){
     b.type = 'button'; b.className = 'act'; b.textContent = p.name;
     b.style.cssText = 'padding:5px 11px;font-size:12px;width:auto' +
       (p.id === active ? ';outline:2px solid #7fdc7f;outline-offset:-2px' : '');
-    b.addEventListener('click', () => { setActiveProfile(p.id); openTitle(); });
+    b.addEventListener('click', () => { if (!switchProfile(p.id)) openTitle(); });
     row.appendChild(b);
   }
   const add = document.createElement('button');
@@ -14296,8 +14494,7 @@ function renderTitleProfiles(){
   add.addEventListener('click', async () => {
     const name = await showPrompt('Name for the new profile?');
     if (!name) return;
-    setActiveProfile(addProfile(name));
-    openTitle();
+    if (!switchProfile(addProfile(name))) openTitle();
   });
   row.appendChild(add);
   host.appendChild(row);
@@ -14343,6 +14540,68 @@ function drawRunner(ctx, x, gy, stride, col, carrying, isClown){
 // shoulder, two clowns in pursuit, a running van waiting. Purely decorative and self-contained
 // (doesn't touch any live game state), only ever drawn while the title/char-create screens are
 // up — see the `if (!player)` branch in loop().
+// user: "We need a better menu background." — a full-screen animated scene drawn from code (dusk over a village with a campfire, lit windows, banners and a city skyline with a
+// searchlight, fireflies, drifting smoke). No screenshots or saves needed, so it looks the same for everyone (including on the web).
+let _titleBgRAF = 0, hudHidden = false;
+function tbRand(n){ const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+function drawTitleBg(now){
+  const cv = document.getElementById('title-bg'); if (!cv || !titleOpen){ _titleBgRAF = 0; return; }
+  const H = 216, W = Math.max(288, Math.round(H * innerWidth / Math.max(1, innerHeight)));
+  if (cv.width !== W || cv.height !== H){ cv.width = W; cv.height = H; }
+  const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+  const t = now, gy = Math.round(H * 0.74), sk = c.createLinearGradient(0, 0, 0, gy);
+  sk.addColorStop(0, '#0e0a24'); sk.addColorStop(0.45, '#3e2456'); sk.addColorStop(0.8, '#b8607a'); sk.addColorStop(1, '#f0a45a');
+  c.fillStyle = sk; c.fillRect(0, 0, W, H);
+  for (let i = 0; i < 70; i++){ const x = tbRand(i) * W, y = tbRand(i + 99) * gy * 0.55, tw = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.0013 + i)); c.fillStyle = 'rgba(255,245,220,' + (0.18 + 0.55 * tw).toFixed(2) + ')'; c.fillRect(x | 0, y | 0, 1, 1); }
+  const mx = W * 0.76, my = H * 0.2;                                                                                   // the moon
+  const mg = c.createRadialGradient(mx, my, 3, mx, my, 34); mg.addColorStop(0, 'rgba(255,245,210,0.45)'); mg.addColorStop(1, 'rgba(255,245,210,0)'); c.fillStyle = mg; c.fillRect(mx - 36, my - 36, 72, 72);
+  c.fillStyle = '#fff2c8'; c.beginPath(); c.arc(mx, my, 9, 0, 7); c.fill(); c.fillStyle = 'rgba(200,180,150,0.5)'; c.beginPath(); c.arc(mx - 2, my - 1, 2.2, 0, 7); c.arc(mx + 3, my + 3, 1.6, 0, 7); c.fill();
+  for (let i = 0; i < 6; i++){ const cx = ((i * 97 + t * 0.006 * (0.6 + (i % 3) * 0.3)) % (W + 120)) - 60, cy = 18 + (i * 29) % 70;                    // slow clouds
+    c.fillStyle = 'rgba(90,50,100,0.42)'; c.beginPath(); c.ellipse(cx, cy, 34, 6, 0, 0, 7); c.ellipse(cx + 16, cy - 3, 20, 5, 0, 0, 7); c.fill(); }
+  const layer = (col, base, amp, f, ph, drift) => { c.fillStyle = col; c.beginPath(); c.moveTo(0, H); for (let x = 0; x <= W; x += 4) c.lineTo(x, base - amp * (0.5 + 0.5 * Math.sin(x * f + ph + drift)) - amp * 0.4 * Math.sin(x * f * 2.3 + ph * 1.7)); c.lineTo(W, H); c.closePath(); c.fill(); };
+  layer('#3a2a4c', gy - 26, 30, 0.018, 1, Math.sin(t * 0.00004) * 0.6);                                                 // far mountains
+  layer('#2a2038', gy - 14, 22, 0.024, 4, Math.sin(t * 0.00006) * 0.5);
+  // the city on the right: skyline, lit windows, a searchlight
+  const cityX = W * 0.62;
+  for (let i = 0; i < 16; i++){ const bw = 14 + tbRand(i + 200) * 14, bh = 34 + tbRand(i + 300) * 70, bx = cityX + i * (W * 0.4 / 16) - 6;
+    c.fillStyle = '#1c1430'; c.fillRect(bx, gy - bh, bw, bh + 4);
+    for (let wy = 6; wy < bh - 4; wy += 7) for (let wx = 3; wx < bw - 3; wx += 5){ const on = tbRand(i * 31 + wy * 3 + wx) < 0.42, fl = 0.85 + 0.15 * Math.sin(t * 0.004 + wx + wy); if (on){ c.fillStyle = 'rgba(255,214,120,' + (0.55 * fl).toFixed(2) + ')'; c.fillRect(bx + wx, gy - bh + wy, 2, 3); } } }
+  { const sx = cityX + 60, sa = -Math.PI / 2 + Math.sin(t * 0.0005) * 0.5; c.fillStyle = 'rgba(255,255,220,0.07)'; c.beginPath(); c.moveTo(sx, gy - 96); c.lineTo(sx + Math.cos(sa - 0.06) * 130, gy - 96 + Math.sin(sa - 0.06) * 130); c.lineTo(sx + Math.cos(sa + 0.06) * 130, gy - 96 + Math.sin(sa + 0.06) * 130); c.closePath(); c.fill(); }
+  layer('#1e2c30', gy - 4, 16, 0.03, 2, Math.sin(t * 0.00008) * 0.4);                                                     // near hills
+  for (let i = 0; i < 26; i++){ const px = (i * 41 + 8) % W, ph = 12 + tbRand(i + 500) * 14, py = gy - 2 - tbRand(i + 700) * 6; c.fillStyle = '#10201a'; c.beginPath(); c.moveTo(px, py - ph); c.lineTo(px - 5, py); c.lineTo(px + 5, py); c.fill(); }   // pines
+  c.fillStyle = '#1a3220'; c.fillRect(0, gy, W, H - gy);                                                                  // the ground
+  const gg = c.createLinearGradient(0, gy, 0, H); gg.addColorStop(0, 'rgba(240,164,90,0.16)'); gg.addColorStop(1, 'rgba(0,0,0,0.5)'); c.fillStyle = gg; c.fillRect(0, gy, W, H - gy);
+  c.fillStyle = '#4a3a2a'; c.beginPath(); c.moveTo(W * 0.36, H); c.quadraticCurveTo(W * 0.55, gy + 8, W * 0.66, gy + 2); c.lineTo(W * 0.7, gy + 2); c.quadraticCurveTo(W * 0.58, gy + 14, W * 0.44, H); c.closePath(); c.fill();   // the road to the city
+  // the village on the left
+  const fx = W * 0.2, fyy = gy + 22;
+  const house = (x, w, h, roof, seed) => {
+    c.fillStyle = 'rgba(0,0,0,0.3)'; c.fillRect(x - 2, gy + 3, w + 6, 4);
+    c.fillStyle = '#4a3428'; c.fillRect(x, gy - h + 6, w, h); c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(x, gy - h + 6, w, 3);
+    c.fillStyle = roof; c.beginPath(); c.moveTo(x - 4, gy - h + 7); c.lineTo(x + w / 2, gy - h - 12); c.lineTo(x + w + 4, gy - h + 7); c.closePath(); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.12)'; c.beginPath(); c.moveTo(x - 4, gy - h + 7); c.lineTo(x + w / 2, gy - h - 12); c.lineTo(x + w / 2, gy - h + 7); c.closePath(); c.fill();
+    c.fillStyle = '#20140e'; c.fillRect(x + w / 2 - 3, gy - 12, 6, 16);
+    const fl = 0.8 + 0.2 * Math.sin(t * 0.006 + seed * 3);
+    for (const wx of [x + 4, x + w - 10]){ c.fillStyle = 'rgba(255,196,96,' + (0.9 * fl).toFixed(2) + ')'; c.fillRect(wx, gy - h + 16, 6, 6); c.fillStyle = 'rgba(255,180,80,0.14)'; c.beginPath(); c.arc(wx + 3, gy - h + 19, 12, 0, 7); c.fill(); }
+    const chx = x + w - 7; c.fillStyle = '#3a2a24'; c.fillRect(chx, gy - h - 12, 5, 12);                                       // chimney and its drifting smoke
+    for (let k = 0; k < 5; k++){ const ph = ((t * 0.0004 + k / 5 + seed * 0.17) % 1); c.fillStyle = 'rgba(190,180,190,' + (0.35 * (1 - ph)).toFixed(2) + ')'; c.beginPath(); c.arc(chx + 2 + Math.sin(ph * 5 + seed) * 4 + ph * 8, gy - h - 14 - ph * 30, 2 + ph * 4, 0, 7); c.fill(); }
+  };
+  house(W * 0.05, 34, 30, '#8a3a2a', 1); house(W * 0.3, 40, 36, '#6a3a4a', 2); house(W * 0.42, 30, 26, '#8a5a2a', 3);
+  for (const [bx, seed] of [[W * 0.03, 0], [W * 0.27, 1], [W * 0.41, 2]]){                                                 // crimson banners on tall poles
+    c.fillStyle = '#3a2a24'; c.fillRect(bx, gy - 48, 2, 50); const wv = Math.sin(t * 0.006 + seed * 2);
+    c.fillStyle = '#c8302e'; c.beginPath(); c.moveTo(bx + 2, gy - 48); c.lineTo(bx + 16 + wv * 2, gy - 44 + wv); c.lineTo(bx + 2, gy - 32); c.closePath(); c.fill(); c.fillStyle = '#f0d060'; c.fillRect(bx + 5, gy - 44, 3, 3); }
+  // campfire and the people round it
+  c.fillStyle = '#4a4a54'; for (let i = 0; i < 8; i++){ const a = i / 8 * 6.283; c.fillRect(fx + Math.cos(a) * 9 - 2, fyy - 2 + Math.sin(a) * 3, 4, 3); }
+  const glow = c.createRadialGradient(fx, fyy - 6, 2, fx, fyy - 6, 60); glow.addColorStop(0, 'rgba(255,170,70,' + (0.42 + 0.06 * Math.sin(t * 0.02)).toFixed(2) + ')'); glow.addColorStop(1, 'rgba(255,140,50,0)'); c.fillStyle = glow; c.fillRect(fx - 64, fyy - 70, 128, 130);
+  const fh = 9 + Math.sin(t * 0.017) * 2 + Math.sin(t * 0.031) * 1.5; c.fillStyle = '#ff8a2a'; c.beginPath(); c.moveTo(fx - 7, fyy - 2); c.lineTo(fx + Math.sin(t * 0.01) * 2, fyy - 2 - fh - 8); c.lineTo(fx + 7, fyy - 2); c.fill(); c.fillStyle = '#ffe27a'; c.beginPath(); c.moveTo(fx - 3.5, fyy - 2); c.lineTo(fx, fyy - 2 - fh); c.lineTo(fx + 3.5, fyy - 2); c.fill();
+  for (let i = 0; i < 10; i++){ const ph = ((t * 0.0007 + i * 0.13) % 1); c.fillStyle = 'rgba(255,' + (150 + i * 8) + ',60,' + (0.9 * (1 - ph)).toFixed(2) + ')'; c.fillRect(fx + Math.sin(i * 2.1 + ph * 4) * 10, fyy - 8 - ph * 46, 1.5, 1.5); }   // embers
+  const looks = [{ skin: '#f0c9a0', shirt: '#3f7fd0', pants: '#28324a', hair: '#3a2a1a' }, { skin: '#e0b58c', shirt: '#8a44b8', pants: '#28324a', hair: '#5a3a22' }, { skin: '#d99b6c', shirt: '#3aa06a', pants: '#28324a', hair: '#1c1c22' }, { skin: '#c98a5c', shirt: '#c8a23a', pants: '#28324a', hair: '#3a2a1a' }, { skin: '#f0d0b0', shirt: '#d8583a', pants: '#3a2f28', hair: '#7a4a22' }];
+  looks.forEach((lk, i) => { const a = t * 0.00045 * (i % 2 ? 1 : -1) + i * 1.26, r = 30 + (i % 3) * 8; c.save(); c.translate(fx + Math.cos(a) * r, fyy + 8 + Math.sin(a) * 9); c.scale(0.6, 0.6); drawRunner(c, 0, 0, Math.sin(t * 0.008 + i), lk, false, false); c.restore(); });
+  { const px = W * 0.5 + ((t * 0.012) % (W * 0.42)); c.save(); c.translate(px, gy + 12 + ((px - W * 0.5) / (W * 0.42)) * -6); c.scale(0.6, 0.6); drawRunner(c, 0, 0, Math.sin(t * 0.014), looks[0], false, false); c.restore(); }   // someone heading down the road to the city
+  for (let i = 0; i < 34; i++){ const bx = tbRand(i + 900) * W, by = gy - 12 + tbRand(i + 950) * (H - gy + 8), a = 0.2 + 0.8 * Math.abs(Math.sin(t * 0.0014 + i * 1.7)); c.fillStyle = 'rgba(210,255,120,' + (0.55 * a).toFixed(2) + ')'; c.fillRect(bx + Math.sin(t * 0.0006 + i) * 8, by + Math.cos(t * 0.0005 + i * 1.3) * 5, 1.5, 1.5); }   // fireflies
+  c.fillStyle = '#0a1410'; for (let x = 0; x < W; x += 3){ const gh = 6 + tbRand(x * 0.37) * 8 + Math.sin(t * 0.002 + x) * 1.2; c.fillRect(x, H - gh, 2, gh); }        // foreground grass
+  const vg = c.createRadialGradient(W / 2, H * 0.55, H * 0.3, W / 2, H * 0.55, H * 1.0); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)'); c.fillStyle = vg; c.fillRect(0, 0, W, H);
+  _titleBgRAF = requestAnimationFrame(drawTitleBg);
+}
 function drawTitleArt(t){
   const cv = document.getElementById('title-art');
   if (!cv) return;
@@ -14392,6 +14651,7 @@ function openTitle(){
   document.getElementById('title-continue').style.display = hasSave() ? '' : 'none';
   { const lb = document.getElementById('title-legacy'); if (lb){ const on = !!loadLegacy().ended; lb.style.opacity = on ? '1' : '0.5'; lb.textContent = on ? 'Legacy' : 'Legacy (locked)'; } }
   document.getElementById('titleScreen').classList.add('open');
+  cancelAnimationFrame(_titleBgRAF); _titleBgRAF = requestAnimationFrame(drawTitleBg);
 }
 function closeTitle(){ titleOpen = false; document.getElementById('titleScreen').classList.remove('open'); }
 // applies a character-creator appearance onto a freshly made player actor, including an
@@ -19005,8 +19265,8 @@ function reviveVillagerLater(t){
 function muster(){
   if (!village || zone !== 'village' || !player || paused) return;
   village.squad ||= [];
-  if (village.squad.length){                                  // stand down
-    for (const e of enemies) if (e.soldier) demoteSoldier(e);
+  if (village.squad.length || enemies.some(e => e.soldier && e.villager && !e._isGuard && !e.dead)){                                  // stand down
+    for (const e of enemies) if (e.soldier && !e._isGuard && !e._thrall) demoteSoldier(e);
     for (const v of village.villagers) if (v.armed && !v.gearSet){ village.armory.push(v.armed); v.armed = null; }   // gear you chose in the Armory stays with them
     village.squad = [];
     flash('Stand down', '#bcd0e0', 'they drift back to their chores');
@@ -19080,6 +19340,7 @@ function spawnDump(){
 }
 
 function startGame(appearance){
+  _sessionPlayed = true;
   player = makeActor(0, 0, 'player', 'player');
   if (appearance) applyAppearance(player, appearance);   // fresh character-creator choice — otherwise loadPlayerInto restores a saved one, or makeActor's plain defaults stand
   loadPlayerInto(player);
@@ -26932,7 +27193,7 @@ function draw(){
   const _dn = performance.now(); const _dz = Math.min(0.05, (_dn - (draw._t || _dn)) / 1000); draw._t = _dn;
   viewZoom += (viewZoomT - viewZoom) * Math.min(1, _dz * 16);
   if (Math.abs(viewZoom - viewZoomT) < 0.01) viewZoom = viewZoomT;
-  if (!craftOpen && !musingOpen && !assignOpen && !shrinePickOpen && !giftPickOpen && !cultMenuOpen && !researchOpen && viewZoom <= 1.001 && paused && !packOpen && !travelOpen && !mapOpen && !cityOpen && !sermonOpen && !dossierOpen && !spoilsOpen && !winOpen && !legacyOpen && !smithyOpen && !ngFleeOpen && !$('settings').classList.contains('open')) paused = false;
+  if (!craftOpen && !musingOpen && !assignOpen && !shrinePickOpen && !giftPickOpen && !cultMenuOpen && !researchOpen && viewZoom <= 1.001 && paused && !packOpen && !travelOpen && !mapOpen && !cityOpen && !sermonOpen && !dossierOpen && !spoilsOpen && !winOpen && !legacyOpen && !smithyOpen && !ngFleeOpen && !tutOpen && !$('settings').classList.contains('open')) paused = false;
   // user: "pausing seems to stop the people but things keep occuring that shake the screen - as
   // if the environment is not paused". This call used to run unconditionally every real frame
   // (draw() itself isn't gated on `paused`, only step() is) — so weather kept advancing, and a
@@ -27627,12 +27888,27 @@ function draw(){
   if (zone === 'city' && runWagers.length) drawCalamities();
 
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.font = 'bold 16px "Courier New",monospace';
-  for (const t of texts){
-    ctx.globalAlpha = clamp(t.life * 1.4, 0, 1);
-    const s = w2s(t.x, t.y);
-    ctx.fillStyle = '#000'; ctx.fillText(t.t, s.x + 1, s.y + 1);
-    ctx.fillStyle = t.col; ctx.fillText(t.t, s.x, s.y);
+  ctx.font = 'bold 16px "Courier New",monospace'; ctx.lineJoin = 'round';
+  {
+    const placed = [], maxW = Math.min(300, W * 0.42);
+    for (const t of texts){
+      if (!t._lines){ t._lines = _wrapLines(ctx, String(t.t), maxW).slice(0, 4); t._w = Math.max(...t._lines.map(l => ctx.measureText(l).width)); }
+      const s = w2s(t.x, t.y), h = t._lines.length * 18;
+      if (s.x < -200 || s.x > W + 200 || s.y < -60 || s.y > H + 60) continue;
+      let y = s.y;
+      for (let k = 0; k < 8; k++){                                                         // nudge it up until it no longer sits on another line
+        const b = { x0: s.x - t._w / 2 - 3, x1: s.x + t._w / 2 + 3, y0: y - h + 2, y1: y + 4 };
+        if (!placed.some(o => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0)) break;
+        y -= 20;
+      }
+      placed.push({ x0: s.x - t._w / 2 - 3, x1: s.x + t._w / 2 + 3, y0: y - h + 2, y1: y + 4 });
+      ctx.globalAlpha = clamp(t.life * 1.4, 0, 1);
+      t._lines.forEach((ln, k) => {
+        const ly = y - (t._lines.length - 1 - k) * 18;
+        ctx.strokeStyle = 'rgba(0,0,0,0.92)'; ctx.lineWidth = 4; ctx.strokeText(ln, s.x, ly);
+        ctx.fillStyle = t.col; ctx.fillText(ln, s.x, ly);
+      });
+    }
   }
   ctx.globalAlpha = 1;
 
@@ -27666,10 +27942,10 @@ function draw(){
     ctx.fillRect(0, 0, W, H);
   }
   _tSeg = _mark('postfx', _tSeg);
-  if (zone === 'city' && mission) drawObjectiveHUD();
+  if (zone === 'city' && mission && !hudHidden) drawObjectiveHUD();
   updateWagerHUD(); updateTraitCompact();
   { const _ed = !!(craftOpen || buildMode); if (_ed !== _editUI){ _editUI = _ed; document.body.classList.toggle('editing', _ed); } const _iv = zone === 'village'; if (_iv !== _inVillageUI){ _inVillageUI = _iv; document.body.classList.toggle('invillage', _iv); } }   // crafting/building: the perks box + minimap get out of the way
-  if (!_editUI) drawMinimap();
+  if (!_editUI && !hudHidden) drawMinimap();
   _tSeg = _mark('minimap', _tSeg);
   if (!_editUI) drawSkyClock();
   if (musingOpen) drawMusings();
@@ -30254,10 +30530,11 @@ function drawActor(a){
     octx.beginPath(); octx.ellipse(a.x, fy, a.r * 1.35, a.r * 0.62, 0, 0, 7); octx.stroke();
     octx.globalAlpha = 1;
     if (a._traitTag && dist2(a.x, a.y, player.x, player.y) < 300 * 300){
-      octx.font = 'bold 7px "Courier New",monospace'; octx.textAlign = 'center';
-      const tw = a._traitTag.length * 4.6;
-      octx.fillStyle = 'rgba(0,0,0,0.72)'; octx.fillRect(a.x - tw / 2 - 2, a.y - a.r - 16, tw + 4, 9);
-      octx.fillStyle = a._traitAura; octx.fillText(a._traitTag, a.x, a.y - a.r - 9);
+      octx.font = 'bold 9px "Courier New",monospace'; octx.textAlign = 'center'; octx.lineJoin = 'round';
+      const tw = octx.measureText(a._traitTag).width;
+      octx.fillStyle = 'rgba(0,0,0,0.78)'; octx.fillRect(a.x - tw / 2 - 3, a.y - a.r - 20, tw + 6, 12);
+      octx.strokeStyle = 'rgba(0,0,0,0.9)'; octx.lineWidth = 2; octx.strokeText(a._traitTag, a.x, a.y - a.r - 11);
+      octx.fillStyle = a._traitAura; octx.fillText(a._traitTag, a.x, a.y - a.r - 11);
       octx.textAlign = 'left';
     }
   }
@@ -30594,7 +30871,7 @@ function drawActor(a){
       octx.moveTo(a.x, a.y - R - 16); octx.lineTo(a.x - 4, a.y - R - 21); octx.lineTo(a.x + 4, a.y - R - 21);
       octx.closePath(); octx.fill();
     }
-    if (a._lvl > 1 && (!a._isGuard || dist2(a.x, a.y, player.x, player.y) < 160 * 160)){ octx.fillStyle = '#ffd98a'; octx.font = 'bold 7px "Courier New",monospace'; octx.textAlign = 'center'; octx.fillText('Lv ' + a._lvl, a.x, a.y - R - (a._isGuard ? 17 : 24)); octx.textAlign = 'left'; }   // veterans wear their level
+    if (a._lvl > 1 && (!a._isGuard || dist2(a.x, a.y, player.x, player.y) < 160 * 160)){ octx.font = 'bold 9px "Courier New",monospace'; octx.textAlign = 'center'; octx.lineJoin = 'round'; octx.strokeStyle = 'rgba(0,0,0,0.9)'; octx.lineWidth = 2.4; octx.strokeText('Lv ' + a._lvl, a.x, a.y - R - (a._isGuard ? 17 : 24)); octx.fillStyle = '#ffd98a'; octx.fillText('Lv ' + a._lvl, a.x, a.y - R - (a._isGuard ? 17 : 24)); octx.textAlign = 'left'; }   // veterans wear their level
     if (a._isGuard && a._met === undefined) a._met = !!(village && village.villagers.some(v => v.id === a._vid && v.met));
     const _gd = a._isGuard ? Math.hypot(a.x - player.x, a.y - player.y) : 0;
     if (a._name && (!a._isGuard || (a._met && _gd < 120))){                     // permanent village guards follow the villager rule: name only once met, and only when you're close
@@ -32878,6 +33155,9 @@ function syncHUD(){
   $('title-settings').addEventListener('click', () => toggleSettings(true));
   $('title-help').addEventListener('click', () => openHelp());
   $('set-help').addEventListener('click', () => openHelp());
+  $('set-tutorial').addEventListener('click', () => { if (typeof toggleSettings === 'function') toggleSettings(false); openTutorial(true); });
+  $('title-tutorial').addEventListener('click', () => openTutorial(false));
+  $('tut-back').addEventListener('click', () => tutStep(-1)); $('tut-next').addEventListener('click', () => tutStep(1)); $('tut-skip').addEventListener('click', closeTutorial);
   $('title-exit').addEventListener('click', () => { window.close(); flash('You can close this tab now', '#cfcfe0', ''); });
 
   // ---- character creator ----
@@ -32886,7 +33166,7 @@ function syncHUD(){
     refreshCharCreateUI();
   });
   $('cc-back').addEventListener('click', () => { closeCharCreate(); openTitle(); });
-  $('cc-start').addEventListener('click', () => { const ap = draftToAppearance(charDraft); closeCharCreate(); wipeSave(ap); flash('Welcome home', '#7fdc7f', ''); });
+  $('cc-start').addEventListener('click', () => { const ap = draftToAppearance(charDraft); closeCharCreate(); wipeSave(ap); flash('Welcome home', '#7fdc7f', ''); maybeOfferTutorial(); });
 
   // AI-mix slider
   MIX_RATIO = clamp(parseFloat(store.get('sb_mix')) || 0.4, 0, 1);
@@ -33173,7 +33453,7 @@ function buildEndgameDebug(){
     </div>
     <div class="rgroup" style="opacity:.8">time / village</div>
     <div class="rbtns">
-      <button class="act" id="dbg-tdawn" type="button">☀ dawn</button><button class="act" id="dbg-tnoon" type="button">☀ midday</button><button class="act" id="dbg-tdusk" type="button">🌇 dusk</button><button class="act" id="dbg-tnight" type="button">🌙 NIGHT</button>
+      <button class="act" id="dbg-hud" type="button">🖼 hide / show HUD</button><button class="act" id="dbg-tdawn" type="button">☀ dawn</button><button class="act" id="dbg-tnoon" type="button">☀ midday</button><button class="act" id="dbg-tdusk" type="button">🌇 dusk</button><button class="act" id="dbg-tnight" type="button">🌙 NIGHT</button>
       <button class="act" id="dbg-day" type="button">skip a day</button><button class="act" id="dbg-day5" type="button">skip 5 days</button>
       <select id="dbg-event" style="flex:1;background:#14141c;color:#cfcfe0;border:1px solid #3a3a4c;font:inherit;font-size:11px">${evOpts.map(e => '<option value="' + e[0] + '">' + e[1] + '</option>').join('')}</select>
       <button class="act" id="dbg-evgo" type="button">trigger event</button>
@@ -33213,6 +33493,7 @@ function buildEndgameDebug(){
   on('dbg-c1', () => dbgConquer('next')); on('dbg-call', () => dbgConquer('all')); on('dbg-cap', () => dbgConquer('capital'));
   on('dbg-food', res('food', 50)); on('dbg-wood', res('wood', 50)); on('dbg-stone', res('stone', 50)); on('dbg-stick', res('stick', 50)); on('dbg-favor', res('favor', 50)); on('dbg-rp', res('research', 100));
   on('dbg-cash', () => { money += 500; dbgSave(); dbgSay('+$500'); });
+  on('dbg-hud', () => { hudHidden = !hudHidden; document.body.classList.toggle('nohud', hudHidden); dbgSay(hudHidden ? 'HUD hidden — for clean screenshots (press again to show)' : 'HUD shown'); });
   on('dbg-res', dbgUnlockResearch); on('dbg-vil', () => dbgAddVillagers(5));
   const dna = ks => () => { const V = dbgVillage(); if (!V) return; V.dna = V.dna || {}; for (const k of ks) V.dna[k] = (V.dna[k] || 0) + 10; registerMutLab(); dbgSave(); dbgSay('+10 ' + (ks.length > 1 ? 'of every essence' : MUT_TYPES[ks[0]].name + ' essence') + ' — the Mutation Lab is available'); };
   Object.keys(MUT_TYPES).forEach(k => on('dbg-dna-' + k, dna([k]))); on('dbg-dna-all', dna(Object.keys(MUT_TYPES)));
@@ -33258,7 +33539,7 @@ window.__G = () => ({ get doorLocks(){ return doorLocks; }, get cityCams(){ retu
   wanted, chunks, chunkCount: chunks.size, blocks, worldSeed, CELL, CHUNK, ROSTER, MIX_RATIO,
   cam, VUW, VUH, zone, village, buildMode, mouse, ZOOM, titleOpen, charCreateOpen, get charDraft(){ return charDraft; },
   setBuildSel: (i) => { buildSel = i; }, setMouseWorld: (wx, wy) => { mouse.x = (wx - cam.x) * ZOOM; mouse.y = (wy - cam.y) * ZOOM; },
-  _fn: { A, get craftGroundRef(){ return craftGround; }, get craftSpotRef(){ return craftSpot; }, buildRowsList, doResearch, RECIPES, WINDOW_MATS, lineBlocked, turretTick, get missionNow(){ return mission; }, randPersonRaced, tryCage, openCage, urgeMet, grantTempTrait, grantRandomTempTrait, BUILD_ITEMS, TOWN_BUILD_IDS, refundBuilt, weddingBuntingPairs, villageEventItems, decorBases, buildSquadUI, buildRosterUI, CITY_ALARM, CAL, setWagers: (ids) => { runWagers = ids.slice(); resetCalamities(); _reinfT = null; }, villageBanners, placeDecor, decorSpot, mkProp, sweepWildFromBuilt, mkRock, builtGroundAt, get researchOpenNow(){ return researchOpen; }, setKey: (k, v) => { keys[k] = v; }, openMutLab, hackRange, hackTimeMul, doResearch, openResearch, startNewGamePlus, mkVehicle, mkLandmark, get hazardsNow(){ return hazards; }, commitWanted, get wantedNow(){ return wanted; }, openGov: null, HACKS, CONTAINER_LOOT, hackOf, tryGrate, wearDisguise, freeSpotNear, get texFillCacheSize(){ return _texFillCache.size; }, get texFillCacheKeys(){ return [..._texFillCache.keys()]; }, drawWallBlock, drawTexturedFill, get fastGlow(){ return FAST_GLOW; }, set fastGlow(v){ FAST_GLOW = !!v; },
+  _fn: { A, popText, get craftGroundRef(){ return craftGround; }, get craftSpotRef(){ return craftSpot; }, buildRowsList, doResearch, RECIPES, WINDOW_MATS, lineBlocked, turretTick, get missionNow(){ return mission; }, randPersonRaced, tryCage, openCage, urgeMet, grantTempTrait, grantRandomTempTrait, BUILD_ITEMS, TOWN_BUILD_IDS, refundBuilt, weddingBuntingPairs, villageEventItems, decorBases, buildSquadUI, buildRosterUI, CITY_ALARM, CAL, setWagers: (ids) => { runWagers = ids.slice(); resetCalamities(); _reinfT = null; }, villageBanners, placeDecor, decorSpot, mkProp, sweepWildFromBuilt, mkRock, builtGroundAt, get researchOpenNow(){ return researchOpen; }, setKey: (k, v) => { keys[k] = v; }, openMutLab, hackRange, hackTimeMul, doResearch, openResearch, startNewGamePlus, mkVehicle, mkLandmark, get hazardsNow(){ return hazards; }, commitWanted, get wantedNow(){ return wanted; }, openGov: null, HACKS, CONTAINER_LOOT, hackOf, tryGrate, wearDisguise, freeSpotNear, get texFillCacheSize(){ return _texFillCache.size; }, get texFillCacheKeys(){ return [..._texFillCache.keys()]; }, drawWallBlock, drawTexturedFill, get fastGlow(){ return FAST_GLOW; }, set fastGlow(v){ FAST_GLOW = !!v; },
     damageCell, explode, attack, damage, cellSolid, cellMat, spawnEnemy, populateCityStreets, spawnFromSpec,
          killActor, hurtProp, freezeActor, petrifyActor, spawnPuddle, spawnIceStatue, addHazard, weaponFx, breakNearbyErrandItem, explode, get hazards(){ return hazards; },
          get specialProps(){ return specialProps; }, get warningCars(){ return warningCars; }, get panicCars(){ return panicCars; }, get kennelPets(){ return kennelPets; }, get ambientCars(){ return ambientCars; }, get rollingBarrels(){ return rollingBarrels; }, get weatherObj(){ return weather; }, updatePanicCars, updateKennelPets, hurtKennelPet, forceScenePal(n){ _scenePalForce = n; }, setCell, noteEdit, recomputeRoofs, MAT, openShrinePick, confirmGrandShrine, BUILD_ITEMS, ICONS, promoteGuard, updateSoldier, openEventCard, rollVillageEvent, showVillageEvent, updateFurnishRequests, openMerchantShop, tryInteract, openChat, chatAct, chatWorldFacts, updateAmbientTraffic, updateRollingBarrels, updateHazards, findPath, get thrownItems(){ return thrownItems; }, updateThrown, LIFTABLE_PROPS, grantTempTrait, grantRandomTempTrait, clearTempTraits, get quests(){ return quests; }, completeQuest, updateQuestHUD, questTargetPos, questLabel, PLAYER_TRAITS,
