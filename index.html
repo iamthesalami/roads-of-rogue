@@ -2627,7 +2627,11 @@ function discoverWeapon(name){
 }
 function loadWeaponCodex(){
   if (!village || !village.weaponCodex) return;
-  for (const key in village.weaponCodex.entries) registerCodexWeapon(village.weaponCodex.entries[key]);
+  for (const key in village.weaponCodex.entries){
+    const en = village.weaponCodex.entries[key];
+    try { const raw = classifyWeapon(key); raw.id = en.id; const sp = validateWeapon(raw).spec; if (en.spec && (en.spec.kind !== sp.kind || en.spec.head !== sp.head)) en.spec = sp; } catch (e) { /* keep the old spec */ }   // re-file old finds under the corrected name -> kind rules
+    registerCodexWeapon(en);
+  }
 }
 // ================= NPC CODEX — discovered villager appearances, same shape again =================
 // no separate runtime table to populate here (unlike materials/weapons) — the compiled look
@@ -3891,7 +3895,78 @@ function paintIcon(cv, kind){
       return;
     }
   }
+  if (typeof kind === 'string' && kind.startsWith('wpn:')){ const [, key, fx] = kind.split(':'); paintWeaponIcon(g, S, key, fx); return; }
   (ICONS[kind] || ICONS.wood)(g, S);
+}
+// each discovered weapon gets an icon that matches what it is (axe, spear, scythe, musket, flamethrower...) — they used to all share one generic blade
+const WPN_FX_COL = { fire: '#ff7a2a', ice: '#8adcff', slime: '#7fdc5a', acid: '#b6e83a', spark: '#ffe14a', water: '#4aa8ff', oil: '#8a8a94', sparks: '#ffe14a' };
+function wpnIconKey(name, head){
+  const s = (name || '').toLowerCase(), has = (...w) => w.some(x => s.includes(x));
+  if (head === 'blade'){
+    if (has('axe', 'hatchet')) return 'axe';
+    if (has('scythe', 'sickle', 'billhook', 'hook', 'gaff', 'glaive', 'rake', 'tongs', 'flail')) return 'hook';
+    if (has('spear', 'lance', 'pitchfork', 'bayonet', 'harpoon', 'marlinspike')) return 'spear';
+    if (has('whip')) return 'whip';
+  }
+  if (head === 'smg' && has('musket', 'rifle', 'carbine', 'harpoon')) return 'rifle';
+  return head;
+}
+function paintWeaponIcon(g, S, key, fx){
+  const A = WPN_FX_COL[fx] || null, steel = '#c4cad4', dark = '#3a3a46', wood = '#8a5a30', shade = '#6a4a2a';
+  const L = (x1, y1, x2, y2, w, c) => { g.strokeStyle = c; g.lineWidth = Math.max(1, S * w); g.lineCap = 'round'; g.beginPath(); g.moveTo(S * x1, S * y1); g.lineTo(S * x2, S * y2); g.stroke(); };
+  const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(S * x, S * y, S * w, S * h); };
+  const C = (x, y, r, c) => { g.fillStyle = c; g.beginPath(); g.arc(S * x, S * y, S * r, 0, 7); g.fill(); };
+  const P = (pts, c) => { g.fillStyle = c; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(S * x, S * y) : g.moveTo(S * x, S * y)); g.closePath(); g.fill(); };
+  const glow = (x, y, r) => { if (A){ g.globalAlpha = 0.35; C(x, y, r, A); g.globalAlpha = 1; } };
+  switch (key){
+    case 'blade': case 'frostblade':
+      L(.22, .8, .8, .22, .1, key === 'frostblade' ? '#a8e4ff' : steel); L(.5, .5, .78, .24, .03, '#fff'); L(.16, .68, .34, .86, .07, shade); L(.1, .9, .22, .78, .08, wood); break;
+    case 'axe':
+      L(.2, .88, .68, .28, .08, wood); P([[.5, .12], [.9, .2], [.84, .56], [.6, .42], [.52, .3]], steel); L(.86, .2, .82, .52, .03, '#fff'); break;
+    case 'hook':
+      L(.2, .9, .62, .3, .07, wood); g.strokeStyle = steel; g.lineWidth = S * 0.09; g.lineCap = 'round'; g.beginPath(); g.arc(S * .62, S * .5, S * .26, -2.2, 0.5); g.stroke(); break;
+    case 'spear':
+      L(.14, .9, .74, .3, .06, wood); P([[.86, .12], [.6, .3], [.7, .4]], steel); L(.66, .34, .82, .16, .02, '#fff'); break;
+    case 'whip':
+      L(.16, .86, .3, .7, .1, wood); g.strokeStyle = '#a06a3a'; g.lineWidth = S * 0.05; g.lineCap = 'round'; g.beginPath(); g.moveTo(S * .3, S * .7); g.bezierCurveTo(S * .3, S * .2, S * .7, S * .8, S * .84, S * .22); g.stroke(); break;
+    case 'mallet':
+      L(.2, .88, .66, .34, .07, wood); P([[.5, .18], [.86, .14], [.9, .42], [.56, .5]], '#8a8a96'); L(.54, .2, .86, .17, .03, '#d8dce4'); break;
+    case 'club':
+      P([[.16, .9], [.28, .92], [.86, .3], [.66, .1], [.5, .34], [.22, .72]], '#9a6a3a'); L(.6, .2, .78, .38, .03, '#c8925a'); break;
+    case 'bat':
+      P([[.18, .9], [.26, .86], [.86, .26], [.74, .12], [.5, .34], [.2, .76]], '#c8a060'); L(.7, .18, .82, .3, .03, '#e8c890'); break;
+    case 'pipe':
+      L(.2, .82, .8, .22, .1, '#7a8290'); L(.5, .52, .8, .22, .03, '#aab2c0'); L(.2, .82, .28, .74, .12, '#4a4a54'); L(.78, .24, .84, .18, .13, '#4a4a54'); break;
+    case 'torch':
+      L(.2, .9, .56, .42, .09, wood); glow(.64, .3, .24); P([[.64, .08], [.8, .3], [.72, .44], [.56, .44], [.5, .3]], '#ff7a2a'); P([[.64, .22], [.72, .34], [.66, .42], [.58, .38]], '#ffe27a'); break;
+    case 'hose':
+      L(.16, .86, .5, .5, .1, '#3a6a9a'); g.strokeStyle = '#4a86c4'; g.lineWidth = S * 0.08; g.beginPath(); g.moveTo(S * .5, S * .5); g.bezierCurveTo(S * .5, S * .2, S * .7, S * .6, S * .84, S * .24); g.stroke(); C(.86, .22, .07, '#c8e4ff'); break;
+    case 'zapstaff':
+      L(.2, .88, .66, .32, .07, wood); glow(.72, .26, .24); g.strokeStyle = '#ffe14a'; g.lineWidth = S * 0.06; g.lineJoin = 'round'; g.beginPath(); g.moveTo(S * .78, S * .06); g.lineTo(S * .64, S * .26); g.lineTo(S * .8, S * .3); g.lineTo(S * .66, S * .5); g.stroke(); break;
+    case 'chainsaw':
+      R(.14, .5, .26, .28, '#d8582a'); R(.16, .44, .16, .08, '#a04020'); L(.4, .6, .88, .6, .13, '#8a8a94'); for (let i = 0; i < 6; i++) R(.44 + i * .075, .48, .04, .05, dark); R(.2, .58, .12, .12, '#eee'); break;
+    // ---- firearms: drawn side-on, muzzle to the right ----
+    case 'pistol':
+      R(.24, .32, .56, .17, dark); R(.28, .3, .5, .05, '#8a8a96'); P([[.3, .48], [.5, .48], [.44, .8], [.28, .8]], '#5a3a22'); R(.5, .5, .1, .08, dark); break;
+    case 'smg':
+      R(.16, .32, .66, .16, dark); R(.7, .36, .18, .06, '#8a8a96'); R(.42, .46, .1, .3, '#5a5a66'); R(.22, .46, .1, .14, '#5a3a22'); R(.6, .3, .14, .04, '#8a8a96'); break;
+    case 'rifle':
+      R(.1, .42, .3, .12, '#7a4a26'); R(.36, .38, .3, .14, dark); L(.62, .44, .92, .44, .06, '#8a8a96'); R(.42, .5, .06, .14, dark); break;
+    case 'shotgun':
+      R(.08, .44, .3, .14, '#7a4a26'); L(.34, .42, .92, .42, .06, '#6a6a76'); L(.34, .5, .92, .5, .06, '#8a8a96'); R(.34, .38, .14, .16, dark); break;
+    case 'dartgun':
+      R(.2, .34, .5, .13, '#4a7a5a'); L(.68, .4, .92, .4, .04, '#aaa'); P([[.84, .3], [.9, .4], [.84, .5]], '#ff5a5a'); P([[.28, .46], [.44, .46], [.4, .74], [.26, .74]], '#2a3a30'); break;
+    case 'flamethrower':
+      R(.12, .3, .2, .4, '#c84a2a'); R(.14, .26, .16, .06, '#8a2a1a'); R(.32, .42, .4, .1, dark); L(.7, .46, .8, .46, .09, '#8a8a96'); glow(.88, .44, .16); P([[.8, .44], [.98, .32], [.96, .5]], '#ff7a2a'); break;
+    case 'freezeray': case 'slimegun': case 'acidspray': case 'taser': {
+      const col = A || '#8adcff'; glow(.84, .42, .2); R(.2, .34, .52, .16, dark); R(.24, .3, .4, .05, '#8a8a96'); P([[.3, .48], [.48, .48], [.42, .78], [.28, .78]], '#4a4a56');
+      if (key === 'taser'){ L(.72, .38, .9, .3, .04, col); L(.72, .48, .9, .56, .04, col); } else { R(.7, .36, .16, .12, col); C(.88, .42, .07, '#fff'); } break; }
+    case 'watergun':
+      R(.2, .34, .5, .16, '#3a8ad0'); R(.66, .38, .22, .08, '#c8e4ff'); R(.34, .24, .22, .12, '#8ac8ff'); P([[.28, .48], [.44, .48], [.4, .78], [.26, .78]], '#2a5a9a'); break;
+    default:
+      L(.2, .8, .74, .26, .13, '#9aa0a8'); L(.44, .5, .72, .24, .05, '#e8ecf0'); R(.16, .72, .16, .1, '#6a4a2a');
+  }
+  if (A && (key === 'blade' || key === 'axe' || key === 'mallet' || key === 'spear' || key === 'club' || key === 'bat' || key === 'pipe')){ g.globalAlpha = 0.5; C(.78, .24, .12, A); g.globalAlpha = 1; }
 }
 // hands-on crafting: zoom to the dirt in front of the player, drag pocket items onto the ground,
 // pick from the build previews that appear over the pile.
@@ -4253,7 +4328,7 @@ function pieceInfo(id, name){
     const tb = (typeof TOWN_BUILDINGS !== 'undefined' ? TOWN_BUILDINGS : []).find(b => b.id === id) || (typeof YARD_BUILDINGS !== 'undefined' ? YARD_BUILDINGS : []).find(b => b.id === id) || DEFENCE_BUILDINGS.find(b => b.id === id);
     if (tb) text = (tb.name === 'Well' ? 'A stone well. ' : '') + tb.blurb.charAt(0).toUpperCase() + tb.blurb.slice(1) + '.';
   }
-  if (!text && /^wpn-/.test(id)){ const w = WEAPONS[id]; if (w) text = 'A ' + (w.kind || 'weapon') + ' you can wield. Damage ' + (w.dmg || '?') + (w.reach ? ', reach ' + w.reach : '') + '.'; }
+  if (!text && /^wpn-/.test(id)){ const w = WEAPONS[id]; if (w) text = 'A ' + (w.kind === 'gun' ? 'ranged weapon' : w.kind === 'melee' ? 'melee weapon' : (w.kind || 'weapon')) + ' you can wield. Damage ' + (w.dmg || '?') + (w.reach ? ', reach ' + w.reach : '') + '.'; }
   if (!text && /^path_/.test(id)){
     const PD = { dirt: 'A trodden dirt track, like the trails worn across the land. Drag to trace a path — it shows a preview, click to lay it. Cheap, and it looks right anywhere.',
       gravel: 'Loose gravel. Drag to trace a path and click to lay it — a tidy, hard-wearing track.',
@@ -4289,6 +4364,12 @@ function drawPieceTip(title, text, extra){
   if (ex.length){ yy += 4; ctx.fillStyle = '#e8d08a'; for (const l of ex){ ctx.fillText(l, x + 10, yy); yy += 14; } }
   ctx.restore();
 }
+// how strong a weapon is, for sorting: damage per second, scaled up by reach (melee) or by the fact that guns hit from far away and fire several pellets
+function weaponPower(id){
+  const w = WEAPONS[id]; if (!w) return 0;
+  const dps = (w.dmg || 1) / Math.max(0.08, w.rate || 0.5);
+  return w.kind === 'gun' ? dps * (w.pellets || 1) * 2.6 : dps * (1 + (w.reach || 30) / 90);
+}
 function drawCraftUI(){
   craftOpts = [];
   const res = craftResults();
@@ -4312,6 +4393,11 @@ function drawCraftUI(){
     if (arr.includes(r.id)) continue;
     let slot = arr.indexOf(null); if (slot === -1){ slot = arr.length; arr.push(null); }
     arr[slot] = r.id;
+  }
+  if (CS.tools){                                                      // discovered weapons: strongest (damage x range) on the left, ahead of the plain tools
+    const isW = id => id && WEAPONS[id] && WEAPONS[id].tool;
+    const ws = CS.tools.filter(isW).sort((a, b) => weaponPower(b) - weaponPower(a)), rest = CS.tools.filter(id => id && !isW(id));
+    CS.tools = ws.concat(rest);
   }
   const rowsC = [];
   for (const cat of CRAFT_ORDER){
@@ -6967,7 +7053,7 @@ function addWeaponRecipe(entry){
   if (!entry || RECIPES.some(r => r.id === entry.id)) return;
   const s = entry.spec || {}, t = s.tier || 2;
   const cost = s.kind === 'gun' ? { stick: 1, stone: 2 + t } : { stick: 2, stone: 1 + t };
-  RECIPES.push({ id: entry.id, name: entry.name, ico: 'wpn', in: cost, out: { [entry.id]: 1 }, tool: entry.id });
+  RECIPES.push({ id: entry.id, name: entry.name, ico: 'wpn:' + wpnIconKey(entry.name, s.head) + ':' + (s.fx || 'none'), in: cost, out: { [entry.id]: 1 }, tool: entry.id });
 }
 function loadRaidRoster(){
   if (!village) return;
@@ -12570,6 +12656,16 @@ function classifyWeapon(name){
   if (has('smg', 'submachine', 'uzi', 'machine gun')) return spec('gun', 'smg');
   if (has('dart', 'blowgun', 'needle gun', 'tranq')) return spec('gun', 'dartgun');
   if (has('pistol', 'revolver', 'handgun', 'blaster', 'ray gun', 'laser gun', 'six-shooter')) return spec('gun', 'pistol', has('laser', 'ray') ? 'sparks' : 'none');
+  // the themed spoils names (Hatchet, Wall Musket, Punt Gun...) — firearms first, so a "gun" never comes out as an axe or the other way round
+  if (has('coach gun', 'punt gun', 'fowling', 'blunder')) return spec('gun', 'shotgun');
+  if (has('carbine', 'rifle', 'musket', 'harpoon gun', 'rivet gun', 'signal-lamp gun', 'lamp gun')) return spec('gun', 'smg');
+  if (has('sidearm', 'pepperbox', 'derringer', 'flintlock', 'snub')) return spec('gun', 'pistol');
+  if (/gun/.test(s)) return spec('gun', 'pistol');
+  if (has('flare', 'powder charge', 'blasting')) return spec('melee', 'torch', 'fire');
+  if (has('saw')) return spec('melee', 'chainsaw');
+  if (has('axe', 'hatchet', 'scythe', 'billhook', 'sickle', 'glaive', 'lance', 'spear', 'bayonet', 'pitchfork', 'hook', 'rake', 'flail', 'whip', 'tongs', 'harpoon', 'gaff', 'marlinspike', 'saber')) return spec('melee', 'blade');
+  if (has('maul', 'hammer', 'mallet', 'sledge', 'pick', 'drill', 'shovel', 'ladle', 'weight', 'sack', 'anvil')) return spec('melee', 'mallet');
+  if (has('baton', 'truncheon', 'jack', 'peavey', 'coupling', 'brake', 'cinder')) return spec('melee', 'club');
   // ordinary melee
   if (has('sword', 'blade', 'knife', 'dagger', 'machete', 'saber', 'katana')) return spec('melee', 'blade');
   if (has('hammer', 'mallet', 'sledgehammer')) return spec('melee', 'mallet');
@@ -12578,7 +12674,7 @@ function classifyWeapon(name){
   if (has('pipe', 'rod', 'bar', 'wrench')) return spec('melee', 'pipe');
   // nothing recognised — hash across the FULL head pool (melee + gun) so an unrecognised
   // fantastical name still becomes something distinct and playable, not a default pipe
-  const allHeads = [...RS.meleeHeads.map(h => ['melee', h]), ...RS.gunHeads.map(h => ['gun', h])];
+  const allHeads = has('gun', 'blaster', 'cannon', 'launcher') ? RS.gunHeads.map(h => ['gun', h]) : RS.meleeHeads.map(h => ['melee', h]);   // only something that sounds like a gun becomes one
   const [kind, head] = allHeads[Math.abs(strHash(s)) % allHeads.length];
   const h = kind === 'melee' ? MELEE_HEADS[head] : GUN_HEADS[head];
   return spec(kind, head, h.hitFx);
@@ -20501,7 +20597,11 @@ function showRunRecap(){
   clearTimeout(showRunRecap._t);
   showRunRecap._t = setTimeout(() => el.classList.remove('on'), lines.length > 4 ? 7000 : 4200);
 }
-function popText(x, y, t, col, life){ const l = life || 0.9; texts.push({ x, y, t, col, life: l, life0: l }); }
+function popText(x, y, t, col, life){
+  const l = life || 0.9, tx = { x, y, t, col, life: l, life0: l };
+  if (zone === 'village'){ for (const e of enemies){ if (e.villager && !e.dead && Math.abs(e.x - x) < 30 && e.y - y > -10 && e.y - y < 80){ tx._vil = e; break; } } }   // a villager's own line: smaller, and only shown when you're near them
+  texts.push(tx);
+}
 function burst(x, y, n, col, spd = 240){
   for (let i = 0; i < n; i++){
     const a = rand(0, 7), s = rand(spd * 0.2, spd);
@@ -27928,6 +28028,8 @@ function draw(){
   {
     const placed = [], maxW = Math.min(300, W * 0.42);
     for (const t of texts){
+      if (t._vil && player && dist2(t._vil.x, t._vil.y, player.x, player.y) > 300 * 300) continue;   // 2.5x the 120px name-tag range
+      ctx.font = t._vil ? 'bold 15px "Courier New",monospace' : 'bold 16px "Courier New",monospace';
       if (!t._lines){ t._lines = _wrapLines(ctx, String(t.t), maxW).slice(0, 4); t._w = Math.max(...t._lines.map(l => ctx.measureText(l).width)); }
       const s = w2s(t.x, t.y), h = t._lines.length * 18;
       if (s.x < -200 || s.x > W + 200 || s.y < -60 || s.y > H + 60) continue;
@@ -33620,7 +33722,7 @@ window.__G = () => ({ get doorLocks(){ return doorLocks; }, get cityCams(){ retu
          tryInteract, updateEnemy, get paused(){ return paused; }, get gameOver(){ return gameOver; }, get winOpenNow(){ return winOpen; },
          get villageArrival(){ return villageArrival; }, get pendingRunRecap(){ return pendingRunRecap; }, showRunRecap, get runStart(){ return runStart; },
          get buildings(){ return buildings; }, collapseBuilding, cellBuildingId, damageCell,
-         makeActor, genChunk, streamChunks, biomeAt, drainPending, enterZone, leaveMission, leaderDecor, villageBanners, nearestDecor, leaderRoof, applyPlayerPerks, buildTraitSettingsUI, PLAYER_TRAITS, buildSquadUI, syncSquadToPins, squadCap, muster, toggleMap, get raidTickFn(){ return raidTick; }, markWanted, updateObjectiveHud: drawObjectiveHUD,
+         makeActor, genChunk, streamChunks, biomeAt, drainPending, enterZone, leaveMission, leaderDecor, villageBanners, nearestDecor, leaderRoof, applyPlayerPerks, buildTraitSettingsUI, PLAYER_TRAITS, paintWeaponIcon, wpnIconKey, weaponPower, iconCanvas, buildSquadUI, syncSquadToPins, squadCap, muster, toggleMap, get raidTickFn(){ return raidTick; }, markWanted, updateObjectiveHud: drawObjectiveHUD,
          riverCX, riverHW, waterAt, lakeAt, trailAt, buildVillageFeatures,
          get LAKES(){ return LAKES; }, get TRAILS(){ return TRAILS; }, get MEADOWS(){ return MEADOWS; },
          get doorAnim(){ return doorAnim; },
