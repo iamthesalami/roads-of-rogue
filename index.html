@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Roads of Rogue</title>
+<title>Sign Here</title>
 <style>
   html,body{margin:0;padding:0;background:#07070c;color:#e8e8ef;font-family:"Courier New",monospace;overflow:hidden;height:100%}
   #wrap{position:fixed;inset:0}
@@ -157,6 +157,13 @@
   #settings .set-row input[type=range]{flex:1;accent-color:#ffd24a}
   #settings .set-row input[type=checkbox]{width:15px;height:15px;accent-color:#ffd24a}
   #settings .set-row .val{width:30px;text-align:right;color:#9a9ab0;font-size:12px}
+  #settings .panel{max-height:94vh;overflow-y:auto}
+  #settings #set-keys{display:grid;grid-template-columns:1fr 1fr;gap:5px 14px}
+  #settings .kb-row{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:11px;color:#c8c8d8}
+  #settings .kb-btn{min-width:58px;background:#2b2b3a;border:1px solid #55556a;color:#ffe9a8;font:inherit;font-size:11px;padding:3px 8px;cursor:pointer}
+  #settings .kb-btn:hover{border-color:#ffd24a}
+  #settings .kb-btn.listen{border-color:#7fffb0;color:#7fffb0;animation:kbpulse .8s infinite alternate}
+  @keyframes kbpulse{from{opacity:.55}to{opacity:1}}
   #settings .hint{margin:16px 0 0;font-size:11px;color:#6a6a7c;line-height:1.7}
   #settings .btn-row{margin-top:16px;text-align:right}
   #settings .sv-head{margin:18px 0 6px;font-size:12px;letter-spacing:2px;color:#ffd24a;border-top:1px solid #2e2e3c;padding-top:14px}
@@ -685,7 +692,7 @@
 <div id="settings">
   <div class="panel">
     <h2>SETTINGS</h2>
-    <p class="sub">ROADS OF ROGUE</p>
+    <p class="sub">SIGN HERE</p>
     <div class="set-row">
       <label>Music</label>
       <input type="checkbox" id="set-mus-on" checked title="Music on / off">
@@ -712,10 +719,11 @@
     <div id="set-saves"></div>
     <div class="sv-head traits" id="set-traits-head" style="display:none">ACTIVE TRAITS / MUTATORS</div>
     <div id="set-traits"></div>
+    <div class="sv-head">CONTROLS <span class="sv-hint">click a key, then press the new one · right mouse button always hacks</span></div>
+    <div id="set-keys"></div>
+    <div style="text-align:right;margin-top:6px"><button class="act" id="set-keys-reset" type="button">reset controls</button></div>
     <p class="hint">
-      WASD move · J / click attack · K kick<br>
-      Shift sprint · Space dash · E use / talk / travel<br>
-      1–5 / scroll weapon · Tab backpack · C craft · B build · Q/F perk actives · \ roster
+      1–5 / scroll weapon · \ roster · F1 help · F5 / F9 quicksave / quickload
     </p>
     <div class="btn-row" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
       <button class="act" id="set-help" type="button">help (F1)</button>
@@ -754,7 +762,7 @@
   <canvas id="title-bg"></canvas>
   <div class="panel" style="min-width:320px">
     <canvas id="title-art" width="340" height="150"></canvas>
-    <h1>ROADS OF ROGUE</h1>
+    <h1>SIGN HERE</h1>
     <p class="sub">a dark comedy of forced hospitality</p>
     <div id="title-profiles" style="margin-bottom:12px"></div>
     <div style="display:flex;flex-direction:column;gap:8px">
@@ -913,7 +921,7 @@ let previewMaterial = null;   // {name, texture, gap, c1, c2} — the Generator 
 // walls that count toward enclosing a room for the auto-roof (recomputeRoofs) — any
 // craftable wall material qualifies, not just plank, so a stick or fieldstone house still
 // gets a roof once it's sealed up
-const WALL_MATS = new Set([MAT.PLANK_WALL, MAT.DOOR, MAT.WINDOW, MAT.STICK, MAT.FIELDSTONE]);
+const WALL_MATS = new Set([MAT.PLANK_WALL, MAT.DOOR, MAT.WINDOW, MAT.STICK, MAT.FIELDSTONE, MAT.BRICK]);
 // discovered materials that render as a see-through pane (drawWallBlock's `glassy` path)
 // instead of an opaque textured block — a glass/crystal-family material becomes a real,
 // materially-tinted window rather than a solid wall
@@ -1060,6 +1068,8 @@ const PATH_TEX = {
   flagstone: { name: 'Flagstone Path',   col: 'rgba(136,136,140,0.72)', in: { stone: 1, clay: 1 } },
   paved:     { name: 'Paved Path',       col: 'rgba(172,172,166,0.72)', in: { stone: 2, sand: 1 } },
   dirt:      { name: 'Dirt Path',        col: 'rgba(112,92,58,0.6)',    in: { dirt: 1 } },   // available from game start (see registerPaths(true)); the researched paths come later
+  terracotta:{ name: 'Terracotta Tiles', col: '#b4623f',                in: { clay: 1 }, early: true },   // solid indoor floors from the clay and sand you dig up — no research needed
+  sandstone: { name: 'Sandstone Flags',  col: '#d8c08c',                in: { sand: 1 }, early: true },
 };
 let _pathsRegistered = false;
 let _dirtPathRegistered = false;
@@ -1067,12 +1077,12 @@ function registerPaths(dirtOnly){
   if (dirtOnly){ if (_dirtPathRegistered) return; _dirtPathRegistered = true; }
   else { if (_pathsRegistered) return; _pathsRegistered = true; }
   for (const key in PATH_TEX){
-    if (dirtOnly && key !== 'dirt') continue;
+    if (dirtOnly && key !== 'dirt' && !PATH_TEX[key].early) continue;
     const p = PATH_TEX[key], mat = 'path_' + key;
     if (!RECIPES.some(r => r.id === mat)) RECIPES.push({ id: mat, name: p.name, ico: mat, in: p.in, out: { [mat]: 3 } });   // paths are cheap — a craft lays a good stretch
     if (!BUILD_ITEMS.some(b => b.mat === mat)) BUILD_ITEMS.push({ mat, cell: 0, name: p.name, ico: '▦', floor: true, texture: key, w: 1, h: 1, cat: key === 'brick' ? 'clay' : key === 'dirt' ? 'earth' : 'stone' });
     PIECE_SHORT[mat] = p.name.replace(' Path', '');
-    ICONS[mat] = (g, S) => pathIcon(g, S, key);
+    ICONS[mat] = p.early ? ((g, S) => { g.fillStyle = p.col; g.fillRect(S * 0.12, S * 0.12, S * 0.76, S * 0.76); g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 1; g.beginPath(); g.moveTo(S * 0.5, S * 0.12); g.lineTo(S * 0.5, S * 0.88); g.moveTo(S * 0.12, S * 0.5); g.lineTo(S * 0.88, S * 0.5); g.stroke(); g.fillStyle = 'rgba(255,255,255,0.16)'; g.fillRect(S * 0.12, S * 0.12, S * 0.76, 2); }) : (g, S) => pathIcon(g, S, key);
     BPIC[mat] = mat;
   }
 }
@@ -1120,7 +1130,7 @@ const TOWN_BUILDINGS = [
 // fire". The research-unlocked yard details (formerly auto-drawn round the campfire) are real,
 // placeable pieces now: each appears in the craft + build menus the moment its research is done.
 const YARD_BUILDINGS = [
-  { id: 'well',       name: 'Well',        res: 'wells',      glyph: '◎', w: 1, h: 1, cost: { wood: 4, stone: 8 },  blurb: 'a stone well — Wells research' },
+  { id: 'well',       name: 'Well',        res: 'wells',      glyph: '◎', w: 1, h: 1, cost: { wood: 4, stone: 8 },  blurb: 'a stone well — Wells research · watered farms nearby yield up to +30% food' },
   { id: 'logpile',    name: 'Log Pile',    res: 'sawmill',    glyph: '≡', w: 1, h: 1, cost: { wood: 6 },            blurb: 'stacked logs and a sawhorse — Sawmill research' },
   { id: 'stonepile',  name: 'Stone Heap',  res: 'quarry',     glyph: '▲', w: 1, h: 1, cost: { stone: 6 },           blurb: 'cut stone, stacked — Quarry research' },
   { id: 'smokerack',  name: 'Smoke Rack',  res: 'smokehouse', glyph: '♨', w: 1, h: 1, cost: { wood: 8 },            blurb: 'curing meat over smoke — Smokehouse research' },
@@ -1224,6 +1234,15 @@ const HQ_REQ = [
   { prop: 'study',     n: 1, label: 'a study', scope: 'village' },
   { prop: 'weaponrack', n: 1, label: 'a weapon rack' },
 ];
+// the weapon rack is buildable from the cult onwards — and, from the second country on, straight away (you already know how to manage your weapons)
+function registerWeaponRack(){
+  if (!RECIPES.some(r => r.id === 'weaponrack'))
+    RECIPES.push({ id: 'weaponrack', name: 'Weapon Rack', ico: 'weaponrack', in: { wood: 5, stone: 1 }, out: { weaponrack: 1 } });
+  if (!BUILD_ITEMS.some(b => b.mat === 'weaponrack'))
+    BUILD_ITEMS.push({ mat: 'weaponrack', cell: 0, name: 'Weapon Rack', ico: 'weaponrack', prop: 'weaponrack', w: 2, h: 1, cat: 'home' });
+  PIECE_SHORT.weaponrack = 'Rack';
+  BPIC.weaponrack = 'weaponrack';
+}
 let _cultBuildRegistered = false;
 function registerCultBuild(){
   if (_cultBuildRegistered) return;
@@ -1234,12 +1253,7 @@ function registerCultBuild(){
     BUILD_ITEMS.push({ mat: 'altar', cell: 0, name: 'Altar', ico: '⛧', prop: 'altar', w: 2, h: 2, cat: 'home' });
   PIECE_SHORT.altar = 'Altar';
   BPIC.altar = 'altar';
-  if (!RECIPES.some(r => r.id === 'weaponrack'))
-    RECIPES.push({ id: 'weaponrack', name: 'Weapon Rack', ico: 'weaponrack', in: { wood: 5, stone: 1 }, out: { weaponrack: 1 } });
-  if (!BUILD_ITEMS.some(b => b.mat === 'weaponrack'))
-    BUILD_ITEMS.push({ mat: 'weaponrack', cell: 0, name: 'Weapon Rack', ico: 'weaponrack', prop: 'weaponrack', w: 2, h: 1, cat: 'home' });
-  PIECE_SHORT.weaponrack = 'Rack';
-  BPIC.weaponrack = 'weaponrack';
+  registerWeaponRack();
   // user: "many small shrines" — cheap, one tile, spammable; each one is a passive Favor source
   // (see villageDayTick), so a sprawling town of little shrines is the intended play, not one big one.
   if (!RECIPES.some(r => r.id === 'shrine'))
@@ -1368,11 +1382,25 @@ function isChurchCell(cx, cy){
 const STAINED_PAL = ['#c8383a', '#3a68c8', '#e2b030', '#3a9a58', '#8a44b8', '#d8702a'];
 function stainedCol(seed, r, c){ const hv = ((seed * 31 + r * 7 + c * 13) >>> 0) % STAINED_PAL.length; return STAINED_PAL[(hv + (r + c) % 2 * 2) % STAINED_PAL.length]; }
 // the rose window over a church's crossing (world coords) — shared by the roof art and the night glow
+// user: "I made a square cult building and the roof placement is ugly. Make it treat the door as the front of the building to help it determine which direction to face."
+// A church's roof now runs away from its door: the bell tower sits over the entrance end and the nave / rose window lie beyond it, whatever shape the building is.
+function roofFront(rf){
+  const now = performance.now(); if (rf._fr && now - rf._frT < 1500) return rf._fr;
+  const w = rf.x1 - rf.x0, h = rf.y1 - rf.y0, cx = (rf.x0 + rf.x1) / 2, cy = (rf.y0 + rf.y1) / 2;
+  let best = null, bs = 0;
+  for (let gy = Math.floor(rf.y0 / CELL) - 1; gy <= Math.ceil(rf.y1 / CELL); gy++) for (let gx = Math.floor(rf.x0 / CELL) - 1; gx <= Math.ceil(rf.x1 / CELL); gx++){
+    if (cellMat(gx, gy) !== MAT.DOOR) continue;
+    const nx = ((gx + 0.5) * CELL - cx) / (w / 2), ny = ((gy + 0.5) * CELL - cy) / (h / 2), sc = Math.max(Math.abs(nx), Math.abs(ny));
+    if (sc > 0.7 && sc > bs){ bs = sc; best = { nx, ny }; }                       // only a door out on the edge of the building counts, not an inner room door
+  }
+  const fr = !best ? { horiz: w >= h, flip: false } : Math.abs(best.nx) > Math.abs(best.ny) ? { horiz: true, flip: best.nx > 0 } : { horiz: false, flip: best.ny > 0 };
+  rf._fr = fr; rf._frT = now; return fr;
+}
 function churchRose(rf){
-  const w = rf.x1 - rf.x0, h = rf.y1 - rf.y0, horiz = w >= h, shortD = horiz ? h : w;
-  let x = horiz ? rf.x0 + w * 0.58 : rf.x0 + w / 2, y = horiz ? rf.y0 + h / 2 : rf.y0 + h * 0.58;
+  const w = rf.x1 - rf.x0, h = rf.y1 - rf.y0, fr = roofFront(rf), horiz = fr.horiz, shortD = horiz ? h : w, fk = fr.flip ? 0.42 : 0.58;
+  let x = horiz ? rf.x0 + w * fk : rf.x0 + w / 2, y = horiz ? rf.y0 + h / 2 : rf.y0 + h * fk;
   if (rf.anchor && rf._cc){ let b = null, bd = 1e18; for (const c of rf._cc){ const d = (c.x - x) ** 2 + (c.y - y) ** 2; if (d < bd){ bd = d; b = c; } } if (b){ x = b.x; y = b.y; } }
-  return { x, y, r: clamp(shortD * 0.15, 8, 14) };
+  return { x, y, r: clamp(shortD * 0.15, 8, 14), horiz };
 }
 // stained glass lit from inside at night (screen-space, called from the relight pass): a saturated mosaic in the arch + coloured light spilling onto the ground below
 function drawLitStained(cx, sy, ww, hh, seed, nb, groundY, vwf){
@@ -2863,11 +2891,54 @@ function cellHpFrac(cx, cy){ const c = chunkOfCell(cx, cy); if (!c) return 1; co
 // ---------- input ----------
 const keys = {};
 const mouse = { x: W/2, y: H/2, down: false };
+// user: "RMB does nothing — make it replace H for hacking. In the menu options we should probably arrange keybinding."
+// Every key press is translated to the action's DEFAULT key before the game sees it, so all the existing hotkey code keeps working; rebinding just changes the translation.
+const KB_ACTIONS = [['up', 'Move up', 'w'], ['down', 'Move down', 's'], ['left', 'Move left', 'a'], ['right', 'Move right', 'd'], ['attack', 'Attack', 'j'], ['kick', 'Kick', 'k', 'r'],
+  ['interact', 'Use / talk / pick up', 'e'], ['hack', 'Hack (or right-click)', 'h'], ['sprint', 'Sprint', 'shift'], ['dash', 'Dash', ' '], ['craft', 'Craft', 'c'], ['build', 'Build', 'b'],
+  ['pack', 'Backpack', 'tab'], ['perk1', 'Perk ability 1', 'q'], ['perk2', 'Perk ability 2', 'f'], ['muster', 'Muster squad', 'g']];
+let KB = {}; try { KB = JSON.parse(localStorage.getItem('sb_keybinds') || '{}') || {}; } catch { KB = {}; }
+let _kPhys = {}, _kBlock = new Set(), _kbListen = null;
+function kbRebuild(){
+  _kPhys = {}; _kBlock = new Set();
+  for (const [id, , def, dflt] of KB_ACTIONS){ const p = KB[id] || dflt || def; if (p === def) continue; _kBlock.add(def); if (p !== 'none') _kPhys[p] = def; }
+}
+const kmap = k => (k in _kPhys) ? _kPhys[k] : (_kBlock.has(k) ? '' : k);
+kbRebuild();
+function kbName(k){ return k === ' ' ? 'Space' : k === 'none' ? '—' : k.length === 1 ? k.toUpperCase() : k.charAt(0).toUpperCase() + k.slice(1); }
+function buildKeybindUI(){
+  const el = document.getElementById('set-keys'); if (!el) return;
+  el.innerHTML = '';
+  for (const [id, label, def, dflt] of KB_ACTIONS){
+    const row = document.createElement('div'); row.className = 'kb-row';
+    const lb = document.createElement('span'); lb.textContent = label;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'kb-btn' + (_kbListen === id ? ' listen' : '');
+    b.textContent = _kbListen === id ? 'press a key…' : kbName(KB[id] || dflt || def);
+    b.addEventListener('click', () => { _kbListen = _kbListen === id ? null : id; buildKeybindUI(); });
+    row.appendChild(lb); row.appendChild(b); el.appendChild(row);
+  }
+}
+function kbAssign(id, phys){
+  const cur = a => { const r = KB_ACTIONS.find(x => x[0] === a); return KB[a] || r[3] || r[2]; };
+  const old = cur(id);
+  for (const [oid] of KB_ACTIONS) if (oid !== id && cur(oid) === phys) KB[oid] = old;              // that key was taken: the other action swaps onto the one you're leaving
+  KB[id] = phys; try { localStorage.setItem('sb_keybinds', JSON.stringify(KB)); } catch {}
+  kbRebuild(); for (const k in keys) keys[k] = false;
+}
+window.addEventListener('keydown', e => {                                                     // capture phase: while rebinding, the next key press is the binding
+  if (!_kbListen) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const k = e.key.toLowerCase();
+  if (k === 'escape'){ _kbListen = null; buildKeybindUI(); return; }
+  if (['f1', 'f5', 'f8', 'f9', 'f12', '\\'].includes(k) || k === 'dead') return;                    // reserved
+  if (k === 'backspace' || k === 'delete') kbAssign(_kbListen, 'none'); else kbAssign(_kbListen, k);
+  _kbListen = null; buildKeybindUI();
+}, true);
+document.addEventListener('DOMContentLoaded', () => { const r = document.getElementById('set-keys-reset'); if (r) r.addEventListener('click', () => { KB = {}; try { localStorage.removeItem('sb_keybinds'); } catch {} kbRebuild(); _kbListen = null; buildKeybindUI(); }); });
 addEventListener('keydown', e => {
   if (titleOpen || charCreateOpen) return;   // title screen / character creator — plain HTML buttons handle their own input
   const _tag = document.activeElement && document.activeElement.tagName;
   if ((_tag === 'INPUT' || _tag === 'TEXTAREA') && e.key !== 'Escape') return;   // typing in a text field (e.g. Generator Lab) — don't hijack it as a game hotkey
-  const k = e.key.toLowerCase();
+  const _raw = e.key.toLowerCase(), k = (buildMode && _raw === 'r') ? 'r' : kmap(_raw);      // R still rotates pieces while building
   if (k === 'v' && zone === 'city' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) toggleAwareAid();
   if (guardRouteMode && (k === 'enter' || k === 'backspace')){ e.preventDefault(); if (k === 'enter') finishGuardRoute(); else guardRoutePts.pop(); return; }
   if (k === 'escape'){
@@ -2920,7 +2991,7 @@ addEventListener('keydown', e => {
   if (k === 'f' && player && !paused) usePlayerActive(1);
   if ([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
 });
-addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+addEventListener('keyup', e => { keys[kmap(e.key.toLowerCase())] = false; keys[e.key.toLowerCase()] = false; });
 cv.addEventListener('mousemove', e => {
   const r = cv.getBoundingClientRect();
   mouse.x = (e.clientX - r.left) * (W / r.width);
@@ -3077,6 +3148,7 @@ cv.addEventListener('mousedown', e => {
       removeBuild(); return;
     }
   }
+  if (e.button === 2 && player && !paused && zone === 'city' && !buildMode) tryHack();   // right-click hacks the nearest hackable thing (hold still, as before)
   if (e.button === 0) mouse.down = true;
 });
 addEventListener('mouseup', e => {
@@ -3254,7 +3326,7 @@ function tutCycle(c, t, W, H, nodes){
   c.textAlign = 'left';
 }
 const TUT_PAGES = [
-  { title: 'Welcome to Roads of Rogue', art(c, t, W, H){
+  { title: 'Welcome to Sign Here', art(c, t, W, H){
       tutGround(c, W, H, 100, '#1c1436', '#7a3a6a'); c.fillStyle = '#20162a'; for (const [x, w, h] of [[250, 34, 60], [280, 40, 78], [318, 30, 50], [346, 34, 66]]) c.fillRect(x, 100 - h, w, h);
       c.fillStyle = '#ffd24a'; for (const [x, y] of [[262, 52], [296, 40], [330, 62], [358, 50]]) c.fillRect(x, y, 3, 3);
       tutFire(c, 70, 100, t); drawRunner(c, 150 + Math.sin(t * 0.006) * 3, 104, Math.sin(t * 0.012), TUT_LOOKS[0], false, false); drawRunner(c, 36, 104, 0, TUT_LOOKS[1], false, false); drawRunner(c, 104, 104, 0, TUT_LOOKS[2], false, false);
@@ -3268,7 +3340,7 @@ const TUT_PAGES = [
       drawRunner(c, 214, 104, Math.sin(t * 0.007), { skin: '#c98a5c', shirt: '#b5563c', pants: '#3a2f28', hair: '#1c1c22' }, false, false);
       c.fillStyle = '#e04a4a'; c.fillRect(200, 40, 28 * (0.6 + 0.4 * Math.sin(t * 0.003)), 4);
     }, html: `<ul><li>${TK('W')} ${TK('A')} ${TK('S')} ${TK('D')} move · ${TK('Shift')} sprint · ${TK('Space')} dash</li>
-    <li>${TK('J')} or click to attack · ${TK('K')} to kick · ${TK('1')}–${TK('5')} pick a weapon · ${TK('Tab')} backpack</li>
+    <li>${TK('J')} or click to attack · ${TK('R')} to kick · ${TK('1')}–${TK('5')} pick a weapon · ${TK('Tab')} backpack</li>
     <li>${TK('E')} is the everything key: talk, pick up, open doors, use the thing you're standing next to.</li></ul>
     <p>Fights are messy on purpose — try fire, water and electricity together. Knocked-out people can be carried.</p>` },
   { title: 'Your village', art(c, t, W, H){
@@ -3305,7 +3377,7 @@ const TUT_PAGES = [
       c.fillStyle = 'rgba(255,90,60,0.22)'; c.beginPath(); c.moveTo(258, 74); c.arc(258, 74, 92, Math.PI - 0.7, Math.PI + 0.7); c.closePath(); c.fill();
       drawRunner(c, 110, 104, 0, TUT_LOOKS[0], false, false); c.fillStyle = '#7fffb0'; c.font = 'bold 12px monospace'; c.fillText('H', 200, 60); c.strokeStyle = '#7fffb0'; c.strokeRect(194, 50, 16, 14);
     }, html: `<p>People in the city have eyes. Guards and civilians build up <b>suspicion</b> when they notice you — watch their posture and the cone in front of them. Break line of sight, hide behind walls, or knock out witnesses before they phone the police.</p>
-    <ul><li>Press ${TK('H')} next to machines (ATMs, fridges, cars, cameras, fountains…) and stand still to <b>hack</b> them. Each does something different.</li>
+    <ul><li><b>Right-click</b> (or ${TK('H')}) next to machines (ATMs, fridges, cars, cameras, fountains…) and stand still to <b>hack</b> them. Each does something different.</li>
     <li>Locked doors can be picked (${TK('E')} hold) or hacked. Things you research at the Study make hacking faster and longer-ranged.</li></ul>` },
   { title: 'Taking over a country', artH: 222, art(c, t, W, H){
       const im = tutMapImg();
@@ -3389,7 +3461,7 @@ function helpSections(){
     <p>You are a poor fool with a <b>village</b> at home and a <b>city</b> full of trouble down the road. You build up the village, convert its people to your cause, then go out and take the country city by city until you hold the capital.</p>
     <h4>Controls</h4><ul>
     <li>${HK('W A S D')} move · ${HK('Shift')} sprint · ${HK('Space')} dash</li>
-    <li>${HK('J')} or click — attack · ${HK('K')} — kick</li>
+    <li>${HK('J')} or click — attack · ${HK('R')} — kick · right-click — hack</li>
     <li>${HK('E')} — use / pick up / talk / open the thing you're standing next to (study, blacksmith, signpost, doors…)</li>
     <li>${HK('1')}–${HK('5')} — weapon slots · ${HK('Tab')} — backpack · ${HK('C')} — craft · ${HK('B')} — build mode</li>
     <li>${HK('Q')} / ${HK('F')} — active abilities from your perks · ${HK('\\')} — roster &amp; <b>test panel</b> (jump countries, take cities, add resources, force events / raids / wagers, unlock uniques — handy for trying late-game features)</li>
@@ -3539,6 +3611,7 @@ function toggleSettings(force){
     if (titleOpen) closeTitle();   // settings sits behind the title screen (lower z-index) otherwise
     if (typeof rebuildSaveUI === 'function') rebuildSaveUI();
     if (typeof buildTraitSettingsUI === 'function') buildTraitSettingsUI();
+    _kbListen = null; buildKeybindUI();
   } else if (!player) openTitle();   // closed settings pre-game (no Continue yet) — back to the title, not a blank canvas
 }
 function toggleRoster(force){
@@ -3666,9 +3739,10 @@ const RECIPES = [
   { id:'stick_wall',      name:'Stick Wall',      ico:'stick_wall',      in:{ stick:2 }, out:{ stick_wall:3 } },
   { id:'fieldstone_wall', name:'Fieldstone Wall', ico:'fieldstone_wall', in:{ stone:2 }, out:{ fieldstone_wall:3 } },
   { id:'earth_floor',     name:'Packed Earth',    ico:'earth_floor',     in:{ dirt:1 }, out:{ earth_floor:4 } },
-  { id:'bridge',          name:'Bridge Deck',     ico:'floor',           in:{ wood:2 },  out:{ bridge:4 } },   // lay it over deep water to cross
+  { id:'bridge',          name:'Bridge Deck',     ico:'floor',           in:{ wood:2 },  out:{ bridge:4 } },
+  { id:'brick_wall',      name:'Brick Wall',      ico:'brick_wall',      in:{ clay:2 },  out:{ brick_wall:3 } },   // fired clay: the toughest wall you can build yourself   // lay it over deep water to cross
 ];
-const MAT_NAME = { wood:'Wood', stone:'Stone', stick:'Stick', dirt:'Dirt', sand:'Sand', clay:'Clay', plank_wall:'Plank Wall', door:'Door', window:'Window', floor:'Floor Boards', fence:'Fence', plot:'Plot', bed:'Bed', study:'Study',
+const MAT_NAME = { brick_wall:'Brick Wall',  wood:'Wood', stone:'Stone', stick:'Stick', dirt:'Dirt', sand:'Sand', clay:'Clay', plank_wall:'Plank Wall', door:'Door', window:'Window', floor:'Floor Boards', fence:'Fence', plot:'Plot', bed:'Bed', study:'Study',
   stick_wall:'Stick Wall', fieldstone_wall:'Fieldstone Wall', earth_floor:'Packed Earth', shovel:'Shovel', torchpost:'Standing Torch', weaponrack:'Weapon Rack' };
 // pixel-art icon painters (kind -> fn(g, S)) for the craft UI — no words, just pictures
 const ICONS = {
@@ -3985,6 +4059,7 @@ const PIECE_SHORT = { bridge:'Bridge', plank_wall:'Wall', door:'Door', window:'W
   stick_wall:'Sticks', fieldstone_wall:'Fieldstone', earth_floor:'Earth' };
 const PLOT_COL = 'rgba(74,52,32,0.95)';   // tilled-soil floor decal — farm capacity = count of these
 let _iconCache = {};
+ICONS.brick_wall = (g, S) => { g.fillStyle = '#7a3a2c'; g.fillRect(S * 0.12, S * 0.18, S * 0.76, S * 0.66); const rows = 4, bh = S * 0.66 / rows; for (let r = 0; r < rows; r++){ const off = r % 2 ? S * 0.11 : 0; for (let c = -1; c < 3; c++){ const x = S * 0.12 + off + c * S * 0.25; g.fillStyle = r % 2 ? '#a8523c' : '#b85c44'; g.fillRect(Math.max(S * 0.12, x), S * 0.18 + r * bh + 0.6, Math.min(S * 0.24, S * 0.88 - Math.max(S * 0.12, x)), bh - 1.2); } } g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(S * 0.12, S * 0.18, S * 0.76, 1.5); };
 function iconCanvas(kind){
   if (!_iconCache[kind]){ const c = document.createElement('canvas'); c.width = c.height = 32; paintIcon(c, kind); _iconCache[kind] = c; }
   return _iconCache[kind];
@@ -4007,6 +4082,7 @@ const BUILD_ITEMS = [
   { mat:'displayspot',cell:0, name:'Display Spot', ico:'displayspot', displayspot:true, w:2, h:2, cat:'home' },
   { mat:'stick_wall',      cell:MAT.STICK,      name:'Stick Wall',      ico:'🌿', w:1, h:1, cat:'wood' },
   { mat:'fieldstone_wall', cell:MAT.FIELDSTONE, name:'Fieldstone Wall', ico:'⬢', w:1, h:1, cat:'stone' },
+  { mat:'brick_wall',      cell:MAT.BRICK,      name:'Brick Wall',      ico:'🧱', w:1, h:1, cat:'clay' },
   { mat:'earth_floor',     cell:0, name:'Earth Floor', ico:'▨', floor:true, texture:'earth', w:1, h:1, cat:'earth' },
   { mat:'bridge',          cell:0, name:'Bridge',      ico:'≋', floor:true, texture:'bridge', w:1, h:1, cat:'wood' },
 ];
@@ -4023,7 +4099,7 @@ const BUILD_CATS = [
   { id:'other',     label:'OTHER'    },
 ];
 const BUILD_FAITH_WAR = new Set(['altar', 'shrine', 'blacksmith', 'weaponrack', 'watchtower', 'eventgrounds', 'mutlab', 'barracks']);
-const BUILD_STARTER_ORDER = ['plank_wall', 'stick_wall', 'fieldstone_wall', 'door', 'window', 'fence', 'floor', 'earth_floor', 'bridge', 'plot', 'bed', 'study', 'sidetable', 'longtable', 'giftpile', 'displayspot', 'torchpost'];
+const BUILD_STARTER_ORDER = ['plank_wall', 'stick_wall', 'fieldstone_wall', 'brick_wall', 'door', 'window', 'fence', 'floor', 'earth_floor', 'bridge', 'plot', 'bed', 'study', 'sidetable', 'longtable', 'giftpile', 'displayspot', 'torchpost'];
 const BUILD_STARTERS = new Set(BUILD_STARTER_ORDER);
 function buildCatOf(b){
   if (b.plot) return 'farming';
@@ -7544,6 +7620,7 @@ function researchHorizon(n){
 }
 function researchCostText(n){ return n.cost + ' rp' + (n.favor ? ' + ' + n.favor + ' favor' : ''); }
 function researchAffordable(n){ return (village.stores.research | 0) >= n.cost && (village.stores.favor | 0) >= (n.favor || 0); }
+const WELL_RANGE = 150;                                                    // how far a well's water reaches (px, ~9 tiles)
 const plotCount = () => (village ? village.floors.filter(f => f.col === PLOT_COL).length : 0);
 const bedProps = () => props.filter(p => !p.dead && p.t === 'bed');
 const bedTaken = (b) => village && village.villagers.some(v => v.bed && Math.hypot(v.bed.x - b.x, v.bed.y - b.y) < 8);
@@ -7567,6 +7644,10 @@ function villageDayTick(){
   const V = village, vs = V.stores, R = V.research;
   rollVillageEvent(V);
   let pWood = 0, pStone = 0, pFood = 0, pRes = 0, pTrade = 0, farmCap = plotCount() * 1.7;
+  // user: "give a bonus if it's placed near farms" — every plot within a short walk of a well is watered: it holds more farmers' work, and the farms as a whole yield up to +30% more food
+  const _wells = props.filter(pp => !pp.dead && pp.t === 'well'), _plots = V.floors.filter(f => f.col === PLOT_COL);
+  let _wet = 0; if (_wells.length) for (const f of _plots) if (_wells.some(wl => dist2(wl.x, wl.y, f.x + CELL / 2, f.y + CELL / 2) < WELL_RANGE * WELL_RANGE)) _wet++;
+  const _wellMul = 1 + 0.3 * (_plots.length ? _wet / _plots.length : 0); farmCap += _wet * 0.8; V._wetPlots = _wet;
   const rcount = {}; for (const v of V.villagers){ const r = raceOf(v); if (r) rcount[r] = (rcount[r] || 0) + 1; }
   const _gsProp = props.find(pp => !pp.dead && pp.t === 'grandshrine'), gsPerk = _gsProp ? SHRINE_PERK[(SHRINE_VARIANTS[((_gsProp._var | 0) % SHRINE_VARIANTS.length + SHRINE_VARIANTS.length) % SHRINE_VARIANTS.length] || {}).kind] : null;
   // a shrine settles in over time — its gift grows for the first month or so (villagers "growing devoted to it"), capped at +60%
@@ -7593,7 +7674,7 @@ function villageDayTick(){
     const rt0 = RACE_TRAIT[raceOf(v)], jm = rt0 ? ((rt0.mult && rt0.mult[v.job]) || 1) * (rt0.work || 1) : 1;
     const base = 2 * v.mood * (1 + 0.3 * Math.max(0, ...(v.mut || []).filter(m => (mutGift(m).k || {}).work).map(mutPot))) * jm * (v.bound ? 1.2 : 1) * (v.golem ? (v.job === 'miner' ? 1.6 : v.job === 'logger' ? 1.25 : 1) : 1);   // Sticky Hands, and your people's talents
     if (v.sick > 0){ v.sick--; continue; }                                   // laid up — no work today
-    if (v.job === 'farmer'){ const y = Math.min(base * (R.plow ? (R.crops ? (R.irrigation ? 2 : 1.75) : 1.5) : 1), Math.max(0, farmCap)); pFood += y; farmCap -= base; }
+    if (v.job === 'farmer'){ const y = Math.min(base * (R.plow ? (R.crops ? (R.irrigation ? 2 : 1.75) : 1.5) : 1) * _wellMul, Math.max(0, farmCap)); pFood += y; farmCap -= base; }
     else if (v.job === 'hunter') pFood += base * 1.5;
     else if (v.job === 'logger') pWood += base * LABOUR_MAT_MUL * (R.sawmill ? (R.forestry ? 1.75 : 1.5) : 1);
     else if (v.job === 'miner')  pStone += base * LABOUR_MAT_MUL * (R.quarry ? (R.deepmine ? 1.75 : 1.5) : 1);
@@ -8243,16 +8324,56 @@ function evDraw(g, it, tt, night){
         g.fillStyle = 'rgba(0,0,0,0.16)'; g.beginPath(); g.ellipse(bx + 1, by + 1.4, 5.6, 6.6, 0, 0, 7); g.fill(); g.fillStyle = cols[i]; g.beginPath(); g.ellipse(bx, by, 5.6, 6.6, 0, 0, 7); g.fill();
         g.fillStyle = 'rgba(0,0,0,0.18)'; g.beginPath(); g.ellipse(bx + 1.8, by + 2, 3.4, 4.2, 0, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,0.6)'; g.beginPath(); g.ellipse(bx - 2, by - 2.4, 1.5, 2.4, -0.4, 0, 7); g.fill(); g.fillStyle = cols[i]; g.beginPath(); g.moveTo(bx - 1.2, by + 6.4); g.lineTo(bx + 1.2, by + 6.4); g.lineTo(bx, by + 8); g.closePath(); g.fill(); }
       break; }
-    case 'tent': {                                                                                     // pilgrims' canvas tent with an open flap, guy ropes, pegs, a bedroll, pack and boots
-      evShadow(g, 26, 5);
-      g.strokeStyle = '#8a7a5a'; g.lineWidth = 0.9; g.beginPath(); g.moveTo(-18, -8); g.lineTo(-34, 6); g.moveTo(18, -8); g.lineTo(34, 6); g.stroke(); g.fillStyle = '#5a4a30'; g.fillRect(-35, 4, 2, 4); g.fillRect(33, 4, 2, 4);
-      const cc = [['#dccca4', '#c4b48a'], ['#c8d0b0', '#aab890'], ['#d4b8a0', '#b89c84']][(it.tint || 0) % 3];
-      g.fillStyle = cc[1]; g.beginPath(); g.moveTo(-24, 6); g.lineTo(0, -34); g.lineTo(24, 6); g.closePath(); g.fill(); g.fillStyle = cc[0]; g.beginPath(); g.moveTo(-24, 6); g.lineTo(0, -34); g.lineTo(0, 6); g.closePath(); g.fill();
-      g.strokeStyle = 'rgba(60,40,20,0.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(-12, -14); g.lineTo(-12, 6); g.moveTo(12, -14); g.lineTo(12, 6); g.moveTo(0, -34); g.lineTo(0, 6); g.stroke(); g.strokeStyle = 'rgba(30,20,10,0.6)'; g.beginPath(); g.moveTo(-24, 6); g.lineTo(0, -34); g.lineTo(24, 6); g.closePath(); g.stroke();
-      g.fillStyle = '#1a1410'; g.beginPath(); g.moveTo(-8, 6); g.lineTo(0, -12); g.lineTo(8, 6); g.closePath(); g.fill(); g.fillStyle = cc[0]; g.beginPath(); g.moveTo(-8, 6); g.lineTo(-13, 6); g.lineTo(-2, -16); g.lineTo(0, -12); g.closePath(); g.fill();   // open flap
-      g.fillStyle = '#5a6a8a'; g.fillRect(-4, 2, 8, 3); g.fillStyle = '#e8e0d0'; g.fillRect(-4, 2, 3, 3);
-      g.fillStyle = '#5a5a3a'; g.beginPath(); g.ellipse(-30, 9, 5, 3.4, 0, 0, 7); g.fill(); g.fillStyle = '#7a7a4a'; g.fillRect(-33, 4, 6, 4); g.fillStyle = '#3a2a1a'; g.fillRect(26, 7, 3.4, 3); g.fillRect(30, 8, 3.4, 3);
-      g.fillStyle = '#5a3d22'; g.fillRect(19, -2, 1.6, 12); if (night > 0.35){ g.fillStyle = 'rgba(255,200,110,0.95)'; g.beginPath(); g.arc(19.8, -4, 2.6, 0, 7); g.fill(); lights.push({ x: it.x + 20, y: it.y - 6, r: 70, col: [255, 190, 100], life: 0.02, t: 0.06 }); } else { g.fillStyle = '#c8a860'; g.beginPath(); g.arc(19.8, -4, 2.4, 0, 7); g.fill(); }
+    case 'tent': {                                                                                     // pilgrims' tents: three builds — a ridge tent, a round bell tent and a pavilion — with shaded canvas, stitched seams, tied-back flaps, guy ropes, bedrolls and a hanging lantern
+      const v = (it.tint || 0) % 3, pal = [
+        { c: '#e6d8b0', d: '#c4b280', s: '#a08e5c', tr: '#8a3a4a' },
+        { c: '#cfd8b8', d: '#a8b890', s: '#7e9068', tr: '#3a5a8a' },
+        { c: '#dcc0a6', d: '#b89880', s: '#8e7058', tr: '#6a3a8a' }][v];
+      const sway = Math.sin(tt * 2 + it.seed) * 1.4, flick = 0.85 + 0.15 * Math.sin(tt * 9 + it.seed);
+      evShadow(g, v === 1 ? 22 : 27, 5);
+      const lamp = (lx, ly) => { g.strokeStyle = '#3a2a1a'; g.lineWidth = 0.9; g.beginPath(); g.moveTo(lx, ly - 5); g.lineTo(lx, ly - 1.5); g.stroke(); g.fillStyle = '#2a1e14'; g.fillRect(lx - 2, ly - 1.6, 4, 1); g.fillRect(lx - 2, ly + 2.4, 4, 1);
+        g.fillStyle = 'rgba(255,205,110,' + (0.55 + 0.4 * flick).toFixed(2) + ')'; g.fillRect(lx - 1.5, ly - 0.7, 3, 3.2); if (night > 0.3){ const gr = g.createRadialGradient(lx, ly, 1, lx, ly, 22); gr.addColorStop(0, 'rgba(255,190,100,0.5)'); gr.addColorStop(1, 'rgba(255,190,100,0)'); g.fillStyle = gr; g.fillRect(lx - 22, ly - 22, 44, 44); lights.push({ x: it.x + lx, y: it.y + ly, r: 74, col: [255, 190, 100], life: 0.02, t: 0.06 }); } };
+      const rope = (x1, y1, x2, y2) => { g.strokeStyle = '#8a7a58'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); g.fillStyle = '#4a3820'; g.fillRect(x2 - 1, y2 - 1, 2, 4); };
+      if (v === 0){                                                                                                          // RIDGE TENT: long canvas gable, shadowed far slope, tied-back door
+        rope(-17, -10, -34, 7); rope(16, -14, 33, 6);
+        g.fillStyle = pal.s; g.beginPath(); g.moveTo(22, 6); g.lineTo(0, -27); g.lineTo(11, -37); g.lineTo(34, -8); g.closePath(); g.fill();                                              // the far roof slope, in shade
+        const sg = g.createLinearGradient(0, -37, 34, 6); sg.addColorStop(0, pal.d); sg.addColorStop(1, pal.s); g.fillStyle = sg; g.beginPath(); g.moveTo(22, 6); g.lineTo(0, -27); g.lineTo(11, -37); g.lineTo(34, -8); g.closePath(); g.fill();
+        g.strokeStyle = 'rgba(40,28,14,0.3)'; g.lineWidth = 0.8; g.beginPath(); for (let i = 1; i < 4; i++){ const t = i / 4; g.moveTo(22 + 12 * t, 6 - 14 * t); g.lineTo(0 + 11 * t, -27 - 10 * t); } g.stroke();
+        const fg = g.createLinearGradient(-22, 0, 22, 0); fg.addColorStop(0, pal.c); fg.addColorStop(1, pal.d); g.fillStyle = fg; g.beginPath(); g.moveTo(-23, 6); g.lineTo(0, -27); g.lineTo(23, 6); g.closePath(); g.fill();   // the front gable
+        g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(-23, 6); g.lineTo(0, -27); g.stroke(); g.strokeStyle = 'rgba(40,28,14,0.42)'; g.beginPath(); g.moveTo(23, 6); g.lineTo(0, -27); g.stroke();
+        g.strokeStyle = pal.tr; g.lineWidth = 2; g.beginPath(); g.moveTo(-21, 3); g.lineTo(0, -24); g.lineTo(21, 3); g.stroke();                                                       // a coloured trim along the edge
+        g.strokeStyle = 'rgba(40,28,14,0.22)'; g.lineWidth = 0.7; g.setLineDash([1.6, 1.6]); g.beginPath(); g.moveTo(-9, -8); g.lineTo(-13, 6); g.moveTo(9, -8); g.lineTo(13, 6); g.stroke(); g.setLineDash([]);   // stitched seams
+        g.fillStyle = 'rgba(120,90,50,0.5)'; g.fillRect(-15, -1, 4, 4); g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(-15, -1, 4, 1);                                            // a mended patch
+        g.fillStyle = '#16100c'; g.beginPath(); g.moveTo(-8.5, 6); g.lineTo(0, -14); g.lineTo(8.5, 6); g.closePath(); g.fill();                                                        // the doorway
+        g.fillStyle = 'rgba(255,205,120,' + (0.14 + 0.1 * flick).toFixed(2) + ')'; g.beginPath(); g.moveTo(-6, 6); g.lineTo(0, -9); g.lineTo(6, 6); g.closePath(); g.fill();
+        g.fillStyle = '#5a6a8a'; g.fillRect(-5, 2.5, 10, 3.4); g.fillStyle = '#e8e0d0'; g.fillRect(-5, 2.5, 3.6, 3.4); g.fillStyle = '#8a3a3a'; g.fillRect(2, 3, 3, 2.4);                       // bedroll and blanket inside
+        for (const sx of [-1, 1]){ g.fillStyle = sx < 0 ? pal.c : pal.d; g.beginPath(); g.moveTo(sx * 8.5, 6); g.lineTo(sx * 15, 6); g.quadraticCurveTo(sx * 9, -4, sx * 2.5, -15); g.lineTo(0, -14); g.closePath(); g.fill(); g.strokeStyle = 'rgba(40,28,14,0.35)'; g.lineWidth = 0.8; g.stroke();
+          g.strokeStyle = '#8a3a4a'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(sx * 11.5, 0); g.lineTo(sx * 9, 1.4); g.stroke(); }                                                     // flaps rolled back and tied
+        g.strokeStyle = '#4a3220'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(0, -27); g.lineTo(0, -34); g.stroke(); g.fillStyle = pal.tr; g.beginPath(); g.moveTo(0, -34); g.lineTo(9 + sway, -31.6); g.lineTo(0, -29); g.closePath(); g.fill();   // pole + pennant
+        lamp(19, -2); g.fillStyle = '#5a3d22'; g.fillRect(18.4, -1, 1.2, 9);
+        g.fillStyle = '#4a3a24'; g.fillRect(-32, 7, 6, 3); g.fillStyle = '#7a6a46'; g.fillRect(-31, 5.4, 4, 2.4); g.fillStyle = '#3a2a1a'; g.fillRect(26, 8, 3.4, 2.6); g.fillRect(30, 8.6, 3.4, 2.6);   // a pack and boots outside
+      } else if (v === 1){                                                                                                   // BELL TENT: a round conical tent with panelled canvas and a scalloped skirt
+        rope(-14, -12, -30, 7); rope(14, -12, 30, 7);
+        const cg = g.createLinearGradient(-20, 0, 20, 0); cg.addColorStop(0, pal.c); cg.addColorStop(0.55, pal.d); cg.addColorStop(1, pal.s);
+        g.fillStyle = cg; g.beginPath(); g.moveTo(-21, 5); g.quadraticCurveTo(-16, -14, -1.4, -33); g.lineTo(1.4, -33); g.quadraticCurveTo(16, -14, 21, 5); g.closePath(); g.fill();
+        g.strokeStyle = 'rgba(40,28,14,0.26)'; g.lineWidth = 0.8; g.beginPath(); for (const k of [-0.62, -0.28, 0, 0.3, 0.64]){ g.moveTo(k * 2.2, -32); g.quadraticCurveTo(k * 13, -12, k * 30, 5); } g.stroke();
+        g.fillStyle = 'rgba(255,255,255,0.18)'; g.beginPath(); g.moveTo(-21, 5); g.quadraticCurveTo(-16, -14, -1.4, -33); g.lineTo(-4, -30); g.quadraticCurveTo(-15, -14, -18, 4); g.closePath(); g.fill();
+        g.fillStyle = pal.tr; g.beginPath(); g.moveTo(-21, 5); for (let i = 0; i <= 6; i++){ const x = -21 + i * 7; g.quadraticCurveTo(x + 3.5, 10, x + 7, 5); } g.lineTo(21, 1); g.lineTo(-21, 1); g.closePath(); g.fill();      // scalloped skirt
+        g.fillStyle = '#16100c'; g.beginPath(); g.moveTo(-6.5, 6); g.lineTo(-5.4, -7); g.quadraticCurveTo(0, -12, 5.4, -7); g.lineTo(6.5, 6); g.closePath(); g.fill();
+        g.fillStyle = 'rgba(255,205,120,' + (0.16 + 0.1 * flick).toFixed(2) + ')'; g.fillRect(-4.6, -3, 9.2, 8.4);
+        g.fillStyle = pal.c; g.beginPath(); g.moveTo(-6.5, 6); g.lineTo(-11.5, 6); g.quadraticCurveTo(-8, -3, -4.6, -10); g.lineTo(-5.4, -7); g.closePath(); g.fill(); g.beginPath(); g.moveTo(6.5, 6); g.lineTo(11.5, 6); g.quadraticCurveTo(8, -3, 4.6, -10); g.lineTo(5.4, -7); g.closePath(); g.fill();
+        g.fillStyle = '#c8a040'; g.beginPath(); g.arc(0, -34, 2, 0, 7); g.fill(); g.fillStyle = '#5a3d22'; g.fillRect(-0.6, -38, 1.2, 4); g.fillStyle = pal.tr; g.beginPath(); g.moveTo(0, -38); g.lineTo(7 + sway, -36); g.lineTo(0, -34); g.closePath(); g.fill();
+        lamp(-16, -2); g.fillStyle = '#5a3d22'; g.fillRect(-16.6, -1, 1.2, 9); g.fillStyle = '#3a2a1a'; g.fillRect(24, 8, 3.4, 2.6); g.fillRect(28, 8.6, 3.4, 2.6);
+      } else {                                                                                                               // PAVILION: an open striped awning on poles over a bedroll, a chest and a folded blanket
+        for (const sx of [-1, 1]){ g.fillStyle = '#4a3220'; g.fillRect(sx * 22 - 1.2, -22, 2.4, 30); g.fillStyle = '#7a5a34'; g.fillRect(sx * 22 - 1.2, -22, 1, 30); }
+        g.fillStyle = 'rgba(30,20,10,0.5)'; g.fillRect(-21, -18, 42, 24);                                                                                                       // the shaded space underneath
+        for (let i = 0; i < 7; i++){ const x0 = -26 + i * 7.4; g.fillStyle = i % 2 ? pal.tr : pal.c; g.beginPath(); g.moveTo(x0, -20); g.lineTo(x0 + 7.4, -20); g.lineTo(x0 + 6.4, -33); g.lineTo(x0 + 1, -33); g.closePath(); g.fill(); }   // striped canopy
+        g.fillStyle = 'rgba(0,0,0,0.16)'; g.beginPath(); g.moveTo(26, -20); g.lineTo(26, -33); g.lineTo(20, -33); g.closePath(); g.fill(); g.fillStyle = 'rgba(255,255,255,0.2)'; g.fillRect(-26, -33, 52, 1.2);
+        for (let i = 0; i < 7; i++){ const x0 = -26 + i * 7.4; g.fillStyle = i % 2 ? pal.tr : pal.c; g.beginPath(); g.moveTo(x0, -20); g.lineTo(x0 + 7.4, -20); g.lineTo(x0 + 3.7, -15.6); g.closePath(); g.fill(); }        // scalloped valance
+        g.fillStyle = '#5a6a8a'; g.fillRect(-15, 2, 20, 4); g.fillStyle = '#e8e0d0'; g.fillRect(-15, 2, 6, 4); g.fillStyle = '#8a3a3a'; g.fillRect(-4, 2.4, 8, 3.2); g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(-15, 5.2, 20, 0.8);
+        g.fillStyle = '#5a3d22'; g.fillRect(9, -4, 12, 9); g.fillStyle = '#7a5a34'; g.fillRect(9, -4, 12, 3); g.fillStyle = '#c8a040'; g.fillRect(14.4, -2, 1.6, 3); g.strokeStyle = '#3a2a18'; g.lineWidth = 0.8; g.strokeRect(9.4, -3.6, 11.2, 8.4);
+        lamp(-19, -10); g.fillStyle = pal.tr; g.beginPath(); g.moveTo(0, -33); g.lineTo(8 + sway, -36); g.lineTo(0, -38); g.closePath(); g.fill(); g.fillStyle = '#5a3d22'; g.fillRect(-0.6, -38, 1.2, 5);
+      }
       break; }
     case 'cookfire': {                                                                                 // stone ring, crossed logs, flames, an iron tripod with a steaming pot, log seats
       evShadow(g, 16, 5);
@@ -9669,7 +9790,7 @@ function drawObjectiveHUD(){
     const segs = u.kind === 'kidnap' ? (mission.escort ? [{ c: RC.target, t: 'walk them to the road home' }] : [{ c: RC.target, t: 'sweet-talk them if nobody\'s watching, or pay $' + recruitPrice() + ' (E)' }, { c: RC.force, t: 'or knock them out and carry' }])
       : u.kind === 'errand' ? [{ c: RC.target, t: 'lift it off the holder (E, from behind)' }, { c: RC.force, t: 'or take it by force' }]
       : u.kind === 'money' ? [{ c: RC.other, t: 'hack ATMs (H)' }, { c: RC.other, t: 'crack locked buildings' }, { c: RC.other, t: 'lift wallets (E, from behind)' }, { c: RC.force, t: 'or shake people down' }]
-      : u.kind === 'groceries' ? [{ c: RC.other, t: 'hack fridges (H)' }, { c: RC.other, t: "lift shoppers' bags (E, from behind)" }, { c: RC.other, t: 'buy at market stalls (E, $20)' }, { c: RC.force, t: 'or raid a shop' }]
+      : u.kind === 'groceries' ? [{ c: RC.other, t: 'hack fridges (right-click)' }, { c: RC.other, t: "lift shoppers' bags (E, from behind)" }, { c: RC.other, t: 'buy at market stalls (E, $20)' }, { c: RC.force, t: 'or raid a shop' }]
       : u.kind === 'rescue' ? (mission.escort ? [{ c: RC.target, t: 'walk them to the road home' }] : [{ c: RC.target, t: 'pick the lock (E, 5s)' }, { c: RC.other, t: 'hack it (H)' }, { c: RC.node, t: 'take the key guard\'s key' }, { c: RC.force, t: 'or smash the cell' }])
       : u.kind === 'grudge' ? [{ c: RC.target, t: 'knock them out' }, { c: RC.house, t: 'wreck their house' }, { c: RC.car, t: 'steal their car' }, { c: RC.police, t: '…into ' + ((mission.grudge && mission.grudge.police && mission.grudge.police.name) || 'the police station') }] : null;
     if (segs) drawRouteLine(segs);
@@ -11743,6 +11864,7 @@ function buildPlaceable(cx, cy, item, skipDist){
     Math.abs(p.x - wx) < (p.w + w * CELL) / 2 && Math.abs(p.y - wy) < (p.h + h * CELL) / 2) return false;
   return true;
 }
+let _sameFloorT = 0;
 // place one piece at a specific cell; returns true if it went down
 function placeBuildAt(cx, cy, item, skipDist){
   if (player.mats[item.mat] <= 0) return false;
@@ -11761,6 +11883,11 @@ function placeBuildAt(cx, cy, item, skipDist){
   if (TOWN_MAX[item.mat] && props.filter(pp => !pp.dead && pp.t === item.mat).length >= TOWN_MAX[item.mat]){ popText(player.x, player.y - 26, 'you already have the maximum (' + TOWN_MAX[item.mat] + ')', '#ff8f8f', 1.6); return false; }
   const { w, h } = itemDims(item);
   const wx = cx * CELL + CELL / 2, wy = cy * CELL + CELL / 2;
+  if (item.floor){                                          // laying the same floor over itself costs nothing (and changes nothing) — only swapping to a DIFFERENT floor uses material
+    const tex = item.plot ? 'plot' : (item.texture || null), fx = Math.round(wx), fy = Math.round(wy);
+    let cur = null; for (let i = village.floors.length - 1; i >= 0; i--){ const f = village.floors[i]; if (f.x === fx && f.y === fy){ cur = f; break; } }
+    if (cur && (cur.texture || null) === tex){ if (_sameFloorT < performance.now()){ _sameFloorT = performance.now() + 1200; popText(wx, wy - 10, 'already this floor', '#cfe0c0', 0.9); } return false; }
+  }
   player.mats[item.mat]--;
   if (item.overlay === 'window'){
     (village.windows = village.windows || {})[cx + ',' + cy] = 1;
@@ -15520,27 +15647,34 @@ function recomputeRoofs(){
       if (lx > 0) st.push(idx - 1); if (lx < w - 1) st.push(idx + 1);
       if (ly > 0) st.push(idx - w); if (ly < h - 1) st.push(idx + w);
     }
+    // user: "rooms within a house should not create a separate roof — ignore all internal walls, treat it as one large building."
+    // The RING is the outer shell (wall cells touching the outside); every other enclosed cell, internal walls and doors included, belongs to one big interior.
+    const RING = new Uint8Array(w * h);
+    for (let ly = 1; ly < h - 1; ly++) for (let lx = 1; lx < w - 1; lx++){
+      const idx = li(lx, ly); if (OUT[idx] || !wall(x0 - pad + lx, y0 - pad + ly)) continue;
+      for (let dy = -1; dy <= 1 && !RING[idx]; dy++) for (let dx = -1; dx <= 1; dx++) if (OUT[idx + dy * w + dx]){ RING[idx] = 1; break; }
+    }
     for (let ly = 0; ly < h; ly++) for (let lx = 0; lx < w; lx++){
       const idx = li(lx, ly);
-      if (OUT[idx] || seen[idx] || wall(x0 - pad + lx, y0 - pad + ly)){ seen[idx] = 1; continue; }
-      let rx0 = 1e9, ry0 = 1e9, rx1 = -1e9, ry1 = -1e9, n = 0;
+      if (OUT[idx] || seen[idx] || RING[idx]){ seen[idx] = 1; continue; }
+      let rx0 = 1e9, ry0 = 1e9, rx1 = -1e9, ry1 = -1e9, n = 0, nOpen = 0;
       const q = [idx], cellList = []; seen[idx] = 1;
       while (q.length){
         const ci = q.pop(), cx = ci % w, cy = (ci / w) | 0;
         const gx = x0 - pad + cx, gy = y0 - pad + cy;
         cellList.push(gx, gy);
-        if (gx < rx0) rx0 = gx; if (gx > rx1) rx1 = gx; if (gy < ry0) ry0 = gy; if (gy > ry1) ry1 = gy; n++;
+        if (gx < rx0) rx0 = gx; if (gx > rx1) rx1 = gx; if (gy < ry0) ry0 = gy; if (gy > ry1) ry1 = gy; n++; if (!wall(gx, gy)) nOpen++;
         for (const d of [1, -1, w, -w]){
           const ni = ci + d;
           if (ni < 0 || ni >= w * h) continue;
           if ((d === 1 && cx === w - 1) || (d === -1 && cx === 0)) continue;
           if (seen[ni] || OUT[ni]) continue;
           seen[ni] = 1;
-          if (wall(x0 - pad + (ni % w), y0 - pad + ((ni / w) | 0))) continue;
+          if (RING[ni]) continue;
           q.push(ni);
         }
       }
-      if (n >= 4){
+      if (nOpen >= 4){                                              // a solid lump of wall with no real room inside it is not a building
         let sd = (Math.imul(rx0 + 512, 374761393) ^ Math.imul(ry0 + 512, 668265263)) >>> 0;
         sd = Math.imul(sd ^ (sd >>> 15), 2246822519) >>> 0;
         sd = (sd ^ (sd >>> 13)) >>> 0;
@@ -15677,6 +15811,12 @@ function bakeFloorDetail(g, texture, wx, wy, left, top, u, s){
       const arc = entry.arc;                               // a discovered floor material — same engine as walls, capped gap (a frayed rug edge, not a hole to fall through)
       (TEXTURE_ENGINES[arc.texture] || TEXTURE_ENGINES.smooth)(g, left, top, u, u, Math.min(arc.gap, 0.3), arc.c2 || 'rgba(0,0,0,0.18)');
     }
+  } else if (texture === 'terracotta' || texture === 'sandstone'){                  // square tiles with mortar lines and a few chips
+    const px = Math.max(1, s), tc = texture === 'terracotta';
+    g.fillStyle = tc ? 'rgba(60,24,12,0.42)' : 'rgba(110,84,44,0.4)';
+    g.fillRect(left, top + u / 2 - px * 0.5, u, px); g.fillRect(left + u / 2 - px * 0.5, top, px, u); g.fillRect(left, top, u, px); g.fillRect(left, top, px, u);
+    g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(left + px, top + px, u / 2 - px * 2, px); g.fillRect(left + u / 2 + px, top + u / 2 + px, u / 2 - px * 2, px);
+    for (let k = 0; k < 4; k++){ g.fillStyle = k % 2 ? 'rgba(0,0,0,0.14)' : 'rgba(255,255,255,0.1)'; g.fillRect(left + vhash(Math.round(wx) + k * 13, Math.round(wy) + k * 7) * u * 0.85, top + vhash(Math.round(wx) - k * 9, Math.round(wy) + k * 17) * u * 0.85, px * 1.4, px * 1.4); }
   } else if (PATH_TEX[texture]){
     const rnd = (a, b) => vhash(Math.round(wx) + a * 13, Math.round(wy) + b * 7);
     const px = Math.max(1, s);
@@ -15895,6 +16035,7 @@ function enterZone(name){
     registerEventGrounds();
     if (village.research && village.research.paving) registerPaths();
     if (village.cult) registerCultBuild();
+    else if (countryNumber() >= 2) registerWeaponRack();
     if (cameFromMission) squadDebrief(!!_raidWon);
     if (cameFromMission){                                  // a raid eats ~4 hours — you come home at a different time each trip.
       village.tod = Math.min(0.93, (village.tod == null ? 0.2 : village.tod) + 4 / 24);   // never past deep night — the day only turns over when you sleep
@@ -16533,7 +16674,7 @@ const PLAIN_CAR_TARGET = 3;
 // fountains, statues, market stalls, benches, shipping containers — solid city landmarks (variant in _lm)
 const ROCKET_PADS = [], FERRIS_PADS = [], rideFun = [];   // rideFun: hacked rides mid-tantrum
 const RAIL_LINES = []; let trainRuns = [], _trT = 20, runawayTrains = [], trainWrecks = [];                       // rail yard tracks + trains that thunder through
-const LANDMARK_DIM = { train: [100, 26], plane: [88, 64], rocket: [62, 46], pagoda: [138, 40], hedge: [46, 12], column: [14, 12], umbrella: [22, 14], crane: [44, 22], grave: [13, 10], dish: [30, 20], cart: [30, 16], fountain: [44, 30], statue: [20, 18], stall: [38, 18], bench: [26, 9], container: [54, 22], firetruck: [72, 28], ferris: [72, 20], carousel: [124, 64] };
+const LANDMARK_DIM = { train: [100, 26], plane: [88, 64], rocket: [62, 46], pagoda: [138, 40], hedge: [46, 12], column: [14, 12], umbrella: [22, 14], crane: [44, 22], grave: [13, 10], dish: [30, 20], cart: [30, 16], fountain: [44, 30], statue: [20, 18], stall: [38, 18], bench: [26, 9], container: [54, 22], firetruck: [72, 28], ferris: [72, 20], carousel: [124, 64], helwreck: [70, 36] };
 const LM_HP = { ferris: 320, carousel: 240, pagoda: 700, cart: 70, stall: 90 };                         // the rides can be wrecked — with consequences (see destroyRide)
 function mkLandmark(x, y, lm){
   const d = LANDMARK_DIM[lm], pr = mkProp(x, y, d[0], d[1], 'landmark');
@@ -18620,7 +18761,9 @@ function nearestHackable(r){
 }
 function tryHack(){
   if (zone !== 'city' || player.dead || player.carrying || player.holding || player._hack || player.canHack === false || player._rideRocket || player._rideFerris) return;
-  const p = nearestHackable(hackRange());
+  let p = nearestHackable(hackRange());
+  const _hh = heliHackTarget();
+  if (_hh && (!p || dist2(_hh.x, _hh.y, player.x, player.y) < dist2(p.x, p.y, player.x, player.y))) p = heliProxy(_hh);
   let lk = null, ld = Infinity;                                                          // electronic door locks are hackable too (mechanical ones are not)
   for (const l of doorLocks){ if (l.until > _lockNow) continue; const d = Math.hypot(l.x - player.x, l.y - player.y); if (d < hackRange() + 8 && d < ld && l.elec){ ld = d; lk = l; } }
   const pd = p ? Math.hypot(p.x - player.x, p.y - player.y) : Infinity;
@@ -18642,7 +18785,7 @@ function hackTick(dt){
   const hk = player._hack;
   if (hk){
     const tx = hk.lk ? hk.lk.x : hk.p.x, ty = hk.lk ? hk.lk.y : hk.p.y;
-    if (player.dead || (hk.p && hk.p.dead) || (hk.lk && hk.lk.until > _lockNow) || Math.hypot(player.x - hk.px, player.y - hk.py) > 10 || Math.hypot(tx - player.x, ty - player.y) > hackRange() + 20 || player.hurt > 0) player._hack = null;
+    if (player.dead || (hk.p && hk.p.dead) || (hk.lk && hk.lk.until > _lockNow) || Math.hypot(player.x - hk.px, player.y - hk.py) > 10 || Math.hypot(tx - player.x, ty - player.y) > hackRange() + 20 + ((hk.p && hk.p._extra) || 0) || player.hurt > 0) player._hack = null;
     else {
       hk.t += dt; hk.n -= dt;
       if (hk.n <= 0){ hk.n = 1; makeNoise(tx, ty, hk.lk && hk.lk.metal ? 120 : 70, hk.lk && hk.lk.metal ? 0.3 : 0.2); }   // a long hack on a metal door is a bit noisier
@@ -19462,10 +19605,10 @@ function wipeSave(appearance){
   village = null;
   // drop the previous save's discovered materials from the shared runtime tables too —
   // otherwise a wiped game could still craft materials it never actually discovered
-  for (let i = RECIPES.length - 1; i >= 0; i--) if (/^(mat_|matf_|matd_|path_|eventgrounds$|altar$|shrine$|blacksmith$|well$|logpile$|stonepile$|smokerack$|handcart$|sheaves$|market$|barracks$|watchtower$|scriptorium$|temple$|granary$|grandshrine$|mutlab$|vgate$|spikes$|wpn-)/.test(RECIPES[i].id)) RECIPES.splice(i, 1);
-  for (let i = BUILD_ITEMS.length - 1; i >= 0; i--) if (/^(mat_|matf_|matd_|path_|eventgrounds$|altar$|shrine$|blacksmith$|well$|logpile$|stonepile$|smokerack$|handcart$|sheaves$|market$|barracks$|watchtower$|scriptorium$|temple$|granary$|grandshrine$|mutlab$|vgate$|spikes$)/.test(BUILD_ITEMS[i].mat)) BUILD_ITEMS.splice(i, 1);
+  for (let i = RECIPES.length - 1; i >= 0; i--) if (/^(mat_|matf_|matd_|path_|eventgrounds$|altar$|shrine$|blacksmith$|well$|logpile$|stonepile$|smokerack$|handcart$|sheaves$|market$|barracks$|watchtower$|scriptorium$|temple$|granary$|grandshrine$|mutlab$|weaponrack$|vgate$|spikes$|wpn-)/.test(RECIPES[i].id)) RECIPES.splice(i, 1);
+  for (let i = BUILD_ITEMS.length - 1; i >= 0; i--) if (/^(mat_|matf_|matd_|path_|eventgrounds$|altar$|shrine$|blacksmith$|well$|logpile$|stonepile$|smokerack$|handcart$|sheaves$|market$|barracks$|watchtower$|scriptorium$|temple$|granary$|grandshrine$|mutlab$|weaponrack$|vgate$|spikes$)/.test(BUILD_ITEMS[i].mat)) BUILD_ITEMS.splice(i, 1);
   for (let i = ROSTER.enemies.length - 1; i >= 0; i--) if (/^raid-/.test(ROSTER.enemies[i].id)){ delete ROSTER_ENEMY[ROSTER.enemies[i].id]; ROSTER.enemies.splice(i, 1); }
-  _pathsRegistered = false;
+  _pathsRegistered = false; _dirtPathRegistered = false;                 // (the always-available floors need re-registering after a wipe too)
   _cultBuildRegistered = false;
   CODEX_BY_ID = {};
   WINDOW_MATS.clear();
@@ -21046,6 +21189,7 @@ function hurtProp(p, dmg, from){
   // tool / gunfire just bounce off
   if ((p.t === 'tree' || p.t === 'rock' || p.t === 'stump') && from && (from === player || from.team === 'player')){
     const need = p.t === 'tree' ? 'axe' : p.t === 'rock' ? 'pickaxe' : 'shovel';
+    if (p.t === 'stump' && p._newUntil > performance.now()) return;                  // the stump that just appeared under the felling swing — the same swing catching it isn't a deliberate hit
     if ((player.weapon || 'fists') !== need){
       burst(p.x, p.y, 3, '#e8e8e8', 90); A.S.thud();
       if (_toolHintT < performance.now()){
@@ -21137,7 +21281,7 @@ function hurtProp(p, dmg, from){
       burst(p.x, p.y - 10, 22, p._sp === 'maple' && p._mc ? p._mc : pick(_pal), 260);
       burst(p.x, p.y, 10, (STUMP_PAL[p._sp] || STUMP_PAL._)[0], 200);
       A.S.wood(); shake(2);
-      { const st = mkProp(p.x, p.y, 14, 12, 'stump'); if (p._sp){ st._sp = p._sp; st._mc = p._mc || null; } props.push(st); }
+      { const st = mkProp(p.x, p.y, 14, 12, 'stump'); st._newUntil = performance.now() + 500; if (p._sp){ st._sp = p._sp; st._mc = p._mc || null; } props.push(st); }
       for (let i = 0, n = 3 + (Math.random()*3 | 0); i < n; i++)
         pickups.push({ x: p.x + rand(-14, 14), y: p.y + rand(-6, 14), w: 'log', taken: false });
       if (zone === 'village') noteTreeRemoved(p.x, p.y, 'tree', p._sp, p._mc);
@@ -21957,7 +22101,7 @@ function tryInteract(){
     }
   }
   if (zone === 'city' && !player.carrying && !player.holding && !player._rideRocket && !player._rideFerris){        // the ferris wheel: one full turn
-    for (const pad of FERRIS_PADS){ if (pad.dead || !props.includes(pad)) continue; if (dist2(pad.x, pad.y + 10, player.x, player.y) < 90 * 90){ boardFerris(pad); return; } }
+    for (const pad of FERRIS_PADS){ if (pad.dead || !props.includes(pad)) continue; if (dist2(pad.x, pad.y + 10, player.x, player.y) < 90 * 90){ if (!pad._spun && !pad._doom && !(pad._turbo > 0)) startRideTantrum(pad, 'ferris', true); else popText(pad.x, pad.y - 30, pad._doom ? 'it is a bit late for that' : 'it is still spinning…', '#d8e4c0', 1.2); return; } }
   }
   if (zone === 'city' && !player.carrying && !player.holding && !player._rideRocket){                          // climb aboard a waiting rocket
     for (const pad of ROCKET_PADS){ if (pad.dead || pad._launched || pad._igniting || !props.includes(pad)) continue; if (dist2(pad.x, pad.y, player.x, player.y) < 84 * 84){ boardRocket(pad); return; } }
@@ -24641,10 +24785,32 @@ function spawnHelicopter(x, y){
   const h = { x, y, a: Math.random() * 6.283, ang: 0, rot: 0, hp: 240, maxhp: 240, alt: 64, state: 'approach', cd: 2, burst: 0, bcd: 0, drop: 8, _calm: 0, sw: 0, t: 0 };
   helis.push(h); return h;
 }
+function spawnHeliWreck(h){                                          // a crashed chopper always leaves a burning wreck behind (like a wrecked train), plus debris and a scorch mark
+  const x = h.x, y = h.y, pr = mkLandmark(x, y, 'helwreck'); pr._ang = h.ang; props.push(pr); trainWrecks.push(pr);
+  bakeDecal(x, y, 46, 'rgba(24,20,18,0.55)');
+  burst(x, y - 10, 34, '#ff8a2a', 380); burst(x, y - 6, 26, '#3a3a40', 300); burst(x, y - 12, 22, '#c8c8d4', 340);
+  for (let i = 0; i < 7; i++){ const a = rand(0, 6.283), d = rand(30, 90); parts.push({ x, y: y - 8, vx: Math.cos(a) * d * 3, vy: Math.sin(a) * d * 1.6 - rand(30, 90), life: rand(0.8, 1.6), col: '#2a2e38', r: rand(2, 4) }); }
+  return pr;
+}
+const HELI_PANIC = ['"I HAVE NO CONTROL!"', '"MAYDAY! MAYDAY!"', '"THE CONTROLS ARE POSSESSED!"', '"WHO HAS THE STICK?!"', '"WE ARE GOING DOWN!"', '"TELL MY WIFE—"'];
+function heliHackTarget(){                                          // choppers can be hacked from further away than props — but only once you own a laptop
+  if (!hasRes('laptop') || !player) return null;
+  let best = null, bd = (hackRange() + 130) ** 2;
+  for (const h of helis){ if (h.dead || h.state === 'crash' || h.state === 'rampage' || h._hacked) continue; const d = dist2(h.x, h.y, player.x, player.y); if (d < bd){ bd = d; best = h; } }
+  return best;
+}
+function heliProxy(h){                                              // a prop-like handle so the normal hacking machinery (range, progress, cancel) works on a moving helicopter
+  if (!h._proxy) h._proxy = Object.defineProperties({ t: 'heli', w: 40, h: 20, _extra: 130, _h: h }, { x: { get(){ return h.x; } }, y: { get(){ return h.y; } }, dead: { get(){ return !!h.dead || h.state === 'crash' || h.state === 'rampage'; } } });
+  return h._proxy;
+}
+function startHeliRampage(h){
+  h._hacked = true; h.state = 'rampage'; h.rt = 0; h._fire = 0; h._boom = 0.6; h._said = 0; h.tx = h.x; h.ty = h.y;
+  A.S.thud(); shake(4); popText(h.x, h.y - h.alt - 30, 'SYSTEM COMPROMISED', '#7fffb0', 1.8); flash('CHOPPER HACKED', '#7fffb0', 'it has gone completely haywire'); noteAlt('errand', 'took the chopper for a joyride');
+}
 function damageHeli(h, d){
   if (h.dead || h.state === 'crash') return;
   h.hp -= d; h.hit = 0.12; burst(h.x, h.y - h.alt, 3, '#ffd27f', 120);
-  if (h.hp <= 0){ h.state = 'crash'; h.t = 0; h.cvx = Math.cos(h.ang) * 90; h.cvy = Math.sin(h.ang) * 90; popText(h.x, h.y - 70, 'CHOPPER DOWN!', '#ffb04a', 1.6); money += 150; }
+  if (h.hp <= 0 && h.state !== 'rampage'){ h.state = 'crash'; h.t = 0; h.cvx = Math.cos(h.ang) * 90; h.cvy = Math.sin(h.ang) * 90; popText(h.x, h.y - 70, 'CHOPPER DOWN!', '#ffb04a', 1.6); money += 150; }
 }
 function updateHelicopters(dt){
   if (zone !== 'city' || !player || (mission && (mission.node || mission.raid))){ if (helis.length) helis = []; return; }   // no police choppers during a city raid — they were strafing the villagers you brought along
@@ -24656,10 +24822,24 @@ function updateHelicopters(dt){
     if (h.state === 'crash'){
       h.x += h.cvx * dt; h.y += h.cvy * dt; h.ang += dt * 9; h.alt = Math.max(0, 64 * (1 - h.t / 1.5));
       if (Math.random() < dt * 40) parts.push({ x: h.x + rand(-6, 6), y: h.y - h.alt + rand(-6, 6), vx: rand(-20, 20), vy: rand(-30, 10), life: rand(0.4, 0.9), col: Math.random() < 0.5 ? 'rgba(60,60,64,0.6)' : 'rgba(255,140,40,0.9)', r: rand(2, 6) });
-      if (h.t >= 1.5){ h.dead = true; explode(h.x, h.y, 150, 80); for (let i = 0; i < 4; i++) addHazard('fire', h.x + rand(-60, 60), h.y + rand(-40, 40), { r: rand(30, 46), life: rand(8, 14) }); flash('CHOPPER DOWN', '#ffb04a', '+$150'); }
+      if (h.t >= 1.5){ h.dead = true; explode(h.x, h.y, 150, 80); for (let i = 0; i < 4; i++) addHazard('fire', h.x + rand(-60, 60), h.y + rand(-40, 40), { r: rand(30, 46), life: rand(8, 14) }); spawnHeliWreck(h); flash('CHOPPER DOWN', '#ffb04a', h._hacked ? 'courtesy of you' : '+$150'); }
+      continue;
+    }
+    if (h.state === 'rampage'){                                          // a hacked chopper: flies flat out at random, hosing everything down and dropping bombs, then falls out of the sky
+      h.rt += dt; h._fire -= dt; h._boom -= dt; h._said -= dt;
+      if (Math.hypot(h.tx - h.x, h.ty - h.y) < 60 || !h._rt){ h._rt = 1; const tg = enemies.filter(e => !e.dead && !e.villager && dist2(e.x, e.y, h.x, h.y) < 700 * 700); const t2 = tg.length && Math.random() < 0.6 ? pick(tg) : { x: h.x + rand(-500, 500), y: h.y + rand(-400, 400) }; h.tx = t2.x; h.ty = t2.y; }
+      const dx = h.tx - h.x, dy = h.ty - h.y, dd = Math.hypot(dx, dy) || 1, mv = Math.min(dd, 360 * dt); h.x += dx / dd * mv; h.y += dy / dd * mv;
+      h.ang += dt * 5; h.alt = 64 + Math.sin(h.rt * 3.2) * 22;
+      if (h._fire <= 0){ h._fire = 0.07; const wp = WEAPONS.smg, vis = bulletVisual(wp, 'smg', player), ang = rand(0, 6.283); bullets.push({ x: h.x + Math.cos(ang) * 30, y: h.y - 30 + Math.sin(ang) * 30, vx: Math.cos(ang) * 640, vy: Math.sin(ang) * 640, ang, style: vis.style, col: vis.col, dmg: 10, knock: 120, team: 'player', life: 0.9, wp, from: { x: h.x, y: h.y } }); }
+      if (h._boom <= 0){ h._boom = rand(0.5, 0.9); const bx = h.x + rand(-70, 70), by = h.y + rand(-50, 50); explode(bx, by, 78, 38); burst(bx, by - 6, 10, '#ffb04a', 220); }
+      if (h._said <= 0){ h._said = rand(0.9, 1.6); popText(h.x + rand(-30, 30), h.y - h.alt - 26, pick(HELI_PANIC), '#ffd0a0', 1.3); }
+      if (Math.random() < dt * 30) parts.push({ x: h.x + rand(-10, 10), y: h.y - h.alt + rand(-6, 6), vx: rand(-30, 30), vy: rand(-30, 6), life: rand(0.4, 0.9), col: Math.random() < 0.5 ? 'rgba(60,60,64,0.6)' : 'rgba(255,140,40,0.9)', r: rand(2, 5) });
+      if (Math.hypot(player.x - h.x, player.y - h.y) < 900) shake(2);
+      if (h.rt >= 9){ h.state = 'crash'; h.t = 0; h.cvx = Math.cos(h.ang) * 130; h.cvy = Math.sin(h.ang) * 130; explode(h.x, h.y - h.alt, 90, 30); burst(h.x, h.y - h.alt, 30, '#ff8a2a', 360); popText(h.x, h.y - 80, 'IT IS COMING DOWN!', '#ffb04a', 1.8); }
       continue;
     }
     const far = Math.hypot(player.x - h.x, player.y - h.y);
+    if (hasRes('laptop') && !h._hacked && far < 700) tip('heliHack', 'Hack the chopper', '#7fffb0', 'Hold right-click (or H) and stay still near the helicopter to take it over.', 800);
     if (st < 2) h._calm += dt; else h._calm = 0;
     if (h._calm > 6 && h.state !== 'leaving') h.state = 'leaving';
     let tx, ty, spd;
@@ -24704,6 +24884,7 @@ function drawHelicopters(){
     octx.fillStyle = '#1c2a4a'; octx.fillRect(-46, -2.5, 30, 5); octx.fillRect(-48, -7, 4, 14);
     const on = ((tn * 5) | 0) % 2; octx.fillStyle = on ? '#ff3030' : '#3060ff'; octx.fillRect(-4, -9, 5, 4); octx.fillStyle = on ? '#3060ff' : '#ff3030'; octx.fillRect(-4, 5, 5, 4);
     octx.restore();
+    { const hk = player && player._hack; if (hk && hk.p && hk.p._h === h){ const k = clamp(hk.t / hk.need, 0, 1); octx.fillStyle = 'rgba(0,0,0,0.7)'; octx.fillRect(hx - 24, hy - 50, 48, 7); octx.fillStyle = '#7fffb0'; octx.fillRect(hx - 23, hy - 49, 46 * k, 5); } }
     octx.save(); octx.translate(hx, hy); octx.scale(2, 2); octx.fillStyle = 'rgba(210,225,245,0.14)'; octx.beginPath(); octx.arc(0, 0, 44, 0, 7); octx.fill(); octx.strokeStyle = 'rgba(40,44,54,0.8)'; octx.lineWidth = 2.4; octx.beginPath(); octx.moveTo(Math.cos(h.rot) * 44, Math.sin(h.rot) * 44); octx.lineTo(-Math.cos(h.rot) * 44, -Math.sin(h.rot) * 44); octx.moveTo(Math.cos(h.rot + 1.57) * 44, Math.sin(h.rot + 1.57) * 44); octx.lineTo(-Math.cos(h.rot + 1.57) * 44, -Math.sin(h.rot + 1.57) * 44); octx.stroke(); octx.fillStyle = '#20242c'; octx.beginPath(); octx.arc(0, 0, 3.4, 0, 7); octx.fill(); octx.restore();   // the rotor
   }
 }
@@ -25812,7 +25993,7 @@ function spawnSlimeRaid(node, sx, sy){
 function updateRockets(dt){
   if (zone !== 'city' || !player) return;
   updateHelicopters(dt); updateFerris(dt); updateRideFun(dt); updateHeist(dt); updateSlimeFx(dt);
-  if (player && !player._rideFerris && !player._rideRocket){ for (const q of FERRIS_PADS) if (!q.dead && dist2(q.x, q.y + 10, player.x, player.y) < 120 * 120){ tip('ferris', 'Ferris wheel', '#ffd070', 'Press E at the base of the big wheel to ride once around.'); break; } }
+  if (player && !player._rideFerris && !player._rideRocket){ for (const q of FERRIS_PADS) if (!q.dead && dist2(q.x, q.y + 10, player.x, player.y) < 120 * 120){ tip('ferris', 'Ferris wheel', '#ffd070', 'Press E at the base to spin it up and shake the riders\' pockets loose — or hack it (right-click) if you want to see it go badly.'); break; } }
   updateCityTrains(dt);
   _rkT -= dt;
   if (_rkT <= 0){
@@ -25936,6 +26117,7 @@ function updateRollingWheels(dt){
   if (!rollingWheels.length) return;
   for (const w of rollingWheels){
     w.fuse -= dt;
+    if (w.cry){ w._c = (w._c || 0) - dt; if (w._c <= 0){ w._c = rand(0.35, 0.7); popText(w.x + rand(-60, 60), w.y - w.r * 1.6 + rand(-30, 40), pick(['"WAAAAAH!"', '"I WANT MY MUMMY"', '*sob*', '"WE ARE GOING TO DIE"', '"I WANT TO GO HOME"', '"MAKE IT STOP"', '*sniffle*']), '#9fc8ff', 1.5); } }
     const nx = w.x + Math.cos(w.ang) * w.speed * dt, ny = w.y + Math.sin(w.ang) * w.speed * dt, px = -Math.sin(w.ang), py = Math.cos(w.ang);
     for (let k = -2; k <= 2; k++){ const cx = Math.floor((nx + px * k * 26) / CELL), cy = Math.floor((ny + py * k * 26) / CELL); if (cellSolid(cx, cy)) damageCell(cx, cy, 420 * dt + 30); }   // it tears through walls
     for (const pr of props){
@@ -27123,7 +27305,15 @@ function step(dt){
       const nt = todLerp().night;
       if (nt > 0.4 && village._duskFlashDay !== village.day){       // one soft nudge as the light goes
         village._duskFlashDay = village.day;
-        flash('The village turns in', '#c1a86a', 'find your bed and rest till dawn');
+        const hasBed = props.some(b => !b.dead && b.t === 'bed');
+        if (village.day === 0 && !hasBed) flash('Night is falling', '#c1a86a', 'build a bed to skip the night — press C to craft one, then B to place it');   // very first night: nudge them toward a bed
+        else flash('The village turns in', '#c1a86a', 'find your bed and rest till dawn');
+      }
+      village._playT = (village._playT || 0) + dt;                    // minutes of play so far — for the gentle starter-tools reminder
+      if (village._playT >= 120 + (village._toolHints || 0) * 240 && (village._toolHints || 0) < 2){
+        const owns = id => (player.quick || []).includes(id) || (player.pack || []).includes(id) || (village.toolStash || []).includes(id);
+        village._toolHints = (village._toolHints || 0) + 1;
+        if (!owns('axe') && !owns('pickaxe')) toast('Tip: press C to craft an axe and a pickaxe — chop trees, mine rocks');
       }
     }
     const daytime = !village || village.tod == null || todLerp().night < 0.4;
@@ -27311,6 +27501,22 @@ function step(dt){
 // its own separate try/catch. Logged here (not just console.error, which a long-lived tab's
 // console tool can misreport) so a recurrence is actually diagnosable: inspect
 // window.__RORDrawErrors from the console.
+// user: "myself and buildings and NPCs start vanishing in certain areas. last time it was related to the glow of
+// the cultist eyes — but it's still happening." Root cause: whenever a draw call throws PARTWAY through an
+// octx.save()...octx.restore() pair (a clip, a translate, a rotate — any of them), the matching restore() never
+// runs. octx is never actually cleared between frames (it's only painted over), so that phantom save sits on the
+// context's internal stack forever. The next unrelated restore() anywhere in the frame then pops THAT stale state
+// instead of its own — which can reinstate an old clip rect or transform and silently hide whatever draws inside
+// it from then on. That reads as exactly "certain areas" going invisible, and which area depends only on which two
+// saves/restores ended up mismatched, not on what's actually there. The old fix (try/finally around the eye glow)
+// patched one call site; this tracks save/restore depth so ANY draw error — this one or a future one — unwinds
+// cleanly instead of leaving the stack corrupted.
+let _octxDepth = 0;
+{ const _save0 = octx.save.bind(octx), _restore0 = octx.restore.bind(octx);
+  octx.save = function(){ _octxDepth++; return _save0(); };
+  octx.restore = function(){ if (_octxDepth > 0){ _octxDepth--; return _restore0(); } };   // a stray restore() past depth 0 is a no-op, not a corrupt pop
+}
+function _octxUnwindTo(depth){ while (_octxDepth > depth) octx.restore(); }
 window.__RORDrawErrors = window.__RORDrawErrors || [];
 function _logRORDrawError(err){
   window.__RORDrawErrors.push({ t: Date.now(), zone, message: err && err.message, stack: err && err.stack });
@@ -27338,6 +27544,7 @@ function draw(){
   // for the handful of frames a menu is open.
   if (!paused) updateAmbient(_dz);
 
+  _octxUnwindTo(0);
   octx.setTransform(1, 0, 0, 1, 0, 0);
   octx.fillStyle = VOID_GROUND;
   octx.fillRect(0, 0, OW, OH);
@@ -27469,6 +27676,7 @@ function draw(){
   _tSeg = _mark('listsort', _tSeg);
   octx.globalCompositeOperation = 'source-over'; octx.globalAlpha = 1;
   for (const i of _dlIdx){
+   const _d0 = _octxDepth;
    try {
     const kind = _dl[i + 1];
     if (kind === 0){ const _pp = _dl[i + 3]; drawProp(_pp); if (zone === 'city' && hackOf(_pp)) drawHackFx(_pp); }
@@ -27510,6 +27718,7 @@ function draw(){
       if (_a.team === 'enemy' && ((_a._sus || 0) > 0.04 || _a._report || _a._alarm || (!_a.mad && !_a.civ && !_a.cop)) && !_a.villager) drawSusMark(_a);
     }
    } catch (err){                                   // one object failing to draw must never blank the rest of the scene (a stuck blend mode / alpha would hide everything after it)
+    _octxUnwindTo(_d0);                              // undo any save() this item made but never got to restore() — see the note above _octxDepth
     octx.globalCompositeOperation = 'source-over'; octx.globalAlpha = 1; octx.shadowBlur = 0;
     if (!window.__drawErrOnce){ window.__drawErrOnce = 1; console.error('draw error', err); }
    }
@@ -27899,7 +28108,7 @@ function draw(){
             octx.beginPath(); for (let i = 1; i < 4; i++){ octx.moveTo(sx + sw2 * i / 4, sy); octx.lineTo(sx + sw2 * i / 4, sy + sh2); } octx.moveTo(sx, sy + sh2 / 2); octx.lineTo(sx + sw2, sy + sh2 / 2); octx.stroke();
           }
         } else if (rf.role === 'church'){                               // rose window: a wheel of coloured light
-          const ro = churchRose(rf), rx = vw(ro.x - camx), ry = vw(ro.y - camy), rr = vw(ro.r), hz = (rf.x1 - rf.x0) >= (rf.y1 - rf.y0), sq = 0.68;
+          const ro = churchRose(rf), rx = vw(ro.x - camx), ry = vw(ro.y - camy), rr = vw(ro.r), hz = ro.horiz, sq = 0.68;
           if (rx + rr * 3 > 0 && rx - rr * 3 < OW && ry + rr * 3 > 0 && ry - rr * 3 < OH){
             octx.save(); octx.translate(rx, ry); octx.scale(hz ? 1 : sq, hz ? sq : 1);                                 // foreshortened onto the pitched roof, not a flat disc
             octx.globalCompositeOperation = 'lighter';
@@ -28000,7 +28209,7 @@ function draw(){
     octx.fillStyle = 'rgba(255,244,205,0.85)'; octx.fillRect(lx - 1, ly - 1, 3, 3);
   }
   _tSeg = _mark('roofslight', _tSeg);
-  } catch (err){ _logRORDrawError(err); }   // whatever made it onto octx still gets blitted below, instead of leaving the visible canvas stuck on a stale frame
+  } catch (err){ _octxUnwindTo(0); _logRORDrawError(err); }   // whatever made it onto octx still gets blitted below, instead of leaving the visible canvas stuck on a stale frame
 
   // ---- blit to main (zoomed toward the craft / build spot) ----
   ctx.imageSmoothingEnabled = false;
@@ -28750,6 +28959,14 @@ function updateRideFun(dt){
     const r = rideFun[i], p = r.p;
     if (zone !== 'city' || p.dead || !props.includes(p)){ if (p) p._turbo = 0; rideFun.splice(i, 1); continue; }
     r.t += dt;
+    if (r.k === 'ferrisdoom'){
+      p._turbo = Math.min(1, r.t / 2.2) * 2.2;                     // keeps accelerating until it comes off
+      r.nx -= dt;
+      if (r.nx <= 0){ r.nx = rand(0.4, 0.7); popText(p.x + rand(-50, 50), p.y - 130 + rand(-20, 40), pick(r.t > r.life - 2.2 ? FERRIS_WORRIED : FERRIS_EXCITED), r.t > r.life - 2.2 ? '#ffb090' : '#ffe6a0', 1.4); }
+      if (Math.random() < dt * 10) shake(1.5 + r.t * 0.4);
+      if (r.t >= r.life){ rideFun.splice(i, 1); releaseFerrisWheel(p); }
+      continue;
+    }
     const ramp = Math.min(1, r.t / 1.2) * (r.t > r.life - 1.6 ? Math.max(0, (r.life - r.t) / 1.6) : 1);
     p._turbo = ramp; if (r.k === 'carousel') p._spinA = (p._spinA || 0) + ramp * 9 * dt;
     r.nx -= dt;
@@ -28764,13 +28981,27 @@ function updateRideFun(dt){
     if (r.t >= r.life){ p._turbo = 0; rideFun.splice(i, 1); popText(p.x, p.y - 50, r.k === 'ferris' ? 'everyone is very dizzy' : '*hic*', '#d8e4c0', 1.8); }
   }
 }
-function startRideTantrum(p, k){
-  p._hacked = true; rideFun.push({ p, k, t: 0, life: 9, nx: 0.3 });
+function startRideTantrum(p, k, viaE){
+  if (viaE) p._spun = true; else p._hacked = true;
+  rideFun.push({ p, k, t: 0, life: 9, nx: 0.3 });
   A.S.thud(); shake(3); makeNoise(p.x, p.y, 380, 0.8);
   popText(p.x, p.y - (k === 'ferris' ? 120 : 56), k === 'ferris' ? 'MAXIMUM SPIN' : 'THE HORSES HAVE OPINIONS', '#ff9ae0', 1.8);
   noteAlt('groceries', 'hacked the fair — picnic baskets rained down'); noteAlt('money', 'the riders pockets emptied');
 }
-HACKS.lm_ferris = { time: 2.4, ok: p => !p._hacked && !(p._turbo > 0), run(p){ startRideTantrum(p, 'ferris'); } };
+const FERRIS_EXCITED = ['"WHEEEEEE!"', '"THIS IS AMAZING!"', '"FASTER! FASTER!"', '"WOOOOO!"', '"BEST. RIDE. EVER."', '"I CAN SEE MY HOUSE!"'];
+const FERRIS_WORRIED = ['"is that... supposed to happen?"', '"why is it going sideways?"', '"the bolts! the BOLTS!"', '"STOP! STOP!"', '"ok I want to get off now"'];
+HACKS.lm_ferris = { time: 2.4, ok: p => !p._doom, run(p){
+  p._doom = true; rideFun.push({ p, k: 'ferrisdoom', t: 0, life: 7, nx: 0.2 });
+  A.S.thud(); shake(3); makeNoise(p.x, p.y, 380, 0.8);
+  popText(p.x, p.y - 130, 'SPINNING UP…', '#ff9ae0', 1.8); noteAlt('groceries', 'wrecked the fair'); noteAlt('money', 'wrecked the fair');
+} };
+function releaseFerrisWheel(p){                                     // the wheel tears off its mount and rolls, wrecking everything in its path, until it blows
+  const x = p.x, y = p.y; p._turbo = 0; p.dead = true;
+  burst(x, y, 24, '#c8c8d4', 340); burst(x, y - 10, 16, '#ff9a3a', 320); A.S.thud(); shake(10); makeNoise(x, y, 520, 1); bakeDecal(x, y, 40, 'rgba(30,26,22,0.5)');
+  const dirs = [0, Math.PI / 2, Math.PI, Math.PI * 1.5], base = dirs[(Math.abs(Math.round(x * 3 + y)) % 4)];
+  rollingWheels.push({ x, y: y + 6, ang: base + rand(-0.12, 0.12), speed: 260, r: 112, fuse: 7, rot: 0, cry: true });
+  popText(x, y - 60, "THE WHEEL'S LOOSE!", '#ffd24a', 1.8);
+}
 HACKS.lm_carousel = { time: 2.2, ok: p => !p._hacked && !(p._turbo > 0), run(p){ startRideTantrum(p, 'carousel'); } };
 // market stalls: hack the produce display and it all comes tumbling down (free groceries, a very loud vendor)
 HACKS.lm_stall = { time: 1.6, ok: p => !p._hacked, run(p){
@@ -28779,6 +29010,25 @@ HACKS.lm_stall = { time: 1.6, ok: p => !p._hacked, run(p){
   burst(p.x, p.y, 16, '#e8603a', 200); burst(p.x, p.y, 10, '#8ac04a', 160); A.S.thud(); makeNoise(p.x, p.y, 200, 0.5);
   popText(p.x, p.y - 30, 'PRODUCE AVALANCHE!', '#ffb070', 1.6); noteAlt('groceries', 'the market stall collapsed');
 } };
+// arcade cabinets: hold the hack and the machine goes into a random tantrum
+HACKS.arcade = { time: 1.8, ok: p => !p._hacked, run(p){
+  p._hacked = true; const r = Math.random();
+  if (r < 0.3){                                                                                                        // high score: the whole jackpot pours out
+    for (let i = 0, n = hasRes('siphon') ? 14 : 9; i < n; i++) pickups.push({ x: Math.round(p.x + rand(-16, 16)), y: Math.round(p.y + 14 + rand(0, 14)), w: 'cash', taken: false });
+    burst(p.x, p.y, 16, '#ffd24a', 220); A.S.thud(); popText(p.x, p.y - 30, 'NEW HIGH SCORE!', '#ffe27a', 1.6); makeNoise(p.x, p.y, 180, 0.4); noteAlt('money', 'gamed the arcade');
+  } else if (r < 0.55){                                                                                                // the prize counter empties: a fresh weapon and a first-aid snack
+    pickups.push({ x: Math.round(p.x), y: Math.round(p.y + 16), w: pick([...COPYCAT_WEAPONS]), taken: false });
+    for (let i = 0; i < 2; i++) pickups.push({ x: Math.round(p.x + rand(-12, 12)), y: Math.round(p.y + 14 + rand(0, 12)), w: 'health', taken: false });
+    burst(p.x, p.y, 12, '#ff9ae0', 200); A.S.thud(); popText(p.x, p.y - 30, 'TICKET AVALANCHE!', '#ffb0e8', 1.6);
+  } else if (r < 0.8){                                                                                                 // insert coin... loudly, then it blows (crowd magnet, like the telly)
+    p._tvHack = { t: 0, life: 6, n: 0 }; activeHacks.push(p); makeNoise(p.x, p.y, 340, 0.9); popText(p.x, p.y - 30, 'INSERT COIN…', '#9fe8ff', 1.6);
+  } else {                                                                                                             // game over: the cabinet zaps everything nearby
+    addHazard('spark', p.x, p.y + 10, { r: 62, life: 8 }); burst(p.x, p.y, 18, '#7fd8ff', 260); A.S.thud(); shake(3);
+    for (const e of enemies) if (!e.dead && e.team === 'enemy' && !e.villager && dist2(e.x, e.y, p.x, p.y) < 90 * 90) damage(e, 22, player, 200);
+    popText(p.x, p.y - 30, 'GAME OVER', '#ff8a8a', 1.6); makeNoise(p.x, p.y, 220, 0.6);
+  }
+} };
+HACKS.heli = { time: 3.2, ok: p => !!(p._h && !p._h._hacked), run(p){ startHeliRampage(p._h); } };
 HACKS.lm_fountain = { time: 2.4, ok: p => !p._hacked, run(p){
   p._hacked = true; A.S.splash(); shake(3);
   burst(p.x, p.y, 26, '#8fd8c0', 260); burst(p.x, p.y, 12, '#ffffff', 200);
@@ -29080,6 +29330,225 @@ const SHRINE_CORES = {
   gallows: [[-20, -26, 2, 2.6, 40], [22, -24, 2, 2.6, 40], [0, -22, 2, 2.6, 40]], maw: [[0, -6, 6, 8, 80]], ossuary: [[0, -38, 5, 8, 90]], bloodmoon: [[0, -30, 12, 12, 90]],
   nightmare: [[-7, -24, 2, 1.8, 36], [0, -27, 2, 1.8, 36], [7, -24, 2, 1.8, 36], [-10, -16, 2, 1.8, 36], [10, -16, 2, 1.8, 36], [0, -18, 2, 1.8, 36]],
 };
+// ================= CULT ALTAR + TEMPLE FONT — five hand-built looks each =================
+// user: "the cult altar and temple font look very plain and boring. Create 5 variations of each and make them look better quality."
+// Which look a piece gets comes from where it stands (so it never changes once placed); move it a few tiles and it can roll a different one.
+const ALTAR_LOOKS = ['Blood Altar', 'Obsidian Altar', 'Sun Altar', 'Bone Altar', 'Moon Altar'];
+const FONT_LOOKS = ['Marble Font', 'Blood Font', 'Lotus Font', 'Star Font', 'Ember Font'];
+function propLook5(p){ return Math.abs(Math.round(p.x / 4) * 73 + Math.round(p.y / 4) * 151) % 5; }
+function _glowDot(g, x, y, r, rgb, a){ const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(' + rgb + ',' + a + ')'); gr.addColorStop(1, 'rgba(' + rgb + ',0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2); }
+function _cultFlame(g, x, y, s, t, seed, outer, inner){
+  const f = 1 + Math.sin(t * 9 + seed) * 0.16 + Math.sin(t * 15 + seed * 2) * 0.1, sw = Math.sin(t * 6 + seed) * s * 0.18;
+  g.fillStyle = outer || '#ff8a2a'; g.beginPath(); g.moveTo(x - s * 0.55, y); g.quadraticCurveTo(x - s * 0.5, y - s * 0.9, x + sw, y - s * 2.1 * f); g.quadraticCurveTo(x + s * 0.5, y - s * 0.9, x + s * 0.55, y); g.closePath(); g.fill();
+  g.fillStyle = inner || '#ffe27a'; g.beginPath(); g.moveTo(x - s * 0.28, y); g.quadraticCurveTo(x - s * 0.25, y - s * 0.6, x + sw * 0.6, y - s * 1.3 * f); g.quadraticCurveTo(x + s * 0.25, y - s * 0.6, x + s * 0.28, y); g.closePath(); g.fill();
+}
+// a shaded stone block seen from above-front: base bottom edge at yb, front face z tall, top face d deep
+function _block(g, x, yb, w, d, z, c, hl){
+  const dk = _tone(c, -0.34), md = _tone(c, -0.14), lt = _tone(c, 0.2);
+  const gr = g.createLinearGradient(0, yb - z, 0, yb); gr.addColorStop(0, md); gr.addColorStop(1, dk);
+  g.fillStyle = gr; g.fillRect(x, yb - z, w, z);
+  g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(x, yb - 1.4, w, 1.4);
+  g.fillStyle = c; g.fillRect(x, yb - z - d, w, d);
+  const tg = g.createLinearGradient(0, yb - z - d, 0, yb - z); tg.addColorStop(0, lt); tg.addColorStop(1, c); g.fillStyle = tg; g.fillRect(x, yb - z - d, w, d);
+  g.fillStyle = hl || 'rgba(255,255,255,0.22)'; g.fillRect(x, yb - z - d, w, 1); g.fillRect(x, yb - z - d, 1, d + z);
+  g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(x + w - 1, yb - z - d, 1, d + z);
+}
+function _altarOverlays(g, t, p, tx, ty, glowRgb){                     // research perks show on whichever altar you have
+  if (hasRes('tithing')){ g.fillStyle = '#ffd24a'; for (const [dx, dy] of [[-6, 0], [2, 1], [7, -1]]){ g.fillRect(tx + dx, ty + dy, 2.4, 1.6); g.fillStyle = '#fff2a0'; g.fillRect(tx + dx, ty + dy, 1, 0.8); g.fillStyle = '#ffd24a'; } }
+  if (hasRes('reliquary')){ const ga = 0.3 + 0.16 * Math.sin(t * 2.4), fy = ty - 9 + Math.sin(t * 1.6) * 1.5; _glowDot(g, tx, fy, 15, '200,170,255', ga); g.fillStyle = '#efe6cc'; g.fillRect(tx - 2, fy - 3, 4, 6); g.fillStyle = '#c79bde'; g.fillRect(tx - 1, fy - 2, 2, 3); }
+  if (hasRes('sacredfire')) _glowDot(g, tx, ty - 6, 26, glowRgb || '255,140,50', 0.22 + 0.06 * Math.sin(t * 7));
+}
+function drawAltarArt(g, p, w, h, t){
+  const v = propLook5(p), yb = h / 2 + 1;
+  g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(0, h / 2 + 1, w * 0.74, 5.5, 0, 0, 7); g.fill();
+  let tx = 0, ty = -h / 2, rgb = '255,140,50';
+  if (v === 0){                                                          // BLOOD ALTAR: dark stone steps, crimson cloth with gold fringe, tall candelabra, a banner behind
+    _block(g, -w / 2 - 3, yb, w + 6, 5, 3, '#4a4250');
+    _block(g, -w / 2, yb - 3, w, 6, 10, '#6a6274');
+    g.fillStyle = '#8a1e2e'; g.fillRect(-w / 2 + 1, yb - 3 - 10 - 6, w - 2, 6); g.fillStyle = '#b02a3c'; g.fillRect(-w / 2 + 1, yb - 3 - 10 - 6, w - 2, 1.6);          // cloth over the top
+    const cg = g.createLinearGradient(0, yb - 15, 0, yb - 2); cg.addColorStop(0, '#a02434'); cg.addColorStop(1, '#5e1220'); g.fillStyle = cg; g.fillRect(-w / 2 + 3, yb - 16, w - 6, 12);   // the drape hanging down the front
+    g.fillStyle = '#e0b84a'; g.fillRect(-w / 2 + 3, yb - 16, w - 6, 1.4); g.fillRect(-w / 2 + 3, yb - 5, w - 6, 1.2);
+    for (let i = 0; i < 7; i++) g.fillRect(-w / 2 + 4 + i * ((w - 9) / 6), yb - 4, 1, 2.4);                       // tassels
+    g.fillStyle = '#e0b84a'; g.beginPath(); g.moveTo(0, yb - 14); g.lineTo(2.6, yb - 10.5); g.lineTo(0, yb - 7); g.lineTo(-2.6, yb - 10.5); g.closePath(); g.fill(); g.fillStyle = '#b02a3c'; g.fillRect(-0.8, yb - 11.4, 1.6, 1.8);   // a gold sigil
+    for (const sx of [-1, 1]){                                             // candelabra
+      const cx = sx * (w / 2 + 3); g.fillStyle = '#3a3440'; g.fillRect(cx - 1, yb - 30, 2, 27); g.fillRect(cx - 3.4, yb - 4, 6.8, 3); g.fillStyle = '#c8a040'; g.fillRect(cx - 4, yb - 31, 8, 1.6);
+      for (const dx of [-3, 0, 3]){ g.fillStyle = '#efe6cc'; g.fillRect(cx + dx - 0.8, yb - 36, 1.6, 5); _cultFlame(g, cx + dx, yb - 36, 1.5, t, cx + dx + sx, '#ff9a3a', '#ffeaa0'); }
+      _glowDot(g, cx, yb - 38, 16, '255,170,80', 0.3 + 0.08 * Math.sin(t * 8 + sx));
+    }
+    g.fillStyle = '#5e1220'; g.beginPath(); g.moveTo(-7, yb - 22); g.lineTo(7, yb - 22); g.lineTo(7, yb - 44); g.lineTo(0, yb - 38); g.lineTo(-7, yb - 44); g.closePath(); g.fill();   // banner behind
+    g.fillStyle = '#e0b84a'; g.fillRect(-7, yb - 22, 14, 1.4); g.fillRect(-1, yb - 40, 2, 14);
+    tx = 0; ty = yb - 20; rgb = '255,120,80';
+  } else if (v === 1){                                                   // OBSIDIAN ALTAR: black glassy slab, pulsing violet runes, floating shards, violet braziers
+    _block(g, -w / 2 - 2, yb, w + 4, 5, 3, '#22202e');
+    _block(g, -w / 2, yb - 3, w, 6, 11, '#2c2a3c', 'rgba(190,150,255,0.35)');
+    const rp = 0.55 + 0.4 * Math.sin(t * 2.2);
+    g.fillStyle = 'rgba(200,150,255,' + rp + ')'; g.strokeStyle = 'rgba(200,150,255,' + rp + ')'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(-8, yb - 5); g.lineTo(-8, yb - 12); g.lineTo(-4, yb - 9); g.lineTo(0, yb - 13); g.lineTo(4, yb - 9); g.lineTo(8, yb - 12); g.lineTo(8, yb - 5); g.stroke();
+    g.fillRect(-1, yb - 8, 2, 2);
+    g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(-w / 2 + 2, yb - 3 - 11 - 6, w * 0.5, 1.4);
+    for (const sx of [-1, 1]){ const bx = sx * (w / 2 + 3); g.fillStyle = '#3a3448'; g.beginPath(); g.moveTo(bx - 4, yb - 13); g.lineTo(bx + 4, yb - 13); g.lineTo(bx + 2, yb - 3); g.lineTo(bx - 2, yb - 3); g.closePath(); g.fill(); g.fillStyle = '#5a4c78'; g.fillRect(bx - 4, yb - 13, 8, 1.4);
+      _glowDot(g, bx, yb - 16, 15, '170,110,255', 0.35 + 0.1 * Math.sin(t * 7 + sx)); _cultFlame(g, bx, yb - 13, 2.2, t, sx * 3, '#a060ff', '#e8d0ff'); }
+    for (let i = 0; i < 3; i++){ const a = t * 0.9 + i * 2.09, sx = Math.cos(a) * 9, sy = yb - 32 + Math.sin(a * 1.3) * 3 - i * 2;                                // floating shards
+      g.fillStyle = 'rgba(180,130,255,0.8)'; g.beginPath(); g.moveTo(sx, sy - 4); g.lineTo(sx + 2.4, sy); g.lineTo(sx, sy + 4); g.lineTo(sx - 2.4, sy); g.closePath(); g.fill(); g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(sx - 0.6, sy - 2.5, 1, 2.5); }
+    _glowDot(g, 0, yb - 28, 20, '150,100,255', 0.16 + 0.05 * Math.sin(t * 3));
+    tx = 0; ty = yb - 19; rgb = '170,110,255';
+  } else if (v === 2){                                                   // SUN ALTAR: pale marble, a golden sunburst disc behind, a bowl of sacred flame
+    for (let i = 0; i < 11; i++){ const a = Math.PI + (i / 10) * Math.PI, r0 = 12, r1 = 22 + (i % 2) * 5; g.strokeStyle = i % 2 ? '#f0c040' : '#c89a30'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(Math.cos(a) * r0, yb - 30 + Math.sin(a) * r0); g.lineTo(Math.cos(a) * r1, yb - 30 + Math.sin(a) * r1); g.stroke(); }
+    _glowDot(g, 0, yb - 30, 26, '255,200,80', 0.3 + 0.06 * Math.sin(t * 2));
+    g.fillStyle = '#c89a30'; g.beginPath(); g.arc(0, yb - 30, 10.5, Math.PI, 0); g.fill(); g.fillStyle = '#f4d060'; g.beginPath(); g.arc(0, yb - 30, 8.6, Math.PI, 0); g.fill(); g.fillStyle = '#fff2b0'; g.beginPath(); g.arc(0, yb - 30, 4.6, Math.PI, 0); g.fill();
+    _block(g, -w / 2 - 3, yb, w + 6, 5, 3, '#cfc9d0');
+    _block(g, -w / 2, yb - 3, w, 6, 10, '#e2dde6');
+    g.fillStyle = '#d4a838'; g.fillRect(-w / 2, yb - 3 - 10, w, 1.4); g.fillRect(-w / 2, yb - 3 - 1.4, w, 1.4);
+    g.fillStyle = 'rgba(200,160,60,0.6)'; for (let i = 0; i < 4; i++) g.fillRect(-w / 2 + 4 + i * ((w - 10) / 3), yb - 11, 2, 5);                                       // fluting
+    g.fillStyle = '#c89a30'; g.beginPath(); g.moveTo(-6, yb - 19); g.lineTo(6, yb - 19); g.lineTo(4, yb - 14); g.lineTo(-4, yb - 14); g.closePath(); g.fill(); g.fillStyle = '#f4d060'; g.fillRect(-6, yb - 19, 12, 1.4);   // the bowl
+    _glowDot(g, 0, yb - 24, 16, '255,190,80', 0.38 + 0.08 * Math.sin(t * 8)); _cultFlame(g, 0, yb - 19, 3, t, 1, '#ffb030', '#fff0a0');
+    tx = 0; ty = yb - 14; rgb = '255,200,80';
+  } else if (v === 3){                                                   // BONE ALTAR: a slab ringed with skulls and ribs, cold green ghostfire
+    _block(g, -w / 2 - 3, yb, w + 6, 5, 3, '#5a5646');
+    _block(g, -w / 2, yb - 3, w, 6, 9, '#8a8672');
+    const skull = (x, y, s) => { g.fillStyle = '#e8e2cc'; g.beginPath(); g.arc(x, y - s * 0.4, s, 0, 7); g.fill(); g.fillRect(x - s * 0.6, y - s * 0.2, s * 1.2, s * 0.9); g.fillStyle = '#2a2a24'; g.fillRect(x - s * 0.55, y - s * 0.6, s * 0.45, s * 0.5); g.fillRect(x + s * 0.1, y - s * 0.6, s * 0.45, s * 0.5); g.fillRect(x - 0.4, y + s * 0.15, 0.8, s * 0.4); };
+    for (const dx of [-8.5, 0, 8.5]) skull(dx, yb - 4, 3.2);
+    g.strokeStyle = '#e8e2cc'; g.lineWidth = 1.5; g.lineCap = 'round';                                                                                                  // a ribcage arch
+    for (let i = 0; i < 4; i++){ g.beginPath(); g.moveTo(-w / 2 + 2 + i * 1.6, yb - 12 - i * 0.6); g.quadraticCurveTo(0, yb - 34 - i * 1.6, w / 2 - 2 - i * 1.6, yb - 12 - i * 0.6); g.stroke(); }
+    g.strokeStyle = '#cfc9b0'; g.lineWidth = 2.2; g.beginPath(); g.moveTo(0, yb - 12); g.lineTo(0, yb - 33); g.stroke(); skull(0, yb - 33, 3.4);
+    for (const sx of [-1, 1]){ const bx = sx * (w / 2 + 2.5); skull(bx, yb - 3, 2.6); g.fillStyle = '#d8d2b8'; g.fillRect(bx - 0.8, yb - 12, 1.6, 8); _glowDot(g, bx, yb - 15, 13, '110,255,150', 0.36 + 0.1 * Math.sin(t * 6 + sx)); _cultFlame(g, bx, yb - 12, 1.8, t, sx * 4, '#4aff8a', '#d8ffe0'); }
+    tx = 0; ty = yb - 14; rgb = '110,255,150';
+  } else {                                                               // MOON ALTAR: mossy stone, a standing crescent arch, vines and softly glowing mushrooms
+    _block(g, -w / 2 - 3, yb, w + 6, 5, 3, '#5a6a5c');
+    _block(g, -w / 2, yb - 3, w, 6, 9, '#7a8a7c');
+    g.fillStyle = '#4a7a44'; for (const [mx, mw] of [[-w / 2, 8], [w / 2 - 6, 6], [-4, 5]]){ g.fillRect(mx, yb - 3 - 9 - 6, mw, 2.4); g.fillRect(mx, yb - 3 - 9, mw + 1, 1.6); }   // moss
+    g.fillStyle = '#5c9a52'; for (const [mx, mw] of [[-w / 2 + 1, 4], [w / 2 - 5, 3]]) g.fillRect(mx, yb - 3 - 9 - 6, mw, 1);
+    g.strokeStyle = '#3a8a4a'; g.lineWidth = 1.1; g.beginPath(); g.moveTo(-w / 2 + 3, yb - 3); g.quadraticCurveTo(-w / 2 + 6, yb - 8, -w / 2 + 4, yb - 12); g.moveTo(w / 2 - 3, yb - 3); g.quadraticCurveTo(w / 2 - 6, yb - 9, w / 2 - 4, yb - 12); g.stroke();
+    g.strokeStyle = '#9ab0a0'; g.lineWidth = 3.4; g.beginPath(); g.arc(0, yb - 27, 12, 0.2 * Math.PI, 0.8 * Math.PI, true); g.stroke();                       // the standing arch
+    g.fillStyle = '#d8e8f8'; g.beginPath(); g.arc(0, yb - 30, 7.4, 0, 7); g.fill(); g.fillStyle = '#0d1420'; g.beginPath(); g.arc(2.6, yb - 31, 6.4, 0, 7); g.fill();     // a crescent
+    _glowDot(g, 0, yb - 30, 22, '170,210,255', 0.28 + 0.07 * Math.sin(t * 2.4));
+    for (const [mx, my, s] of [[-w / 2 - 2, yb - 2, 2.6], [w / 2 + 3, yb - 3, 3.2], [-w / 2 + 3, yb - 16, 1.8]]){ g.fillStyle = '#e8f0ff'; g.fillRect(mx - 0.5, my - 1, 1, 3); g.fillStyle = '#7ad0ff'; g.beginPath(); g.arc(mx, my - 1, s, Math.PI, 0); g.fill(); _glowDot(g, mx, my - 1, s * 3.6, '120,210,255', 0.3 + 0.1 * Math.sin(t * 3 + mx)); }
+    for (let i = 0; i < 4; i++){ const k = (t * 0.25 + i / 4) % 1; g.fillStyle = 'rgba(200,240,255,' + (0.8 * (1 - k)) + ')'; g.fillRect(Math.sin(i * 3 + t * 0.6) * 12, yb - 8 - k * 30, 1.2, 1.2); }
+    tx = 0; ty = yb - 15; rgb = '150,210,255';
+  }
+  _altarOverlays(g, t, p, tx, ty, rgb);
+}
+function drawFontArt(g, p, w, h, t){
+  const v = propLook5(p), cy = h * 0.06;
+  g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(0, h / 2 - 1, w * 0.62, 6, 0, 0, 7); g.fill();
+  const steps = (c) => { g.fillStyle = _tone(c, -0.3); g.beginPath(); g.ellipse(0, h * 0.42, w * 0.58, h * 0.2, 0, 0, 7); g.fill(); g.fillStyle = _tone(c, -0.1); g.beginPath(); g.ellipse(0, h * 0.38, w * 0.58, h * 0.18, 0, 0, 7); g.fill(); g.fillStyle = _tone(c, 0.12); g.beginPath(); g.ellipse(0, h * 0.35, w * 0.5, h * 0.14, 0, 0, 7); g.fill(); };
+  const basin = (c, water, r) => {                                       // a wide rimmed basin on a stem, seen from above-front
+    g.fillStyle = _tone(c, -0.35); g.beginPath(); g.moveTo(-w * 0.1, h * 0.32); g.lineTo(-w * 0.06, cy + 2); g.lineTo(w * 0.06, cy + 2); g.lineTo(w * 0.1, h * 0.32); g.closePath(); g.fill();       // stem
+    g.fillStyle = _tone(c, -0.2); g.beginPath(); g.ellipse(0, cy - 0.5, w * r + 1.6, h * 0.2, 0, 0, 7); g.fill();
+    g.fillStyle = _tone(c, 0.16); g.beginPath(); g.ellipse(0, cy - 2.4, w * r + 1.6, h * 0.19, 0, 0, 7); g.fill();
+    g.fillStyle = _tone(c, -0.3); g.beginPath(); g.ellipse(0, cy - 2.4, w * r - 0.4, h * 0.155, 0, 0, 7); g.fill();
+    const wg = g.createRadialGradient(-w * 0.08, cy - 4, 1, 0, cy - 2.4, w * r); wg.addColorStop(0, water[0]); wg.addColorStop(1, water[1]); g.fillStyle = wg; g.beginPath(); g.ellipse(0, cy - 2, w * r - 1.4, h * 0.135, 0, 0, 7); g.fill();
+  };
+  const ripple = (col, n) => { for (let i = 0; i < n; i++){ const k = (t * 0.55 + i / n) % 1; g.strokeStyle = col.replace('A', (0.6 * (1 - k)).toFixed(2)); g.lineWidth = 0.9; g.beginPath(); g.ellipse(0, cy - 2, w * 0.05 + k * w * 0.26, h * 0.02 + k * h * 0.09, 0, 0, 7); g.stroke(); } };
+  const pillar = (x, top, c, cap) => { g.fillStyle = _tone(c, -0.3); g.fillRect(x - 2.6, top, 5.2, cy + 6 - top); g.fillStyle = c; g.fillRect(x - 2.6, top, 3.4, cy + 6 - top); g.fillStyle = _tone(c, 0.22); g.fillRect(x - 2.6, top, 1.1, cy + 6 - top);
+    g.fillStyle = cap || _tone(c, 0.1); g.fillRect(x - 3.6, top - 2, 7.2, 3); g.fillStyle = _tone(c, -0.3); g.fillRect(x - 3.6, cy + 4, 7.2, 3); };
+  if (v === 0){                                                          // MARBLE FONT: white marble, a playing fountain, twin columns under a lintel, a draped cloth
+    steps('#c8c4d0'); pillar(-w * 0.44, -h * 0.72, '#dcd8e4'); pillar(w * 0.44, -h * 0.72, '#dcd8e4');
+    g.fillStyle = '#c8c2d4'; g.fillRect(-w * 0.5, -h * 0.78, w, 3.6); g.fillStyle = '#ece8f2'; g.fillRect(-w * 0.5, -h * 0.78, w, 1.2); g.fillStyle = '#d4a838'; g.fillRect(-w * 0.5, -h * 0.78 + 3.6, w, 1);
+    g.fillStyle = '#6a3a8a'; g.beginPath(); g.moveTo(-w * 0.14, -h * 0.74); g.lineTo(w * 0.14, -h * 0.74); g.lineTo(w * 0.12, -h * 0.3); g.lineTo(0, -h * 0.26); g.lineTo(-w * 0.12, -h * 0.3); g.closePath(); g.fill(); g.fillStyle = '#d4a838'; g.fillRect(-w * 0.14, -h * 0.74, w * 0.28, 1.4);
+    basin('#d4d0de', ['#a8d8f8', '#4a86c8'], 0.4); ripple('rgba(230,248,255,A)', 3);
+    g.fillStyle = '#e8f6ff'; g.fillRect(-0.6, cy - 12, 1.2, 9); for (let i = 0; i < 6; i++){ const k = (t * 1.3 + i / 6) % 1, a = (i % 2 ? 1 : -1) * (0.3 + 0.9 * k); g.fillStyle = 'rgba(220,244,255,' + (0.9 * (1 - k)).toFixed(2) + ')'; g.fillRect(a * 5 - 0.6, cy - 12 + k * k * 10, 1.4, 1.4); }
+    _glowDot(g, 0, cy - 5, 22, '160,210,255', 0.16);
+  } else if (v === 1){                                                   // BLOOD FONT: black basalt basin of dark red, skull-studded rim, dripping
+    steps('#3a3440'); pillar(-w * 0.44, -h * 0.66, '#2c2834', '#5a4a58'); pillar(w * 0.44, -h * 0.66, '#2c2834', '#5a4a58');
+    for (const sx of [-1, 1]){ g.fillStyle = '#e8e2cc'; g.beginPath(); g.arc(sx * w * 0.44, -h * 0.72, 3, 0, 7); g.fill(); g.fillRect(sx * w * 0.44 - 1.8, -h * 0.72 + 1, 3.6, 2.6); g.fillStyle = '#1a1418'; g.fillRect(sx * w * 0.44 - 1.6, -h * 0.72 - 1, 1.2, 1.4); g.fillRect(sx * w * 0.44 + 0.4, -h * 0.72 - 1, 1.2, 1.4); _glowDot(g, sx * w * 0.44, -h * 0.72, 10, '255,60,60', 0.25 + 0.1 * Math.sin(t * 5 + sx)); }
+    basin('#4a4250', ['#c02a34', '#6a0e1a'], 0.4); ripple('rgba(255,140,140,A)', 2);
+    g.fillStyle = '#e8e2cc'; for (let i = 0; i < 5; i++){ const a = Math.PI * (0.1 + i * 0.2); g.beginPath(); g.arc(Math.cos(a) * (w * 0.4 + 0.5), cy - 2.4 + Math.sin(a) * h * 0.16, 1.5, 0, 7); g.fill(); }   // skulls along the rim
+    for (let i = 0; i < 3; i++){ const k = (t * 0.6 + i * 0.33) % 1, dx = (i - 1) * 8; g.fillStyle = 'rgba(190,20,40,' + (1 - k).toFixed(2) + ')'; g.fillRect(dx - 0.6, cy + 2 + k * 8, 1.2, 1.2 + k * 2); }
+    _glowDot(g, 0, cy - 3, 24, '255,50,70', 0.14 + 0.05 * Math.sin(t * 3));
+  } else if (v === 2){                                                   // LOTUS FONT: jade basin of teal water, floating pink lotuses, lantern posts, a stone koi
+    steps('#7a9a8a'); for (const sx of [-1, 1]){ const lx = sx * w * 0.46; g.fillStyle = '#5a6a60'; g.fillRect(lx - 1.2, -h * 0.5, 2.4, cy + h * 0.5 + 4); g.fillStyle = '#7a8a80'; g.fillRect(lx - 3.6, -h * 0.58, 7.2, 8); g.fillStyle = 'rgba(255,220,130,' + (0.75 + 0.2 * Math.sin(t * 4 + sx)).toFixed(2) + ')'; g.fillRect(lx - 2.2, -h * 0.58 + 1.4, 4.4, 5); _glowDot(g, lx, -h * 0.58 + 4, 15, '255,210,120', 0.3); g.fillStyle = '#5a6a60'; g.beginPath(); g.moveTo(lx - 5, -h * 0.58); g.lineTo(lx, -h * 0.58 - 5); g.lineTo(lx + 5, -h * 0.58); g.closePath(); g.fill(); }
+    basin('#8aaa9a', ['#6ad8c8', '#2a8a90'], 0.42); ripple('rgba(210,255,248,A)', 2);
+    for (const [lx, ly, s, c] of [[-7, -0.5, 4.4, '#f2a0c0'], [6, 1.5, 3.6, '#f8c8d8'], [1, -3.5, 3.2, '#e880a8']]){
+      g.fillStyle = '#2a8a5a'; g.beginPath(); g.ellipse(lx + 2, cy + ly + 1, s * 1.1, s * 0.5, 0, 0, 7); g.fill();
+      for (let k = -2; k <= 2; k++){ g.fillStyle = k === 0 ? '#ffe0ec' : c; g.beginPath(); g.ellipse(lx + k * s * 0.34, cy + ly - Math.abs(k) * 0.4 - 1, s * 0.3, s * 0.62, k * 0.32, 0, 7); g.fill(); }
+      g.fillStyle = '#f8e070'; g.fillRect(lx - 0.6, cy + ly - 1.4, 1.2, 1.2); }
+    g.fillStyle = '#9ab8a8'; g.beginPath(); g.ellipse(-w * 0.16 + Math.sin(t * 0.8) * 2, cy + 1.4, 2.6, 1.1, 0, 0, 7); g.fill(); g.fillRect(-w * 0.16 + 2 + Math.sin(t * 0.8) * 2, cy + 0.6, 2, 1.4);
+  } else if (v === 3){                                                   // STAR FONT: night-blue basin holding a little sky, orbiting sparks, runed pillars
+    steps('#4a4c72'); pillar(-w * 0.44, -h * 0.74, '#5a5c88', '#8a8cc0'); pillar(w * 0.44, -h * 0.74, '#5a5c88', '#8a8cc0');
+    for (const sx of [-1, 1]){ const a = 0.5 + 0.4 * Math.sin(t * 2 + sx); g.fillStyle = 'rgba(190,200,255,' + a.toFixed(2) + ')'; for (let k = 0; k < 3; k++) g.fillRect(sx * w * 0.44 - 0.6, -h * 0.6 + k * 5, 1.2, 2.4); }
+    basin('#6a6c98', ['#3a2a8a', '#0e0e3a'], 0.4);
+    for (let i = 0; i < 9; i++){ const sx = (Math.sin(i * 7.7) * 0.36) * w, sy = cy - 2 + Math.cos(i * 3.1) * h * 0.07, a = 0.4 + 0.6 * Math.abs(Math.sin(t * 2 + i)); g.fillStyle = 'rgba(230,236,255,' + a.toFixed(2) + ')'; g.fillRect(sx, sy, i % 3 ? 1 : 1.6, i % 3 ? 1 : 1.6); }
+    for (let i = 0; i < 3; i++){ const a = t * 1.1 + i * 2.09; const ox = Math.cos(a) * w * 0.3, oy = cy - 8 + Math.sin(a) * 4; _glowDot(g, ox, oy, 7, '190,200,255', 0.6); g.fillStyle = '#fff'; g.fillRect(ox - 0.8, oy - 0.8, 1.6, 1.6); }
+    _glowDot(g, 0, cy - 3, 26, '110,120,255', 0.17 + 0.05 * Math.sin(t * 2.4));
+  } else {                                                               // EMBER FONT: a basalt bowl of living fire between iron braziers, heat-haze sparks
+    steps('#3a2c2a'); for (const sx of [-1, 1]){ const bx = sx * w * 0.46; g.fillStyle = '#2a2224'; g.fillRect(bx - 1.2, -h * 0.34, 2.4, cy + h * 0.34 + 4); g.fillStyle = '#3a2e30'; g.beginPath(); g.moveTo(bx - 5, -h * 0.4); g.lineTo(bx + 5, -h * 0.4); g.lineTo(bx + 3, -h * 0.28); g.lineTo(bx - 3, -h * 0.28); g.closePath(); g.fill(); g.fillStyle = '#c8602a'; g.fillRect(bx - 5, -h * 0.4, 10, 1.2);
+      _glowDot(g, bx, -h * 0.5, 15, '255,140,50', 0.34 + 0.1 * Math.sin(t * 8 + sx)); _cultFlame(g, bx, -h * 0.4, 2.6, t, sx * 5, '#ff7a2a', '#ffe08a'); }
+    basin('#4a3a38', ['#ffb030', '#c82a10'], 0.4);
+    for (let i = 0; i < 4; i++){ const fx = (i - 1.5) * 6; _cultFlame(g, fx, cy - 1, 3.6 + (i % 2), t, i * 2.3, '#ff6a20', '#ffe27a'); }
+    _glowDot(g, 0, cy - 6, 30, '255,120,40', 0.3 + 0.08 * Math.sin(t * 9));
+    for (let i = 0; i < 6; i++){ const k = (t * 0.7 + i / 6) % 1; g.fillStyle = 'rgba(255,' + (150 + i * 12) + ',60,' + (0.9 * (1 - k)).toFixed(2) + ')'; g.fillRect(Math.sin(i * 2.4 + k * 3) * 9, cy - 8 - k * 26, 1.4, 1.4); }
+  }
+  if (hasRes('reliquary')){ const ga = 0.22 + 0.1 * Math.sin(t * 2.4); _glowDot(g, 0, -h * 0.2, w * 0.7, '200,170,255', ga); }
+}
+const SHRINE_LOOKS = ['Lantern Shrine', 'Wayside Hokora', 'Rune Stone', 'Idol Shrine', 'Prayer Cairn'];
+function drawShrineArt(g, p, w, h, t){
+  const v = propLook5(p), yb = h / 2 + 1;
+  g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(0, yb, w * 0.72, 4, 0, 0, 7); g.fill();
+  let fx = 0, fy = -h * 0.6, rgb = '255,206,106';                        // where this shrine's flame / focus sits (perks hang off it)
+  if (v === 0){                                                          // LANTERN SHRINE: stepped stone base, a carved pillar, a stone lantern with a living flame
+    _block(g, -w * 0.6, yb, w * 1.2, 4, 3, '#7a7484');
+    _block(g, -w * 0.44, yb - 3, w * 0.88, 3, 3, '#8a8496');
+    g.fillStyle = '#6a6474'; g.fillRect(-2.2, yb - 20, 4.4, 14); g.fillStyle = '#8a8496'; g.fillRect(-2.2, yb - 20, 2.2, 14); g.fillStyle = '#a8a2b4'; g.fillRect(-2.2, yb - 20, 0.9, 14);
+    g.fillStyle = '#5a5464'; g.fillRect(-5, yb - 22, 10, 3); g.fillStyle = '#8a8496'; g.fillRect(-5, yb - 22, 10, 1.2);                       // the lantern's floor
+    g.fillStyle = 'rgba(20,16,24,0.85)'; g.fillRect(-3.4, yb - 30, 6.8, 8);                                                                     // firebox
+    _glowDot(g, 0, yb - 27, 18, '255,190,90', 0.45 + 0.1 * Math.sin(t * 8 + p.x)); _cultFlame(g, 0, yb - 23.5, 2.1, t, p.x, '#ff9a3a', '#ffeaa0');
+    g.fillStyle = '#5a5464'; g.beginPath(); g.moveTo(-7, yb - 30); g.lineTo(0, yb - 37); g.lineTo(7, yb - 30); g.closePath(); g.fill(); g.fillStyle = '#8a8496'; g.beginPath(); g.moveTo(-7, yb - 30); g.lineTo(0, yb - 37); g.lineTo(0, yb - 30); g.closePath(); g.fill();
+    g.fillStyle = '#a8a2b4'; g.fillRect(-0.9, yb - 40, 1.8, 3.4);
+    fx = 0; fy = yb - 27;
+  } else if (v === 1){                                                   // WAYSIDE HOKORA: a tiny timber shrine on stone feet, doors ajar, candle glow inside, paper streamers
+    g.fillStyle = '#6a6474'; for (const sx of [-1, 1]) g.fillRect(sx * w * 0.36 - 1.6, yb - 4, 3.2, 4);
+    g.fillStyle = '#4a3220'; g.fillRect(-w * 0.46, yb - 6, w * 0.92, 2.4);
+    g.fillStyle = '#7a5630'; g.fillRect(-w * 0.4, yb - 19, w * 0.8, 13); g.fillStyle = '#9a7040'; g.fillRect(-w * 0.4, yb - 19, w * 0.36, 13);
+    g.fillStyle = '#1c1410'; g.fillRect(-w * 0.26, yb - 17, w * 0.52, 10);                                                                     // the open doorway
+    _glowDot(g, 0, yb - 12, 14, '255,180,90', 0.4 + 0.1 * Math.sin(t * 7)); g.fillStyle = '#efe6cc'; g.fillRect(-1, yb - 11, 2, 4); _cultFlame(g, 0, yb - 11, 1.5, t, 3, '#ffb040', '#fff0b0');
+    g.fillStyle = '#6a4a28'; g.fillRect(-w * 0.26, yb - 17, 1.6, 10); g.fillRect(w * 0.26 - 1.6, yb - 17, 1.6, 10);                                // door leaves
+    g.fillStyle = '#3a2a1a'; g.beginPath(); g.moveTo(-w * 0.62, yb - 18); g.lineTo(0, yb - 29); g.lineTo(w * 0.62, yb - 18); g.closePath(); g.fill();       // the roof
+    g.fillStyle = '#5a3a26'; g.beginPath(); g.moveTo(-w * 0.62, yb - 18); g.lineTo(0, yb - 29); g.lineTo(0, yb - 18); g.closePath(); g.fill();
+    g.fillStyle = '#8a4a3a'; g.fillRect(-w * 0.62, yb - 19, w * 1.24, 1.6);
+    g.fillStyle = '#a04030'; g.fillRect(-w * 0.44, yb - 20.5, w * 0.88, 1.4);                                                                  // red beam
+    const sw = Math.sin(t * 2.4 + p.x) * 0.8; g.strokeStyle = '#efe6cc'; g.lineWidth = 1; g.beginPath(); g.moveTo(-w * 0.4, yb - 19); g.lineTo(w * 0.4, yb - 19); g.stroke();
+    for (const sx of [-1, 1]){ g.fillStyle = '#f4f0e4'; g.fillRect(sx * w * 0.3 - 0.8 + sw, yb - 18, 1.6, 5); g.fillRect(sx * w * 0.3 - 0.8 - sw * 0.5, yb - 13, 1.6, 3); }          // shide paper streamers
+    fx = 0; fy = yb - 11; rgb = '255,180,90';
+  } else if (v === 2){                                                   // RUNE STONE: a leaning menhir with softly pulsing glyphs and an offering bowl at its foot
+    g.fillStyle = '#4a4e5a'; g.beginPath(); g.moveTo(-8, yb); g.lineTo(-6, yb - 22); g.lineTo(-2, yb - 30); g.lineTo(4, yb - 27); g.lineTo(7, yb - 8); g.lineTo(9, yb); g.closePath(); g.fill();
+    g.fillStyle = '#6a6e7c'; g.beginPath(); g.moveTo(-8, yb); g.lineTo(-6, yb - 22); g.lineTo(-2, yb - 30); g.lineTo(-1, yb - 12); g.lineTo(-2, yb); g.closePath(); g.fill();
+    g.fillStyle = '#8a8e9c'; g.fillRect(-6, yb - 22, 1, 12);
+    const rp = 0.55 + 0.4 * Math.sin(t * 2 + p.x); g.strokeStyle = 'rgba(120,230,255,' + rp.toFixed(2) + ')'; g.lineWidth = 1; g.beginPath();
+    g.moveTo(0, yb - 24); g.lineTo(0, yb - 12); g.moveTo(-3, yb - 20); g.lineTo(3, yb - 17); g.moveTo(-3, yb - 15); g.lineTo(3, yb - 12); g.moveTo(3, yb - 22); g.lineTo(-1, yb - 26); g.stroke();
+    _glowDot(g, 0, yb - 18, 17, '110,220,255', 0.18 + 0.08 * Math.sin(t * 2 + p.x));
+    g.fillStyle = '#3a3a44'; g.beginPath(); g.ellipse(-9, yb - 1.5, 4.4, 2.2, 0, 0, 7); g.fill(); g.fillStyle = '#5a5a66'; g.beginPath(); g.ellipse(-9, yb - 2.4, 4.4, 2, 0, 0, 7); g.fill(); g.fillStyle = '#1a1c24'; g.beginPath(); g.ellipse(-9, yb - 2.4, 3, 1.3, 0, 0, 7); g.fill();
+    g.fillStyle = '#ffd24a'; g.fillRect(-10.5, yb - 3.2, 1.6, 1); g.fillRect(-8.6, yb - 3.6, 1.6, 1);
+    for (let i = 0; i < 3; i++){ const k = (t * 0.3 + i / 3) % 1; g.fillStyle = 'rgba(160,240,255,' + (0.8 * (1 - k)).toFixed(2) + ')'; g.fillRect(Math.sin(i * 4 + t) * 4, yb - 26 - k * 12, 1.1, 1.1); }
+    fx = 0; fy = yb - 22; rgb = '110,220,255';
+  } else if (v === 3){                                                   // IDOL SHRINE: a small robed figure on a plinth with a soft halo and flowers laid at its feet
+    _block(g, -w * 0.5, yb, w, 4, 4, '#8a8478');
+    _block(g, -w * 0.34, yb - 4, w * 0.68, 3, 3, '#a09a8c');
+    g.fillStyle = '#9a4a8a'; g.beginPath(); g.moveTo(-5, yb - 7); g.lineTo(-3.4, yb - 20); g.lineTo(3.4, yb - 20); g.lineTo(5, yb - 7); g.closePath(); g.fill();          // robe
+    g.fillStyle = '#b866a8'; g.beginPath(); g.moveTo(-5, yb - 7); g.lineTo(-3.4, yb - 20); g.lineTo(0, yb - 20); g.lineTo(0, yb - 7); g.closePath(); g.fill();
+    g.fillStyle = '#e0b84a'; g.fillRect(-3.4, yb - 14, 6.8, 1.2);
+    g.fillStyle = '#d8c8a8'; g.beginPath(); g.arc(0, yb - 23, 3.2, 0, 7); g.fill(); g.fillStyle = '#e8dcc0'; g.beginPath(); g.arc(-0.8, yb - 23.6, 2, 0, 7); g.fill();     // head
+    g.fillStyle = '#2a2018'; g.fillRect(-2.6, yb - 25.6, 5.2, 1.6);
+    g.fillStyle = '#d8c8a8'; g.fillRect(-4.6, yb - 18, 2, 5); g.fillRect(2.6, yb - 18, 2, 5);                                                   // hands folded
+    _glowDot(g, 0, yb - 23, 18, '255,220,140', 0.32 + 0.08 * Math.sin(t * 2.6)); g.strokeStyle = 'rgba(255,224,150,0.85)'; g.lineWidth = 1.1; g.beginPath(); g.arc(0, yb - 23, 6, 0, 7); g.stroke();
+    for (const [fx2, fc] of [[-7, '#f28ab0'], [-4, '#f8e070'], [5, '#8ac0f8'], [8, '#f28ab0']]){ g.fillStyle = '#3a8a4a'; g.fillRect(fx2, yb - 3, 1.2, 2.4); g.fillStyle = fc; g.fillRect(fx2 - 0.6, yb - 4.6, 2.4, 2); }
+    fx = 0; fy = yb - 23; rgb = '255,220,140';
+  } else {                                                               // PRAYER CAIRN: stacked river stones under strings of prayer flags, a candle in a hollow
+    const stones = [[0, 0, 9, 4.6, '#7a7a80'], [-1, -4.4, 7, 4, '#8a8a90'], [1, -8, 5.4, 3.6, '#9a9aa0'], [0, -11.4, 3.6, 3, '#aaaab0']];
+    for (const [sx, sy, sw2, sh2, c] of stones){ g.fillStyle = c; g.beginPath(); g.ellipse(sx, yb - 3 + sy, sw2, sh2, 0, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,0.22)'; g.beginPath(); g.ellipse(sx - sw2 * 0.3, yb - 4.4 + sy, sw2 * 0.4, sh2 * 0.35, 0, 0, 7); g.fill(); }
+    g.fillStyle = '#1a1c20'; g.beginPath(); g.ellipse(-5.6, yb - 3.2, 2.2, 1.7, 0, 0, 7); g.fill(); g.fillStyle = '#efe6cc'; g.fillRect(-6.4, yb - 5.6, 1.6, 3); _glowDot(g, -5.6, yb - 6, 11, '255,190,90', 0.5); _cultFlame(g, -5.6, yb - 5.6, 1.1, t, 7, '#ffb040', '#fff0b0');
+    g.strokeStyle = '#3a2a1a'; g.lineWidth = 1.3; g.beginPath(); g.moveTo(-8, yb - 8); g.lineTo(-8, yb - 27); g.moveTo(9, yb - 8); g.lineTo(9, yb - 27); g.stroke();   // the two poles
+    const cols = ['#3a68c8', '#f0f0f0', '#c8383a', '#3a9a58', '#e2b030'];
+    g.strokeStyle = '#8a7a5a'; g.lineWidth = 0.7; g.beginPath(); g.moveTo(-8, yb - 26); g.quadraticCurveTo(0, yb - 21, 9, yb - 26); g.stroke();
+    for (let i = 0; i < 5; i++){ const k = (i + 0.5) / 5, fxp = -8 + 17 * k, fyp = yb - 26 + Math.sin(k * Math.PI) * 3.4 + 0.5, fl = Math.sin(t * 4 + i * 1.4) * 0.9; g.fillStyle = cols[i]; g.beginPath(); g.moveTo(fxp - 1.5, fyp); g.lineTo(fxp + 1.5, fyp); g.lineTo(fxp + 1.5 + fl, fyp + 4.4); g.lineTo(fxp - 1.5 + fl, fyp + 4.6); g.closePath(); g.fill(); }
+    fx = -5.6; fy = yb - 6;
+  }
+  const tn = t;
+  if (hasRes('sacredfire')){ _glowDot(g, fx, fy - 2, 20, '255,140,50', 0.28 + 0.08 * Math.sin(tn * 9)); for (let i = 0; i < 2; i++){ const k = ((tn / 0.9) + i * 0.5 + p.x * 0.01) % 1; g.fillStyle = 'rgba(255,200,90,' + (1 - k).toFixed(2) + ')'; g.fillRect(fx - 3 + i * 5 + Math.sin(k * 6 + i) * 2, fy - 4 - k * 12, 1.5, 1.5); } }
+  if (hasRes('vespers')) for (const sx of [-1, 1]){ g.fillStyle = '#e8dcc0'; g.fillRect(sx * w * 0.66 - 1, yb - 6, 2, 5); _cultFlame(g, sx * w * 0.66, yb - 6, 0.9, tn, sx * 3, '#ffb040', '#fff0b0'); }
+  if (hasRes('tithing')){ g.fillStyle = '#6a4a2a'; g.fillRect(-4, yb + 1, 8, 2.6); g.fillStyle = '#ffd24a'; g.fillRect(-3, yb - 0.6, 2, 1.6); g.fillRect(0, yb - 1, 2, 2); }
+  if (hasRes('reliquary')){ const ga = 0.25 + 0.15 * Math.sin(tn * 2.4 + p.y); _glowDot(g, fx, fy, 14, '200,170,255', ga); g.fillStyle = '#c79bde'; g.fillRect(fx - 1.5, fy - 12, 3, 3); }
+}
 function drawGrandShrine(g, vi, t, live, prop){
   const NV = SHRINE_VARIANTS.length, V = SHRINE_VARIANTS[((vi % NV) + NV) % NV], st = V.stone, ac = V.accent, night = (live && village && village.tod != null) ? todLerp().night : 0, fl = 0.85 + 0.15 * Math.sin(t * 3 + vi);
   const dk = c => _tone(c, -0.3), lt = c => _tone(c, 0.18), glow = a => 'rgba(' + V.glow[0] + ',' + V.glow[1] + ',' + V.glow[2] + ',' + a + ')';
@@ -29333,10 +29802,10 @@ function drawTowerPlatform(rf, w, h){
 }
 function drawRoofRole(rf, w, h){
   if (rf.role === 'tower'){ drawTowerPlatform(rf, w, h); return; }
-  const g = octx, tt = performance.now() / 1000, an = rf.anchor, cx = an ? an.x : rf.x0 + w / 2, cy = an ? an.y : rf.y0 + h / 2, horiz = w >= h;
+  const g = octx, tt = performance.now() / 1000, an = rf.anchor, cx = an ? an.x : rf.x0 + w / 2, cy = an ? an.y : rf.y0 + h / 2, _fr = rf.role === 'church' ? roofFront(rf) : null, horiz = _fr ? _fr.horiz : w >= h;
   const sm = an ? Math.max(24, Math.min(w, h) * 0.6) : Math.min(w, h);
   const snap = (x, y) => { if (!rf._cc) return [x, y]; let b = null, bd = 1e18; for (const c of rf._cc){ const d = (c.x - x) ** 2 + (c.y - y) ** 2; if (d < bd){ bd = d; b = c; } } return b ? [b.x, b.y] : [x, y]; };
-  const along = f => an ? snap(horiz ? rf.x0 + w * f : rf.x0 + w / 2, horiz ? rf.y0 + h / 2 : rf.y0 + h * f) : (horiz ? [rf.x0 + w * f, cy] : [cx, rf.y0 + h * f]);
+  const along = f0 => { const f = (_fr && _fr.flip) ? 1 - f0 : f0; return an ? snap(horiz ? rf.x0 + w * f : rf.x0 + w / 2, horiz ? rf.y0 + h / 2 : rf.y0 + h * f) : (horiz ? [rf.x0 + w * f, cy] : [cx, rf.y0 + h * f]); };
   switch (rf.role){
     case 'house': {                                                                          // boring and proud of it: a plain chimney
       const [x, y] = [rf.hasChimney ? rf.chimX : rf.x0 + w * 0.26, rf.hasChimney ? rf.chimY : rf.y0 + h * 0.3]; drawChimney(x, y, rf.seed); break; }
@@ -29675,12 +30144,28 @@ function drawRoofs(camx, camy){
 
 // A doorway: wood threshold + two jamb posts + a double door whose leaves swing on their
 // hinges (openness 0..1, s = swing direction). Drawn flat so nobody is occluded in the gap.
-function drawDoorway(x, y, span, open, s, col, glassCol){
+// user: "Doors in the village are kinda too similar. Can you make them change colour and style slightly to match the walls."
+// An untinted door borrows the colour of the wall beside it, and picks one of four small styles from the wall material + where it stands.
+function doorWallLook(cx, cy){
+  const vert = cellMat(cx, cy + 1) === MAT.DOOR, wide = (vert ? cellMat(cx, cy + 1) : cellMat(cx + 1, cy)) === MAT.DOOR ? 2 : 1;
+  const cands = vert ? [[cx, cy - 1], [cx, cy + wide]] : [[cx - 1, cy], [cx + wide, cy]];
+  for (const [ax, ay] of cands){
+    const m = cellMat(ax, ay);
+    if (!m || m === MAT.DOOR || m === MAT.FENCE || m === MAT.GLASS || m === MAT.WINDOW || WINDOW_MATS.has(m)) continue;
+    const arc = m > 11 && CODEX_BY_ID[m] ? CODEX_BY_ID[m].arc : null;
+    if (arc && arc.glassy) continue;
+    const col = arc ? arc.c1 : MAT_COL[m];
+    if (col) return { col, style: (m * 5 + ((ax >> 2) + (ay >> 2))) & 3 };
+  }
+  return null;
+}
+function drawDoorway(x, y, span, open, s, col, glassCol, style){
+  style = style | 0;
   const hy = y + CELL * 0.5;                            // hinge line (mid wall thickness)
-  const jambCol = col ? _tone(col, -0.1) : MAT_COL[MAT.DOOR];
+  const jambCol = col ? _tone(col, style === 2 ? -0.32 : -0.1) : MAT_COL[MAT.DOOR];
   const plankCol = col || '#7c5330';
   // threshold boards across the opening
-  octx.fillStyle = '#553a23'; octx.fillRect(x, y + 3, span, CELL - 6);
+  octx.fillStyle = col ? _tone(col, -0.42) : '#553a23'; octx.fillRect(x, y + 3, span, CELL - 6);
   octx.fillStyle = 'rgba(0,0,0,0.20)'; octx.fillRect(x, y + 3, span, 1);
   octx.fillStyle = 'rgba(255,255,255,0.05)'; octx.fillRect(x, y + CELL - 4, span, 1);
   octx.strokeStyle = 'rgba(0,0,0,0.16)'; octx.lineWidth = 1; octx.beginPath();
@@ -29688,7 +30173,9 @@ function drawDoorway(x, y, span, open, s, col, glassCol){
   octx.stroke();
   // jamb posts
   octx.fillStyle = jambCol;
-  octx.fillRect(x - 1, y, 2.5, CELL); octx.fillRect(x + span - 1.5, y, 2.5, CELL);
+  const jw = style === 2 ? 3.6 : 2.5;
+  octx.fillRect(x - 1, y, jw, CELL); octx.fillRect(x + span - jw + 1, y, jw, CELL);
+  if (style === 1){ octx.fillRect(x - 1, y, span + 2, 1.4); octx.fillRect(x - 1, y + CELL - 1.4, span + 2, 1.4); }   // a lintel and sill: a framed door
   octx.fillStyle = 'rgba(255,255,255,0.14)';
   octx.fillRect(x - 1, y, 2.5, 2); octx.fillRect(x + span - 1.5, y, 2.5, 2);
   // the two leaves
@@ -29701,15 +30188,17 @@ function drawDoorway(x, y, span, open, s, col, glassCol){
     octx.fillStyle = 'rgba(255,255,255,0.11)'; octx.fillRect(0, -T / 2, pl, 1);
     octx.fillStyle = 'rgba(0,0,0,0.30)'; octx.fillRect(0, T / 2 - 1, pl, 1);
     octx.strokeStyle = 'rgba(0,0,0,0.22)'; octx.lineWidth = 1; octx.beginPath();
-    octx.moveTo(pl * 0.42, -T / 2); octx.lineTo(pl * 0.42, T / 2);
-    octx.moveTo(pl * 0.74, -T / 2); octx.lineTo(pl * 0.74, T / 2); octx.stroke();
+    if (style === 1){ octx.moveTo(pl * 0.58, -T / 2); octx.lineTo(pl * 0.58, T / 2); octx.stroke(); octx.strokeStyle = 'rgba(0,0,0,0.3)'; octx.strokeRect(1.2, -T / 2 + 0.8, pl - 2.4, T - 1.6); }   // one seam and a raised frame
+    else if (style === 2){ for (const f of [0.25, 0.5, 0.75]){ octx.moveTo(pl * f, -T / 2); octx.lineTo(pl * f, T / 2); } octx.stroke(); octx.fillStyle = 'rgba(0,0,0,0.28)'; octx.fillRect(pl * 0.08, -0.4, pl * 0.84, 0.9); }   // planks and a strap hinge
+    else { octx.moveTo(pl * 0.42, -T / 2); octx.lineTo(pl * 0.42, T / 2); octx.moveTo(pl * 0.74, -T / 2); octx.lineTo(pl * 0.74, T / 2); octx.stroke(); }
+    if (!glassCol && style === 3 && col){ glassCol = '#cfe6f0'; }                        // the fourth style has a little window
     if (glassCol){                                                                  // a small glass pane inset — a stylised accent, not a full see-through cut (the leaf swings)
       const pw = pl * 0.3, ph = T * 0.72, px0 = pl * 0.5 - pw / 2, py0 = -ph / 2;
       octx.fillStyle = _hexA(glassCol, 0.55); octx.fillRect(px0, py0, pw, ph);
       octx.fillStyle = 'rgba(255,255,255,0.25)'; octx.fillRect(px0, py0, pw, ph * 0.3);
       octx.strokeStyle = 'rgba(0,0,0,0.35)'; octx.lineWidth = 0.6; octx.strokeRect(px0, py0, pw, ph);
     }
-    octx.fillStyle = '#e2c86a'; octx.fillRect(pl - 3, -1, 2, 2);                     // handle
+    octx.fillStyle = style === 1 ? '#3a3a44' : style === 2 ? '#c2c6cc' : style === 3 ? '#f2eee2' : '#e2c86a'; octx.fillRect(pl - 3, -1, 2, 2);                     // handle: brass, iron, steel or ivory by style
     octx.restore();
   };
   leaf(x, 0);
@@ -29754,16 +30243,18 @@ function drawWallBlock(cx, cy, m){
     // it, instead of the whole leaf and its "window" being the identical colour) — everything
     // else tints the whole leaf as before
     const _lkm = lockAt.size ? lockAt.get(cx + ',' + cy) : null;                     // a hardened building's door is a real steel leaf (it still swings when unlocked)
-    const doorCol = (_lkm && _lkm.metal) ? '#6a7386' : tintArc ? (tintArc.glassy ? null : tintArc.c1) : null;
+    const _wl = (zone === 'village' && !tintArc && !(_lkm && _lkm.metal)) ? doorWallLook(cx, cy) : null;
+    const doorCol = (_lkm && _lkm.metal) ? '#6a7386' : tintArc ? (tintArc.glassy ? null : tintArc.c1) : (_wl ? _tone(_wl.col, -0.12) : null);
+    const doorStyle = _wl ? _wl.style : 0;
     const glassCol = tintArc && tintArc.glassy ? tintArc.c1 : null;
     if (cellMat(cx, cy + 1) === MAT.DOOR){              // a tall (rotated) opening — draw a horizontal doorway turned 90°
       octx.save();
       octx.translate(x + CELL, y); octx.rotate(Math.PI / 2);
-      drawDoorway(0, 0, CELL * 2, v, sw, doorCol, glassCol);
+      drawDoorway(0, 0, CELL * 2, v, sw, doorCol, glassCol, doorStyle);
       octx.restore();
     } else {
       const span = cellMat(cx + 1, cy) === MAT.DOOR ? CELL * 2 : CELL;
-      drawDoorway(x, y, span, v, sw, doorCol, glassCol);
+      drawDoorway(x, y, span, v, sw, doorCol, glassCol, doorStyle);
     }
     return;
   }
@@ -32050,17 +32541,34 @@ function drawProp(p){
       octx.strokeStyle = 'rgba(0,0,0,0.55)'; octx.lineWidth = 1; octx.beginPath(); octx.moveTo(-hwd * 0.3, hy + hht * 0.05); octx.lineTo(-hwd * 0.1, hy + hht * 0.05); octx.moveTo(hwd * 0.1, hy + hht * 0.05); octx.lineTo(hwd * 0.3, hy + hht * 0.05); octx.stroke();
     }
   }
-  else if (T === 'study'){
-    const z = 9;
-    octx.fillStyle = 'rgba(0,0,0,0.24)'; octx.beginPath(); octx.ellipse(0, h/2 - 1, w*0.56, 4, 0, 0, 7); octx.fill();
-    box3D(w, h, z, '#5a3f26', '#3f2c19', '#2c1e11');                                      // raised bookcase carcass
-    const top = -h/2 - z;
-    octx.fillStyle = '#3a2718'; octx.fillRect(-w/2 + 2, top + h*0.44, w - 4, 2); octx.fillRect(-w/2 + 2, top + h*0.74, w - 4, 2);
-    const bcol = ['#b04a3a','#3a6ea0','#c8a24a','#4c8a44','#8a4a9a','#c86a3a','#6a8a3a'];
-    for (let r = 0; r < 2; r++) for (let i = 0; i < 6; i++){
-      octx.fillStyle = bcol[(i + r*3) % bcol.length];
-      octx.fillRect(-w/2 + 2 + i * (w - 4) / 6, top + 2 + r * h*0.32, (w - 4) / 6 - 1, h*0.28);
+  else if (T === 'study'){                                                                 // a tall bookcase seen from above-front: the wooden top cap first, then the shelved front face with the books standing on it
+    const Z = 27, D = 7, fy = h/2 - Z, top = fy - D;                                        // front face height, cap depth, and the cap's top edge
+    octx.fillStyle = 'rgba(0,0,0,0.26)'; octx.beginPath(); octx.ellipse(0, h/2 - 0.5, w*0.58, 4, 0, 0, 7); octx.fill();
+    octx.fillStyle = '#4a3320'; octx.fillRect(-w/2, fy, w, Z);                                  // front carcass
+    octx.fillStyle = '#5e4229'; octx.fillRect(-w/2, fy, 2, Z); octx.fillRect(w/2 - 2, fy, 2, Z);   // side uprights (lit edge)
+    octx.fillStyle = '#20160c'; octx.fillRect(-w/2 + 2, fy + 2, w - 4, Z - 6);                   // the recessed shelf interior
+    const shelfH = (Z - 6) / 3, bcol = ['#b04a3a','#3a6ea0','#c8a24a','#4c8a44','#8a4a9a','#c86a3a','#6a8a3a','#a03a5a'];
+    for (let r = 0; r < 3; r++){
+      const sy = fy + 2 + (r + 1) * shelfH;                                                     // the shelf plank each row of books stands on
+      let x = -w/2 + 3, i = 0;
+      while (x < w/2 - 4){
+        const bw = 2 + ((i * 7 + r * 3) % 3) * 0.7, bh = shelfH - 2 - ((i * 5 + r) % 4) * 0.9;
+        if ((i + r * 2) % 9 === 5){ x += bw; i++; continue; }                                  // the odd gap between books
+        octx.fillStyle = bcol[(i * 3 + r * 5) % bcol.length]; octx.fillRect(x, sy - bh, bw, bh);
+        octx.fillStyle = 'rgba(255,255,255,0.18)'; octx.fillRect(x, sy - bh, 0.7, bh);          // a lit spine edge
+        octx.fillStyle = 'rgba(0,0,0,0.3)'; octx.fillRect(x + bw - 0.6, sy - bh, 0.6, bh);
+        x += bw + 0.2; i++;
+      }
+      octx.fillStyle = '#6a4a2c'; octx.fillRect(-w/2 + 2, sy, w - 4, 2);                        // the plank
+      octx.fillStyle = 'rgba(255,255,255,0.10)'; octx.fillRect(-w/2 + 2, sy, w - 4, 0.7);
     }
+    octx.fillStyle = '#2c1e11'; octx.fillRect(-w/2, h/2 - 3, w, 3);                             // plinth
+    octx.fillStyle = '#7a5836'; octx.fillRect(-w/2 - 1, top, w + 2, D);                          // the top of the bookcase, seen from above
+    octx.fillStyle = 'rgba(255,255,255,0.16)'; octx.fillRect(-w/2 - 1, top, w + 2, 1.5);
+    octx.fillStyle = '#3f2c19'; octx.fillRect(-w/2 - 1, fy - 1, w + 2, 1.5);                     // the cap's front lip
+    octx.fillStyle = 'rgba(0,0,0,0.12)'; for (let k = 0; k < 4; k++) octx.fillRect(-w/2 + 2 + k * (w / 4), top + 2, w / 4 - 3, 0.6);   // wood grain
+    octx.fillStyle = '#a04a3a'; octx.fillRect(-w/2 + 3, top + 2.5, 8, 2.6); octx.fillStyle = '#e8dcc0'; octx.fillRect(-w/2 + 3, top + 3, 7.4, 1.4);   // a couple of books lying on top
+    octx.fillStyle = '#3a6ea0'; octx.fillRect(-w/2 + 4, top + 0.6, 7, 2.2);
     if (hasRes('ledger')){                                                                   // The Ledger: a coin glints above the shelves
       const k = (performance.now() / 1400 + p.x * 0.013) % 1;
       octx.fillStyle = 'rgba(255,214,74,' + Math.sin(k * Math.PI) + ')'; octx.fillRect(-w/2 + 6 + k * (w - 14), top - 3 - k * 6, 2.4, 2.4);
@@ -32127,13 +32635,40 @@ function drawProp(p){
     octx.fillStyle = 'rgba(200,120,255,' + (0.6 + gl) + ')'; octx.fillRect(-2, -h*0.2, 4, 2); octx.fillRect(-1, -h*0.2, 2, 8); octx.fillRect(-4, -h*0.1, 8, 2);   // rune
     for (let i = 0; i < 3; i++){ const k = ((tn / 1500) + i / 3) % 1; octx.fillStyle = 'rgba(190,110,240,' + (1 - k) + ')'; octx.fillRect(-4 + i * 4 + Math.sin(k * 6 + i) * 3, -h*0.6 - k * 18, 1.6, 1.6); }
   }
-  else if (T === 'well'){
-    octx.fillStyle = '#7a7c78'; octx.beginPath(); octx.ellipse(0, h*0.22, w*0.42, h*0.22, 0, 0, 7); octx.fill();
-    octx.fillStyle = '#2a4a6a'; octx.beginPath(); octx.ellipse(0, h*0.2, w*0.28, h*0.14, 0, 0, 7); octx.fill();
-    octx.fillStyle = 'rgba(160,200,240,' + (0.25 + 0.15 * Math.sin(performance.now() / 500 + p.x)) + ')'; octx.beginPath(); octx.ellipse(-2, h*0.17, w*0.1, h*0.05, 0, 0, 7); octx.fill();
-    octx.fillStyle = '#4a3220'; octx.fillRect(-w*0.4, -h*0.38, 2, h*0.6); octx.fillRect(w*0.4 - 2, -h*0.38, 2, h*0.6);
-    octx.fillStyle = '#6a4a2a'; octx.beginPath(); octx.moveTo(-w*0.5, -h*0.32); octx.lineTo(0, -h*0.72); octx.lineTo(w*0.5, -h*0.32); octx.closePath(); octx.fill();
-    octx.fillStyle = '#4a3220'; octx.fillRect(-1, -h*0.36, 2, h*0.3);
+  else if (T === 'well'){                                                                   // a proper village well: mortared stone cylinder, dark water, a thatched gable on two posts, a windlass with rope and bucket
+    const tn = performance.now() / 1000, hz = (Math.abs(Math.round(p.x * 5 + p.y * 3)) % 3), stone = ['#8a8c88', '#9a8e7c', '#7e8a92'][hz];
+    const cy = h * 0.18, r = w * 0.46, ry = r * 0.52, z = 9;
+    octx.fillStyle = 'rgba(0,0,0,0.28)'; octx.beginPath(); octx.ellipse(1, cy + z + 2, r + 5, ry + 3, 0, 0, 7); octx.fill();
+    for (let i = 0; i < 7; i++){ const a = i * 0.9 + hz, sx = Math.cos(a) * (r + 3.5), sy = cy + z + 1 + Math.sin(a) * (ry + 1.5); octx.fillStyle = i % 2 ? '#6e706c' : '#8a8c86'; octx.fillRect(sx - 1.4, sy - 1, 2.8, 2); }   // stones around the base
+    const fg = octx.createLinearGradient(-r, 0, r, 0); fg.addColorStop(0, _tone(stone, 0.12)); fg.addColorStop(0.6, stone); fg.addColorStop(1, _tone(stone, -0.32));
+    octx.fillStyle = fg; octx.beginPath(); octx.ellipse(0, cy + z, r, ry, 0, 0, Math.PI); octx.lineTo(-r, cy); octx.lineTo(r, cy); octx.closePath(); octx.fill();             // the wall
+    octx.fillRect(-r, cy, r * 2, z);
+    octx.strokeStyle = 'rgba(30,30,34,0.38)'; octx.lineWidth = 0.8; octx.beginPath();                                                                                  // mortar courses and bricks
+    for (let row = 1; row < 3; row++){ const yy = cy + row * 3; octx.moveTo(-r, yy); octx.quadraticCurveTo(0, yy + ry * 0.9, r, yy); }
+    for (let row = 0; row < 3; row++) for (let k = -3; k <= 3; k++){ const bx = k * (r / 3.2) + (row % 2 ? r / 6 : 0), t = Math.abs(bx / r); if (t > 0.98) continue; const yy = cy + row * 3 + Math.sqrt(Math.max(0, 1 - t * t)) * ry * 0.9; octx.moveTo(bx, yy); octx.lineTo(bx, yy + 3); }
+    octx.stroke();
+    octx.fillStyle = 'rgba(90,140,70,0.55)'; octx.fillRect(-r * 0.7, cy + z - 3, 5, 2.4); octx.fillRect(r * 0.3, cy + z - 4, 4, 2); octx.fillRect(-r * 0.15, cy + z - 1.4, 6, 1.6);            // moss
+    octx.fillStyle = _tone(stone, 0.2); octx.beginPath(); octx.ellipse(0, cy, r + 1.2, ry + 0.6, 0, 0, 7); octx.fill();                                                 // rim
+    octx.fillStyle = _tone(stone, -0.05); octx.beginPath(); octx.ellipse(0, cy, r - 1.8, ry - 1, 0, 0, 7); octx.fill();
+    octx.fillStyle = '#10161c'; octx.beginPath(); octx.ellipse(0, cy + 0.6, r - 2.8, ry - 1.7, 0, 0, 7); octx.fill();                                                    // the shaft
+    const wg = octx.createLinearGradient(0, cy - 2, 0, cy + 4); wg.addColorStop(0, '#3a7ab0'); wg.addColorStop(1, '#173a5a'); octx.fillStyle = wg; octx.beginPath(); octx.ellipse(0, cy + 1.6, r - 3.6, ry - 2.3, 0, 0, 7); octx.fill();
+    octx.strokeStyle = 'rgba(200,232,255,' + (0.35 + 0.2 * Math.sin(tn * 2 + p.x)).toFixed(2) + ')'; octx.lineWidth = 0.8; octx.beginPath(); octx.ellipse(-1, cy + 1.4, (r - 5) * (0.35 + 0.25 * ((tn * 0.5) % 1)), (ry - 3) * (0.35 + 0.25 * ((tn * 0.5) % 1)), 0, 0, 7); octx.stroke();   // a slow ripple
+    octx.fillStyle = 'rgba(255,255,255,0.35)'; octx.fillRect(-r * 0.4, cy + 0.8, 4, 1);
+    // posts, beam, windlass
+    const top = cy - 25, sway = Math.sin(tn * 1.3 + p.x) * 0.8;
+    for (const sx of [-1, 1]){ const px = sx * (r - 1.6); octx.fillStyle = '#3e2a18'; octx.fillRect(px - 1.6, top, 3.2, cy - top + 1); octx.fillStyle = '#7a5630'; octx.fillRect(px - 1.6, top, 1.5, cy - top + 1); }
+    octx.fillStyle = '#5a3d22'; octx.fillRect(-r, top + 4, r * 2, 2.6); octx.fillStyle = '#8a6438'; octx.fillRect(-r, top + 4, r * 2, 1);                                    // crossbeam
+    octx.fillStyle = '#a07a44'; octx.fillRect(-r * 0.55, top + 5, r * 1.1, 3.2); octx.fillStyle = '#5a3d22'; octx.fillRect(-r * 0.55, top + 7, r * 1.1, 1.2);                   // the windlass drum
+    octx.strokeStyle = '#3a2a18'; octx.lineWidth = 1.4; octx.beginPath(); octx.moveTo(r * 0.55, top + 6.6); octx.lineTo(r * 0.95, top + 6.6); octx.lineTo(r * 0.95, top + 11); octx.stroke();   // the crank
+    octx.strokeStyle = '#b89a62'; octx.lineWidth = 0.9; octx.beginPath(); octx.moveTo(0, top + 8); octx.lineTo(sway * 0.4, cy - 4); octx.stroke();                            // rope
+    octx.fillStyle = '#6a4a2a'; octx.fillRect(sway * 0.4 - 2.6, cy - 5, 5.2, 4.4); octx.fillStyle = '#8a6438'; octx.fillRect(sway * 0.4 - 2.6, cy - 5, 5.2, 1.2); octx.fillStyle = '#2a2a30'; octx.fillRect(sway * 0.4 - 2.6, cy - 3, 5.2, 0.8);   // the bucket
+    // the little thatched roof
+    octx.fillStyle = 'rgba(0,0,0,0.24)'; octx.beginPath(); octx.moveTo(-r - 3, top + 3); octx.lineTo(0, top - 8); octx.lineTo(r + 3, top + 3); octx.lineTo(r + 3, top + 6); octx.lineTo(-r - 3, top + 6); octx.closePath(); octx.fill();
+    octx.fillStyle = '#b08a3e'; octx.beginPath(); octx.moveTo(-r - 4, top + 4); octx.lineTo(0, top - 10); octx.lineTo(r + 4, top + 4); octx.closePath(); octx.fill();
+    octx.fillStyle = '#c8a24c'; octx.beginPath(); octx.moveTo(-r - 4, top + 4); octx.lineTo(0, top - 10); octx.lineTo(0, top + 4); octx.closePath(); octx.fill();
+    octx.strokeStyle = 'rgba(70,50,20,0.45)'; octx.lineWidth = 0.9; octx.beginPath(); for (let i = 1; i < 4; i++){ const yy = top + 4 - i * 3.4, k = i * 3.4 / 14; octx.moveTo(-(r + 4) * (1 - k), yy); octx.lineTo((r + 4) * (1 - k), yy); } octx.stroke();
+    octx.fillStyle = '#8a6a2a'; octx.fillRect(-r - 4, top + 3.4, (r + 4) * 2, 1.6);                                                                                            // ragged eave
+    octx.fillStyle = '#5a3d22'; octx.fillRect(-0.9, top - 12, 1.8, 3);                                                                                                        // finial
   }
   else if (T === 'logpile'){
     octx.fillStyle = 'rgba(0,0,0,0.24)'; octx.fillRect(-w/2 + 2, h*0.3, w, 3);
@@ -32207,19 +32742,7 @@ function drawProp(p){
     octx.fillStyle = '#e8e0d0'; octx.fillRect(w*0.2, top - 9, 2, 12); octx.fillStyle = '#2a2a3a'; octx.fillRect(w*0.18, top - 11, 4, 3);   // quill + inkwell
     const tn = performance.now(); octx.fillStyle = 'rgba(255,210,110,' + (0.5 + 0.3 * Math.sin(tn / 300 + p.x)) + ')'; octx.beginPath(); octx.arc(w*0.36, top - 2, 2, 0, 7); octx.fill();   // lamp
   }
-  else if (T === 'temple'){                                                                       // a stone font: pedestal, wide basin of still water, a carved pillar and a hanging cloth
-    const tn = performance.now(), gl = 0.5 + 0.25 * Math.sin(tn / 500 + p.x);
-    octx.fillStyle = 'rgba(0,0,0,0.28)'; octx.beginPath(); octx.ellipse(0, h/2, w*0.6, 5.5, 0, 0, 7); octx.fill();
-    octx.fillStyle = '#8a8496'; octx.fillRect(-w*0.42, h*0.3, w*0.84, h*0.2); octx.fillStyle = '#a8a2b4'; octx.fillRect(-w*0.42, h*0.3, w*0.84, 3);          // steps
-    octx.fillStyle = '#9a94a6'; octx.fillRect(-w*0.34, h*0.16, w*0.68, h*0.16);
-    octx.fillStyle = '#b6b0c2'; octx.fillRect(-w*0.08, -h*0.1, w*0.16, h*0.3);                                                                              // stem
-    octx.fillStyle = '#7a748a'; octx.beginPath(); octx.ellipse(0, -h*0.08, w*0.42, h*0.16, 0, 0, 7); octx.fill(); octx.fillStyle = '#c0bacc'; octx.beginPath(); octx.ellipse(0, -h*0.1, w*0.4, h*0.14, 0, 0, 7); octx.fill();   // basin
-    octx.fillStyle = 'rgba(120,170,230,0.9)'; octx.beginPath(); octx.ellipse(0, -h*0.11, w*0.33, h*0.1, 0, 0, 7); octx.fill(); octx.fillStyle = 'rgba(255,255,255,0.4)'; octx.beginPath(); octx.ellipse(-w*0.1, -h*0.13, w*0.1, h*0.03, 0, 0, 7); octx.fill();   // water
-    octx.fillStyle = '#d8d0e4'; octx.fillRect(-w*0.46, -h*0.7, 4, h*0.85); octx.fillRect(w*0.46 - 4, -h*0.7, 4, h*0.85); octx.fillStyle = '#c0b8d0'; octx.fillRect(-w*0.5, -h*0.74, w, 4);   // side pillars + lintel
-    octx.fillStyle = '#7a2f6a'; octx.fillRect(-w*0.12, -h*0.7, w*0.24, h*0.48); octx.fillStyle = '#c8a040'; octx.fillRect(-w*0.12, -h*0.24, w*0.24, 2);         // hanging cloth
-    octx.fillStyle = 'rgba(255,206,106,' + gl + ')'; octx.beginPath(); octx.arc(0, -h*0.5, 3, 0, 7); octx.fill();
-    if (hasRes('reliquary')){ octx.fillStyle = 'rgba(200,170,255,0.25)'; octx.beginPath(); octx.arc(0, -h*0.3, w*0.5, 0, 7); octx.fill(); }
-  }
+  else if (T === 'temple') drawFontArt(octx, p, w, h, performance.now() / 1000);
   else if (T === 'mutlab'){
     const tn = performance.now();
     octx.fillStyle = 'rgba(0,0,0,0.26)'; octx.beginPath(); octx.ellipse(0, h/2 - 1, w*0.58, 4.5, 0, 0, 7); octx.fill();
@@ -32254,57 +32777,8 @@ function drawProp(p){
       for (let i = 0; i < 3; i++){ const k = ((tn / 700) + i * 0.33 + p.x * 0.01) % 1; octx.fillStyle = 'rgba(255,190,80,' + (1 - k) + ')'; octx.fillRect(-w/2 + w*0.2 + i * 6 + Math.sin(k * 7 + i) * 3, -h*0.08 - k * 14, 1.6, 1.6); }
     }
   }
-  else if (T === 'shrine'){
-    octx.fillStyle = '#615a6c'; octx.fillRect(-w/2, h*0.05, w, h*0.45);
-    octx.fillStyle = '#786f86'; octx.fillRect(-w/2, h*0.05, w, 2);
-    octx.fillStyle = 'rgba(0,0,0,0.22)'; octx.fillRect(-w/2, h/2 - 2, w, 2);
-    octx.fillStyle = '#4f4a58'; octx.fillRect(-w*0.28, -h*0.28, w*0.56, h*0.34);
-    octx.fillStyle = '#e8dcc0'; octx.fillRect(-1.5, -h*0.62, 3, h*0.34);
-    const tn = performance.now();
-    const fl = 1.6 + Math.sin(tn / 130 + p.x) * 0.6 + (hasRes('sacredfire') ? 1.2 : 0);
-    octx.fillStyle = hasRes('sacredfire') ? '#ff8a3a' : '#ffce6a'; octx.beginPath(); octx.arc(0, -h*0.66, fl, 0, 7); octx.fill();   // Sacred Fire: a bigger, hotter flame
-    if (hasRes('sacredfire')){
-      octx.fillStyle = '#ffe28a'; octx.beginPath(); octx.arc(0, -h*0.66, fl * 0.5, 0, 7); octx.fill();
-      for (let i = 0; i < 2; i++){ const k = ((tn / 900) + i * 0.5 + p.x * 0.01) % 1; octx.fillStyle = 'rgba(255,200,90,' + (1 - k) + ')'; octx.fillRect(-3 + i * 5 + Math.sin(k * 6 + i) * 2, -h*0.66 - 4 - k * 12, 1.5, 1.5); }
-    }
-    if (hasRes('vespers')) for (const sx of [-1, 1]){                                                // Vespers: a candle either side
-      octx.fillStyle = '#e8dcc0'; octx.fillRect(sx * w*0.36 - 1, h*0.0, 2, h*0.16);
-      octx.fillStyle = '#ffce6a'; octx.beginPath(); octx.arc(sx * w*0.36, -1, 1.3 + Math.sin(tn / 120 + sx) * 0.4, 0, 7); octx.fill();
-    }
-    if (hasRes('tithing')){                                                                          // Tithing: an offering bowl of coins at the foot
-      octx.fillStyle = '#6a4a2a'; octx.fillRect(-4, h*0.5 - 3, 8, 3);
-      octx.fillStyle = '#ffd24a'; octx.fillRect(-3, h*0.5 - 4.5, 2, 1.5); octx.fillRect(0, h*0.5 - 5, 2, 2);
-    }
-    if (hasRes('reliquary')){                                                                        // Reliquary: a glowing relic + halo
-      const ga = 0.25 + 0.15 * Math.sin(tn / 400 + p.y);
-      octx.fillStyle = 'rgba(200,170,255,' + ga + ')'; octx.beginPath(); octx.arc(0, -h*0.66, 9, 0, 7); octx.fill();
-      octx.fillStyle = '#c79bde'; octx.fillRect(-1.5, -h*0.28 - 2, 3, 3);
-    }
-  }
-  else if (T === 'altar'){
-    octx.fillStyle = '#615a6c'; octx.fillRect(-w/2, -h/2 + h*0.28, w, h*0.72);             // stone block
-    octx.fillStyle = '#786f86'; octx.fillRect(-w/2, -h/2 + h*0.28, w, 3);
-    octx.fillStyle = 'rgba(0,0,0,0.22)'; octx.fillRect(-w/2, h/2 - 3, w, 3);
-    octx.fillStyle = '#7a2f6a'; octx.fillRect(-w/2 + 3, -h/2 + h*0.16, w - 6, h*0.26);     // draped cloth
-    octx.fillStyle = 'rgba(255,255,255,0.12)'; octx.fillRect(-w/2 + 3, -h/2 + h*0.16, w - 6, 2);
-    for (const cxp of [-w/2 + 4, w/2 - 7]){                                                 // candles
-      octx.fillStyle = '#e8dcc0'; octx.fillRect(cxp, -h/2 - 1, 3, h*0.3);
-      const fl = 1.8 + Math.sin(performance.now() / 130 + cxp) * 0.7;
-      octx.fillStyle = '#ffce6a'; octx.beginPath(); octx.arc(cxp + 1.5, -h/2 - 2, fl, 0, 7); octx.fill();
-    }
-    octx.fillStyle = '#c79bde'; octx.beginPath();                                            // hanging banner
-    octx.moveTo(0, -h/2 - 13); octx.lineTo(5, -h/2 - 1); octx.lineTo(-5, -h/2 - 1); octx.closePath(); octx.fill();
-    if (hasRes('tithing')){                                                                  // Tithing: a second banner + coins on the cloth
-      octx.fillStyle = '#e0b84a'; octx.beginPath(); octx.moveTo(w/2 - 6, -h/2 - 9); octx.lineTo(w/2 - 1, -h/2 - 1); octx.lineTo(w/2 - 11, -h/2 - 1); octx.closePath(); octx.fill();
-      octx.fillStyle = '#ffd24a'; octx.fillRect(-5, -h/2 + h*0.22, 2, 2); octx.fillRect(1, -h/2 + h*0.3, 2, 2);
-    }
-    if (hasRes('reliquary')){                                                                // Reliquary: a relic on the altar, softly glowing
-      const ga = 0.22 + 0.14 * Math.sin(performance.now() / 420);
-      octx.fillStyle = 'rgba(200,170,255,' + ga + ')'; octx.beginPath(); octx.arc(0, -h/2 + 4, 12, 0, 7); octx.fill();
-      octx.fillStyle = '#e8dcc0'; octx.fillRect(-2, -h/2 + 1, 4, 5); octx.fillStyle = '#c79bde'; octx.fillRect(-1, -h/2 + 2, 2, 2);
-    }
-    if (hasRes('sacredfire')){ octx.fillStyle = 'rgba(255,140,50,0.35)'; for (const cxp of [-w/2 + 5.5, w/2 - 5.5]){ octx.beginPath(); octx.arc(cxp, -h/2 - 2, 4, 0, 7); octx.fill(); } }   // hotter candle glow
-  }
+  else if (T === 'shrine') drawShrineArt(octx, p, w, h, performance.now() / 1000);
+  else if (T === 'altar') drawAltarArt(octx, p, w, h, performance.now() / 1000);
   else if (T === 'plant'){ octx.fillStyle = '#3a2a1a'; octx.fillRect(-4, 0, 8, 6); octx.fillStyle = '#2f7a3f'; octx.beginPath(); octx.arc(0, -2, 7, 0, 7); octx.fill(); }
   else if (T === 'bomb') drawBombProp(p);
   else if (T === 'camera') drawCameraProp(p);
@@ -32622,6 +33096,23 @@ function drawProp(p){
       octx.fillStyle = '#3a2c20'; octx.fillRect(-w / 2 + 2, -1, 2, 7); octx.fillRect(w / 2 - 4, -1, 2, 7);
       octx.fillStyle = '#7a5a38'; octx.fillRect(-w / 2, -3, w, 3); octx.fillStyle = '#8a6a44'; octx.fillRect(-w / 2, -8, w, 2); octx.fillRect(-w / 2, -5.5, w, 2);
       if (ck === 'snow'){ octx.fillStyle = 'rgba(255,255,255,0.95)'; octx.fillRect(-w / 2, -9.5, w, 2); octx.fillRect(-w / 2, -4.2, w, 1.6); }
+    } else if (lm === 'helwreck'){                                          // a downed police helicopter: scorched fuselage, snapped tail, bent rotor blades, scattered debris, still burning
+      const tw = performance.now() / 1000, hz = (Math.abs(Math.round(p.x * 7 + p.y * 3)) % 100) / 100, ang = p._ang || hz * 6;
+      octx.fillStyle = 'rgba(0,0,0,0.34)'; octx.beginPath(); octx.ellipse(0, 4, 38, 13, 0, 0, 7); octx.fill();
+      octx.fillStyle = 'rgba(20,16,14,0.55)'; octx.beginPath(); octx.ellipse(-2, 3, 44, 15, 0.1, 0, 7); octx.fill();                                    // scorch
+      octx.save(); octx.rotate(Math.sin(ang) * 0.35);
+      octx.fillStyle = '#1c2230'; octx.beginPath(); octx.ellipse(-2, -6, 24, 11, 0.12, 0, 7); octx.fill();                                              // the fuselage, on its side
+      octx.fillStyle = '#0e1016'; octx.beginPath(); octx.ellipse(-2, -4, 20, 8, 0.12, 0, 7); octx.fill();
+      octx.fillStyle = 'rgba(122,200,255,0.5)'; octx.beginPath(); octx.ellipse(15, -8, 7, 5, 0.3, 0, 7); octx.fill(); octx.fillStyle = 'rgba(255,255,255,0.4)'; octx.fillRect(12, -11, 3, 1.4);   // cracked canopy
+      octx.fillStyle = '#e8eef8'; octx.fillRect(-14, -8, 12, 2.4);
+      octx.fillStyle = '#20242c'; octx.save(); octx.translate(-24, -3); octx.rotate(-0.5); octx.fillRect(-22, -2, 24, 4); octx.fillRect(-25, -6, 3, 9); octx.restore();   // the snapped tail boom
+      octx.restore();
+      octx.strokeStyle = '#3a3e48'; octx.lineWidth = 2.6; octx.lineCap = 'round';                                                                         // bent rotor blades
+      octx.beginPath(); octx.moveTo(-6, -18); octx.quadraticCurveTo(14, -30, 34, -20); octx.moveTo(6, 10); octx.quadraticCurveTo(-14, 20, -34, 12); octx.stroke();
+      octx.fillStyle = '#20242c'; for (const [dx, dy, sz] of [[-38, 10, 5], [30, 12, 4], [-20, 16, 3], [40, -4, 3], [8, 18, 4], [-42, -6, 3]]){ octx.fillRect(dx, dy, sz, sz * 0.6); }   // debris
+      octx.fillStyle = '#4a4e5a'; for (const [dx, dy] of [[-30, 14], [24, 16], [34, 6]]) octx.fillRect(dx, dy, 2, 2);
+      for (const [fx, fy] of [[-10, -12], [12, -14], [-24, -4]]){ const fl = 0.7 + 0.3 * Math.sin(tw * 9 + fx); octx.fillStyle = 'rgba(255,' + (100 + fl * 60 | 0) + ',20,' + fl.toFixed(2) + ')'; octx.beginPath(); octx.moveTo(fx - 3, fy + 3); octx.quadraticCurveTo(fx - 2, fy - 5, fx, fy - 9 * fl); octx.quadraticCurveTo(fx + 2, fy - 5, fx + 3, fy + 3); octx.fill(); }
+      for (let i = 0; i < 4; i++){ const k = ((tw * 0.5) + i / 4) % 1; octx.fillStyle = 'rgba(58,56,58,' + (0.5 * (1 - k)) + ')'; octx.beginPath(); octx.arc(-8 + i * 7 + Math.sin(k * 4 + i) * 5, -16 - k * 44, 4 + k * 8, 0, 7); octx.fill(); }
     } else if (lm === 'train' && p._wreck){                                // a burnt-out train wreck
       const tw = performance.now() / 1000;
       octx.fillStyle = 'rgba(0,0,0,0.3)'; octx.beginPath(); octx.ellipse(0, h / 2, w / 2 + 6, 8, 0, 0, 7); octx.fill();
@@ -33274,7 +33765,7 @@ function syncHUD(){
     }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'roads-of-rogue-save-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.download = 'sign-here-save-' + new Date().toISOString().slice(0, 10) + '.json';
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   });
@@ -33722,7 +34213,7 @@ window.__G = () => ({ get doorLocks(){ return doorLocks; }, get cityCams(){ retu
          tryInteract, updateEnemy, get paused(){ return paused; }, get gameOver(){ return gameOver; }, get winOpenNow(){ return winOpen; },
          get villageArrival(){ return villageArrival; }, get pendingRunRecap(){ return pendingRunRecap; }, showRunRecap, get runStart(){ return runStart; },
          get buildings(){ return buildings; }, collapseBuilding, cellBuildingId, damageCell,
-         makeActor, genChunk, streamChunks, biomeAt, drainPending, enterZone, leaveMission, leaderDecor, villageBanners, nearestDecor, leaderRoof, applyPlayerPerks, buildTraitSettingsUI, PLAYER_TRAITS, paintWeaponIcon, wpnIconKey, weaponPower, iconCanvas, buildSquadUI, syncSquadToPins, squadCap, muster, toggleMap, get raidTickFn(){ return raidTick; }, markWanted, updateObjectiveHud: drawObjectiveHUD,
+         makeActor, genChunk, streamChunks, biomeAt, drainPending, enterZone, leaveMission, leaderDecor, villageBanners, nearestDecor, leaderRoof, applyPlayerPerks, buildTraitSettingsUI, PLAYER_TRAITS, spawnHelicopter, heliHackTarget, heliProxy, get helisNow(){ return helis; }, get propsNow(){ return props; }, get octxNow2(){ return octx; }, get octxDepth(){ return _octxDepth; }, octxSave: () => octx.save(), evDraw, drawShrineArt, roofFront, drawAltarArt, drawFontArt, get octxNow(){ return octx; }, setCell, MAT, addProp: p => { props.push(p); return p; }, rideFun, get rollingWheelsNow(){ return rollingWheels; }, paintWeaponIcon, wpnIconKey, weaponPower, iconCanvas, buildSquadUI, syncSquadToPins, squadCap, muster, toggleMap, get raidTickFn(){ return raidTick; }, markWanted, updateObjectiveHud: drawObjectiveHUD,
          riverCX, riverHW, waterAt, lakeAt, trailAt, buildVillageFeatures,
          get LAKES(){ return LAKES; }, get TRAILS(){ return TRAILS; }, get MEADOWS(){ return MEADOWS; },
          get doorAnim(){ return doorAnim; },
