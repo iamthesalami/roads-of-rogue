@@ -11300,6 +11300,11 @@ function drawLiftedPropIcon(data, scale){
     octx.strokeStyle = '#5f1f12'; octx.lineWidth = 1.2;
     octx.beginPath(); octx.moveTo(-9 * scale, -2.5 * scale); octx.lineTo(9 * scale, -2.5 * scale); octx.moveTo(-9 * scale, 2.5 * scale); octx.lineTo(9 * scale, 2.5 * scale); octx.stroke();
     octx.fillStyle = '#eecb50'; octx.font = (7 * scale) + 'px monospace'; octx.textAlign = 'center'; octx.fillText('!', 0, 2.5 * scale);
+  } else if (pt === 'oildrum'){
+    octx.fillStyle = '#141418'; octx.beginPath(); octx.ellipse(0, 0, 9 * scale, 8 * scale, 0, 0, 7); octx.fill();
+    octx.strokeStyle = '#050506'; octx.lineWidth = 1.2;
+    octx.beginPath(); octx.moveTo(-9 * scale, -2.5 * scale); octx.lineTo(9 * scale, -2.5 * scale); octx.moveTo(-9 * scale, 2.5 * scale); octx.lineTo(9 * scale, 2.5 * scale); octx.stroke();
+    octx.fillStyle = '#c8281c'; octx.fillRect(-9 * scale, -1.6 * scale, 18 * scale, 1.8 * scale);
   } else if (pt === 'firebarrel'){
     // the charred-metal standing brazier, not red at all — dark sooty drum with a real flame on top
     octx.fillStyle = '#3a3a42'; octx.beginPath(); octx.ellipse(0, 0, 9 * scale, 8 * scale, 0, 0, 7); octx.fill();
@@ -11455,6 +11460,21 @@ function spawnPuddle(x, y, r, distinct, blood){
 }
 // a freezer bursting (broken, or thrown and landed): flash-freezes enemies who are wet or right next to it, chills the rest,
 // turns nearby puddles into ice sheets, snuffs fires, and leaves slippery frost — the soak-then-freeze combo
+// user: "can these drop flammable and slippery oil everywhere if destroyed... I'd like them to be throwable too... the oil should
+// hang around for a little while being flammable, a good way to burn down houses or enemies by combining with something like a
+// fire barrel." Reuses the 'oil' hazard the HAZ table and a wrecked car's own leak trail already have (slippery underfoot, and
+// updateHazards' fire-spread check already detonates any oil an open flame gets close enough to) — this just spills a lot more of it.
+function spillOil(x, y, n, rMin, rMax, life){
+  const oa = rand(0, 6.283);
+  for (let i = 0; i < n; i++){ const a = oa + i * (6.283 / n) + rand(-0.3, 0.3), d = rand(6, 30 + n * 4); addHazard('oil', x + Math.cos(a) * d, y + Math.sin(a) * d, { r: rand(rMin, rMax), life }); }
+}
+// user: "I'd like to add a driveable oil tanker... that'll spread A LOT of oil." The same spillOil() a broken oil drum uses, just
+// scaled way up — a proper flammable/slippery flood, not a puddle. Shared by the tanker's wreck (hurtProp) and its hacked-runaway
+// meltdown (runawayTick) so ramming it and hacking it both pay off the same big way.
+function spillBigOil(x, y){
+  explode(x, y, 120, 42);
+  spillOil(x, y, 9, 30, 46, 65);
+}
 function freezerBurst(x, y){
   const R = 100;
   burst(x, y, 30, '#dff3ff', 300); burst(x, y, 16, '#ffffff', 220); burst(x, y - 6, 12, '#8fd0ff', 160);
@@ -17948,7 +17968,7 @@ function mkLandmark(x, y, lm){
   pr._lm = lm; pr.fixed = true; pr.hp = pr.maxhp = LM_HP[lm] || 9999; if (lm === 'rocket') ROCKET_PADS.push(pr); if (lm === 'ferris'){ pr._wa = 0; FERRIS_PADS.push(pr); } return pr;
 }
 // themed, drivable vehicles: police cruiser, ambulance, fire engine (hold attack to blast the hose)
-const VEH_DIM = { police: [64, 30], ambulance: [70, 30], firetruck: [98, 36], gangmuscle: [68, 30], gangdonk: [72, 32], gangvan: [78, 34], cultjeep: [58, 30], cultarmour: [90, 40] };
+const VEH_DIM = { police: [64, 30], ambulance: [70, 30], firetruck: [98, 36], gangmuscle: [68, 30], gangdonk: [72, 32], gangvan: [78, 34], cultjeep: [58, 30], cultarmour: [90, 40], oiltanker: [134, 40] };
 // user: "more cult and gang vehicles. Like an armoured truck and jeep for the cultists (in cultist colours)
 // then some kind of pimped out vehicles for the gangs (in gang colours)" — a muscle convertible, a gold-rimmed
 // donk and a flame-painted custom van for the crew; a jeep and an armoured truck for the cult. All repainted
@@ -17960,6 +17980,7 @@ function mkVehicle(x, y, vk){
   const d = VEH_DIM[vk], v = mkProp(x, y, d[0], d[1], 'car');
   v._vk = vk; v._facing = 0; if (vk === 'firetruck') v.hp = v.maxhp = 1800;
   if (FACTION_VK.has(vk)) tagFactionVehicle(v, vk);
+  else if (vk === 'oiltanker'){ v._len = d[0]; v._wid = d[1]; v.hp = v.maxhp = 320; }   // a big rig — tough, but not armoured-truck tough
   return v;
 }
 // user: "the collision boxes on the new vehicles are not accurate." A prop's w/h is an axis-aligned box, but these vehicles rotate: a
@@ -18073,7 +18094,7 @@ function cityPlazaContent(c, ox, oy, rng, dist, RD, hab, ccx, ccy){
     if (rng() < 0.65) props.push(mkLandmark(mx, my, 'fountain')); else props.push(mkLandmark(mx, my, 'statue'));
     const rows = [-78, 78];
     for (const ry of rows) for (let k = 0; k < 4; k++){ const x = mx + (k - 1.5) * 62, y = my + ry; if (rng() < 0.85 && free(x, y, 40)){ props.push(mkLandmark(x, y, 'stall')); if (rng() < 0.8) pendingCiv.push({ x, y: y + (ry < 0 ? -18 : 18), type: 'civ', job: 'vendor' }); } }
-    for (let i = 0; i < 6; i++){ const x = ox + R(lo, hi), y = oy + R(lo, hi), t = ['crate', 'crate', 'barrel'][rng() * 3 | 0]; if (free(x, y, 24)) props.push(mkProp(x, y, 22, 22, t)); }
+    for (let i = 0; i < 6; i++){ const x = ox + R(lo, hi), y = oy + R(lo, hi), t = ['crate', 'crate', 'barrel', 'oildrum'][rng() * 4 | 0]; if (free(x, y, 24)) props.push(mkProp(x, y, 22, 22, t)); }
     for (let i = 0, n = 4 + (rng() * 3 | 0); i < n; i++) pendingCiv.push({ x: ox + R(lo, hi), y: oy + R(lo, hi), type: 'civ', job: jobFor(dist, rng) });   // the crowd
   }
 }
@@ -18093,8 +18114,9 @@ function cityDistrictExtras(c, ox, oy, rng, dist, RD){
   if ((dist === 'downtown' || dist === 'market' || dist === 'oldtown') && rng() < 0.5){ for (let i = 0, n = 3 + (rng() * 3 | 0); i < n; i++){ const sp = sidewalkSpot(ox, oy, rng, 10, 10); if (sp) critters.push({ k: 'pigeon', x: sp.x, y: sp.y, vx: 0, vy: 0, dir: rng() * 6.283, t: R(0.3, 2), st: 'idle', hp: 1, z: 0, ph: R(0, 7), ox: sp.x, oy: sp.y, dead: false, fade: 0, pig: true, keyc: c.key }); } }
   const spot = (w, h) => { for (let t = 0; t < 14; t++){ const x = ox + R(lo, hi), y = oy + R(lo, hi); if (!solidBoxHit(x, y, w, h) && !propOverlap(x, y, w + 10)) return { x, y }; } return null; };
   if (dist === 'industrial'){
+    if (countryNumber() >= 4 && rng() < 0.12){ const sp = spot(VEH_DIM.oiltanker[0] + 6, VEH_DIM.oiltanker[1] + 6); if (sp) props.push(mkVehicle(sp.x, sp.y, 'oiltanker')); }
     for (let i = 0, n = 1 + (rng() * 2 | 0); i < n; i++){ const sp = spot(54, 22); if (sp) props.push(mkLandmark(sp.x, sp.y, 'container')); }
-    for (let i = 0; i < 3; i++){ const sp = spot(22, 22); if (sp) props.push(mkProp(sp.x, sp.y, 22, 22, rng() < 0.5 ? 'crate' : 'barrel')); }
+    for (let i = 0; i < 3; i++){ const sp = spot(22, 22); if (sp) props.push(mkProp(sp.x, sp.y, 22, 22, pick(['crate', 'barrel', 'barrel', 'oildrum']))); }
   } else if (dist === 'slums'){
     for (let i = 0; i < 2; i++){ const sp = spot(20, 18); if (sp) props.push(mkProp(sp.x, sp.y, 20, 18, 'firebarrel')); }
     for (let i = 0; i < 2; i++){ const sp = spot(40, 30); if (sp) props.push(mkProp(sp.x, sp.y, 40, 30, 'dumpster')); }
@@ -18516,6 +18538,14 @@ function genCityChunk(c, ccx, ccy, rng){
         else if (rng() < 0.3) pp.hp = Math.max(1, Math.round(pp.maxhp * 0.08));   // an unpoliced ghetto: some of the parked cars are just burnt-out wrecks nobody's towed
       }
       else if (rng() < 0.4){ pp._cultish = true; if (!ambientCars.includes(pp) && rng() < 0.4) toFactionVehicle(pp, CULT_VEH[(rng() * CULT_VEH.length) | 0]); }
+    }
+    // user: "if they're still having a strong presence, add their vehicles and drive-bys to ALL city events — to further prompt the
+    // player into doing something about them." A much smaller hint than the real raid gets: just a handful of themed cars parked
+    // among the ordinary traffic, not a whole reskinned street — see gangCityTick/cultCityTick for the actual drive-by/convoy sighting.
+    else for (let i = _carsBefore; i < props.length; i++){
+      const pp = props[i]; if (pp.t !== 'car' || pp._vk || pp._moto) continue;
+      if (gangStrong() && rng() < 0.07){ pp._ganger = true; if (!ambientCars.includes(pp) && rng() < 0.4) toFactionVehicle(pp, GANG_VEH[(rng() * GANG_VEH.length) | 0]); }
+      else if (cultStrong() && rng() < 0.05){ pp._cultish = true; if (!ambientCars.includes(pp) && rng() < 0.3) toFactionVehicle(pp, CULT_VEH[(rng() * CULT_VEH.length) | 0]); }
     }
   }
 }
@@ -18953,7 +18983,17 @@ function builtGroundAt(x, y, pad){
   if (Math.hypot(x, y) < 70 || trailAt(x, y) > 0.08) return true;
   for (const f of village.floors) if (Math.abs(f.x - x) < CELL + pad && Math.abs(f.y - y) < CELL + pad) return true;
   for (const rf of village.roofs || []) if (x > rf.x0 - 14 - pad && x < rf.x1 + 14 + pad && y > rf.y0 - 14 - pad && y < rf.y1 + 14 + pad) return true;
-  for (const pp of village.placedProps || []) if (Math.abs(pp.x - x) < 20 + pad && Math.abs(pp.y - y) < 20 + pad) return true;
+  for (const pp of village.placedProps || []){
+    const dm = PROP_DIM[pp.t] || [20, 20];                       // was a flat 20px regardless of the actual build — a big one (a well, jailcell...) let nature spawn right against its edge, sometimes under it
+    if (Math.abs(pp.x - x) < dm[0] / 2 + 14 + pad && Math.abs(pp.y - y) < dm[1] / 2 + 14 + pad) return true;
+  }
+  // user: "still loading new games / waking up and finding boulders, bushes or trees around my village." The forest regenerates
+  // from scratch every time the village loads or a day turns over (only the deltas — edits, floors, placedProps — are saved and
+  // replayed on top), so a walled-but-floorless area (a yard, a half-built room, a defensive perimeter with nothing laid down
+  // inside it) had nothing here to protect it — sweepWildFromBuilt/regenForage only ever checked floors/roofs/placed props, never
+  // the walls themselves. Any built (solid) cell nearby now counts as built ground too.
+  const r = Math.max(CELL, 22 + pad), cx0 = Math.floor((x - r) / CELL), cx1 = Math.floor((x + r) / CELL), cy0 = Math.floor((y - r) / CELL), cy1 = Math.floor((y + r) / CELL);
+  for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) if (cellSolid(cx, cy)) return true;
   return false;
 }
 const WILD_JUNK = new Set(['tree', 'bush', 'twigbush', 'pebbles', 'rock', 'flowers', 'reeds', 'bones', 'log']);
@@ -20123,8 +20163,8 @@ const HACKS = {
 };
 // --- more hackables: cars, security cameras, hydrants, generators, lampposts ---
 Object.assign(HACKS, {
-  car: { time: 3, ok: p => !p._moto && ((!p._vk && !p._driver && !p._panicking) || (FACTION_VK.has(p._vk) && !p._hacked && !p._panicking) || (p._vk === 'ambulance' && !p._ambOpen) || (p._vk === 'police' && wanted > 0 && !(p._polHackAt > performance.now()))) && p !== drivingCar, run(p){
-    if (FACTION_VK.has(p._vk)){ hackFactionVehicle(p); return; }
+  car: { time: 3, ok: p => !p._moto && ((!p._vk && !p._driver && !p._panicking) || ((FACTION_VK.has(p._vk) || p._vk === 'oiltanker') && !p._hacked && !p._panicking) || (p._vk === 'ambulance' && !p._ambOpen) || (p._vk === 'police' && wanted > 0 && !(p._polHackAt > performance.now()))) && p !== drivingCar, run(p){
+    if (FACTION_VK.has(p._vk) || p._vk === 'oiltanker'){ hackFactionVehicle(p); return; }
     if (p._vk === 'ambulance'){ ambulanceUnload(p); return; }
     if (p._vk === 'police'){ policeRadioWipe(p); return; }        // the engine fires up by itself and it goes for a joyride — straight through whatever's there
     p._hacked = true; p._driver = false; p._panicking = true; p._hit = new Set();
@@ -20507,7 +20547,7 @@ function genPlaceInChunk(c, x0, y0, x1, y1, rng, spec){
   c.placeSpec = spec;   // kept for the debug panel + biome-readiness
 }
 
-const PROP_MAT = { turret:'metal', jailcell:'metal', vending:'metal', bomb:'metal', atm:'metal', campole:'metal', camera:'metal', generator:'metal', car:'metal', van:'metal', dumpster:'metal', hydrant:'metal', barrel:'barrel', crate:'wood',
+const PROP_MAT = { oildrum:'metal', turret:'metal', jailcell:'metal', vending:'metal', bomb:'metal', atm:'metal', campole:'metal', camera:'metal', generator:'metal', car:'metal', van:'metal', dumpster:'metal', hydrant:'metal', barrel:'barrel', crate:'wood',
   firebarrel:'metal', vent:'metal', lamppost:'metal', torchpost:'wood', weaponrack:'wood',
   table:'wood', chair:'wood', tv:'glass', counter:'wood', bed:'soft', plant:'soft', fridge:'metal', couch:'soft',
   stool:'wood', booth:'soft', pooltable:'wood', arcade:'glass', shelf:'wood', rack:'metal',
@@ -20515,13 +20555,13 @@ const PROP_MAT = { turret:'metal', jailcell:'metal', vending:'metal', bomb:'meta
   tree:'wood', stump:'wood', campfire:'wood', signpost:'wood', rock:'metal', bush:'soft', flowers:'soft', reeds:'soft',
   twigbush:'wood', pebbles:'metal', dump:'metal', study:'wood', altar:'stone', shrine:'stone', blacksmith:'metal', bones:'wood', furn:'wood', landmark:'stone', cliff:'stone', waterfall:'stone', log:'wood', darkshrine:'stone', well:'stone', logpile:'wood', stonepile:'stone', smokerack:'wood', handcart:'wood', sheaves:'wood', market:'wood', barracks:'wood', watchtower:'wood', scriptorium:'wood', temple:'stone', eventgrounds:'stone', grandshrine:'stone', granary:'wood', mutlab:'metal', vgate:'wood', spikes:'wood', icestatue:'glass',
   manhole:'metal', firework:'wood', cementmixer:'metal', kennel:'wood', neonsign:'glass', wreckingball:'metal', trafficcar:'metal', freezer:'metal', ganghideout:'wood', cultidol:'stone', hanged:'soft', skeleton:'soft' };
-const PROP_HP = { car:90, van:9999, dumpster:120, hydrant:40, barrel:14, crate:20, table:22, chair:8, tv:10,
+const PROP_HP = { oildrum:16, car:90, van:9999, dumpster:120, hydrant:40, barrel:14, crate:20, table:22, chair:8, tv:10,
   firebarrel:60, vent:9999, lamppost:26,
   counter:34, bed:16, plant:6, fridge:30, couch:20,
   stool:8, booth:30, pooltable:44, arcade:16, shelf:20, rack:22, register:14, locker:26, sink:20, safe:60,
   tree:40, stump:16, campfire:9999, signpost:9999, rock:400, bush:14, flowers:4, reeds:6, twigbush:8, pebbles:6, dump:9999, study:9999, altar:9999, shrine:9999, blacksmith:9999, bones:9999, furn:40, landmark:9999, cliff:9999, waterfall:9999, log:70, darkshrine:70, well:9999, logpile:9999, stonepile:9999, smokerack:9999, handcart:9999, sheaves:9999, market:9999, barracks:9999, watchtower:9999, scriptorium:9999, temple:9999, eventgrounds:9999, grandshrine:9999, granary:9999, mutlab:9999, vgate:9999, spikes:9999, icestatue:46,
   turret:80, jailcell:240, vending:60, bomb:20, atm:70, campole:110, camera:45, generator:70, manhole:20, firework:24, cementmixer:70, kennel:16, neonsign:28, wreckingball:9999, trafficcar:90, freezer:36, ganghideout:90, cultidol:50, hanged:9999, skeleton:9999 };   // same as a parked 'car' — it should take damage and blow up the same way, not shrug off everything
-const PROP_DIM = { table:[26,18], chair:[14,14], tv:[22,14], counter:[46,16], bed:[24,30], plant:[14,14],
+const PROP_DIM = { oildrum:[18,18], table:[26,18], chair:[14,14], tv:[22,14], counter:[46,16], bed:[24,30], plant:[14,14],
   firebarrel:[20,18], vent:[26,20], lamppost:[7,8], torchpost:[7,10],
   fridge:[18,24], couch:[40,18], stool:[12,12], booth:[30,20], pooltable:[46,28], arcade:[18,22],
   shelf:[34,14], rack:[24,14], register:[16,12], locker:[16,26], sink:[22,14], safe:[20,20],
@@ -20530,7 +20570,7 @@ const PROP_DIM = { table:[26,18], chair:[14,14], tv:[22,14], counter:[46,16], be
   turret:[14,14], jailcell:[44,28], vending:[18,26], bomb:[12,12], atm:[16,24], campole:[9,9], camera:[10,10], generator:[24,18], manhole:[13,13], firework:[20,24], cementmixer:[26,24], kennel:[18,15], neonsign:[32,10], wreckingball:[20,20], trafficcar:[64,30], freezer:[22,18], ganghideout:[32,28], cultidol:[16,20], hanged:[14,32], skeleton:[22,18] };   // same silhouette size as a parked 'car' — it was spawning at under half scale
 // props with faux-3D height — y-sort earlier by ~half their visual rise so a player level with
 // the base draws in front of the tall part (same trick as trees / beds / boulders)
-const PROP_SORT_LIFT = { vending:14, campole:34, camera:34, generator:8, atm:14, crate:14, barrel:16, dumpster:18, car:12, van:14, hydrant:15, firebarrel:19, lamppost:44, torchpost:26, weaponrack:10, cementmixer:16, wreckingball:12, trafficcar:12, freezer:12 };
+const PROP_SORT_LIFT = { oildrum:16, vending:14, campole:34, camera:34, generator:8, atm:14, crate:14, barrel:16, dumpster:18, car:12, van:14, hydrant:15, firebarrel:19, lamppost:44, torchpost:26, weaponrack:10, cementmixer:16, wreckingball:12, trafficcar:12, freezer:12 };
 // cementmixer deliberately NOT here — user's first ask ("walk through it") briefly made it
 // walkable, but the follow-up corrected that: it should stay a solid obstacle you go AROUND, with
 // its wet-concrete slow hazard as a separate, lopsided puddle to one side (see
@@ -20549,7 +20589,7 @@ const FIXED_PROP = new Set(['bones', 'furn', 'landmark', 'cliff', 'waterfall','l
 // reason to exist (see tryInteract's lift branch, throwHeld, updateThrown).
 // user: chairs and small boxes are everywhere indoors and were getting in the way of picking up the things you actually want — so they can't be lifted any more
 // (they get shoved out of your way as you walk into them instead: see PUSHABLE_PROPS / moveActor).
-const LIFTABLE_PROPS = new Set(['barrel', 'firebarrel', 'tv', 'cementmixer', 'firework', 'freezer']);
+const LIFTABLE_PROPS = new Set(['barrel', 'firebarrel', 'tv', 'cementmixer', 'firework', 'freezer', 'oildrum']);
 const PUSHABLE_PROPS = new Set(['chair', 'crate', 'stool']);
 // the cement mixer's wet-concrete slow puddle — deliberately off-center ("lopsided"), not a ring
 // around the mixer itself, so there's always a dry side to approach and lift it from. Shared by
@@ -20573,6 +20613,7 @@ const PROP_THROW_STATS = {
   firebarrel: { dmg: 22, knock: 340, burn: true },
   cementmixer:{ dmg: 20, knock: 280 },
   freezer:    { dmg: 12, knock: 320 },   // the real payoff is the flash-freeze when it lands (see freezerBurst)
+  oildrum:    { dmg: 9,  knock: 300 },   // a heavy, wet thunk — the real payoff is what it leaves on the ground once it's landed (see hurtProp)
   // a wooden crate of fireworks, no heavier than any other crate on impact — the real payoff isn't
   // the beaning, it's landing intact and going off (see hurtProp's 'firework' branch, reused as-is
   // for a thrown-and-landed one via updateThrown's generic mkProp+hurtProp destroy dispatch): a
@@ -21342,7 +21383,14 @@ function populateCityStreets(){
   // ambush squad in cultCityTick. The street population itself needs to BE the cult, same as the gang.
   const onCultRaid = mission && mission.urge && mission.urge.kind === 'cultraid';
   const clearR = Math.hypot(VUW, VUH) * 1.6;   // comfortably outside the arrival view, not just past its edge
-  const n = (onGangRaid ? Math.max(3, Math.round(7 * gripFrac())) : onCultRaid ? 7 : 4) + (Math.random() * 3 | 0);   // (a beaten-down crew fields fewer street gangers)
+  // user: "gang and cult members were interrupting so much [that] it was almost impossible to sneak and hack my way into banks... can
+  // you make gang raids reduce how many gangs are present in other city raids/events?" Gang Grip used to only ever thin out the ONE
+  // raid it belongs to; this street population — the everyday thugs/gunners/bruisers spawned on every ordinary city trip, kidnap,
+  // errand or stealth job — is what was actually doing the interrupting the rest of the time, and it never looked at grip at all.
+  // user: "the intention was that it worked on cults too." Half this baseline is standing in for each faction, so grinding down
+  // EITHER one alone already visibly thins the streets; it only bottoms out once both are fully neutralized.
+  const facFrac = onGangRaid || onCultRaid ? 1 : (gripFrac() + cultStrengthFrac()) / 2;
+  const n = (onGangRaid ? Math.max(3, Math.round(7 * gripFrac())) : onCultRaid ? 7 : Math.max(2, Math.round(4 * facFrac))) + (Math.random() * 3 | 0);   // (a beaten-down crew fields fewer street gangers, on ANY trip now — not just the raid itself)
   for (let i = 0; i < n; i++){
     if (onCultRaid){ const sp = spreadCityPoint(clearR); makeCultist(sp.x, sp.y, false); continue; }
     const r = Math.random();
@@ -22140,6 +22188,16 @@ function cultOn(){ return !!(village && village.cult && featureUnlocked('cult'))
 const CRUSADE_GOAL = 30, CRUSADE_REST_DAYS = 6;
 function crusade(){ return village.crusade || (village.crusade = { progress: 0, suppressUntil: 0 }); }
 function cultSuppressed(){ return !!(village && village.crusade && village.crusade.suppressUntil > village.day); }
+// user: "the intention was that [Gang Grip reducing ordinary city trips] worked on cults too." The cult has no single 0-100 slider
+// the way gangGrip is one — Crusade tracks PROGRESS toward the next suppression, not a level that just sits somewhere — so this is
+// the cult's equivalent: badly weakened (same floor as a gutted gang crew) while reeling from a suppression, softening a little even
+// before that as the Crusade bar fills. Feeds populateCityStreets the same way gripFrac() does for gangs.
+function cultStrengthFrac(){
+  if (!village || !cultOn()) return 1;
+  if (cultSuppressed()) return GRIP_MIN / 100;
+  return Math.max(0.4, 1 - crusade().progress / CRUSADE_GOAL * 0.6);
+}
+const cultStrong = () => !village || !cultOn() ? true : (!cultSuppressed() && cultStrengthFrac() >= 0.85);   // barely dented — hasn't cost them anything yet
 function bumpCrusade(n){
   if (!village || !cultOn() || cultSuppressed()) return;
   const c = crusade(); c.progress = Math.min(CRUSADE_GOAL, c.progress + n);
@@ -22176,6 +22234,8 @@ function gangGrip(){
   return w.grip;
 }
 const gripFrac = () => village ? Math.max(GRIP_MIN, gangGrip()) / 100 : 1;
+const gangNeutralized = () => village ? gangGrip() <= GRIP_MIN : false;    // ground down to the floor — as beaten-down as a crew ever gets
+const gangStrong = () => village ? gangGrip() >= 85 : true;               // barely dented — hasn't cost them anything yet
 // n points of grip lost; (x, y) puts a floating readout where it happened
 function shakeGrip(n, x, y){
   if (!village) return;
@@ -22240,8 +22300,10 @@ function makeCultist(x, y, caster, guard){
   return e;
 }
 function maybeCultRaid(force){
-  if (!force && (!cultOn() || village.day < 3 || !village.villagers.length || cultSuppressed())) return;
-  const chance = (0.14 + Math.min(0.2, darkShrines().length * 0.07)) * (hasRes('warding') ? 0.5 : 1) * (hasRes('wardages') ? 0.6 : 1);
+  if (!force && (!cultOn() || village.day < 3 || !village.villagers.length)) return;
+  // user: "I still want them to appear — there should just be more pressing issues on your mind once they're neutralized" — reeling
+  // used to fully block this; now it just cuts the odds by 60%, same treatment as the gang's own village threat (see NIGHT_KINDS.bandit).
+  const chance = (0.14 + Math.min(0.2, darkShrines().length * 0.07)) * (hasRes('warding') ? 0.5 : 1) * (hasRes('wardages') ? 0.6 : 1) * (cultSuppressed() ? 0.4 : 1);
   if (!force && Math.random() >= chance) return;
   const fire = props.find(pp => !pp.dead && pp.t === 'campfire') || { x: 0, y: 0 };
   const n = 3 + Math.min(3, Math.floor(village.day / 8)) + (village.ngPlus || 0);
@@ -22427,13 +22489,14 @@ function cultDropTick(car, dt, dx, dy, d){
 // bowling gangers over; cult: sigil-fire dripping behind it, torching the street) — then detonates. It counts as
 // wrecked (raid progress + grip) when it goes.
 function hackFactionVehicle(p){
-  const gang = p._vk.startsWith('gang');
+  const gang = p._vk.startsWith('gang'), tanker = p._vk === 'oiltanker';
   if (p._fac){ p._fac = null; p._driveby = null; p._cultDrop = null; ambientCars = ambientCars.filter(c => c !== p); }   // (a drive-by / convoy car stops working for them)
   p._hacked = true; p._driver = false; p._panicking = true; p._hit = new Set(); p._noPath = false; p._maxf = 0;
   p._speed = 70; p._facing = Math.atan2(p.y - player.y, p.x - player.x);
-  p._runaway = { t: 0, life: p._vk === 'cultarmour' ? 11 : 9, gang, hornT: 0, fireT: 0 };
+  p._runaway = { t: 0, life: p._vk === 'cultarmour' ? 11 : tanker ? 13 : 9, gang, tanker, hornT: 0, fireT: 0 };
   panicCars.push(p);
-  popText(p.x, p.y - 30, gang ? 'STEREO OVERRIDE!' : 'SIGIL OVERLOAD!', gang ? '#ffd257' : '#c9a6f5', 1.6); burst(p.x, p.y, 14, gang ? '#ffd257' : '#b070e8', 220); makeNoise(p.x, p.y, 380, 0.9);
+  popText(p.x, p.y - 30, tanker ? 'IGNITION OVERRIDE!' : gang ? 'STEREO OVERRIDE!' : 'SIGIL OVERLOAD!', tanker ? '#e8b820' : gang ? '#ffd257' : '#c9a6f5', 1.6);
+  burst(p.x, p.y, 14, tanker ? '#e8b820' : gang ? '#ffd257' : '#b070e8', 220); makeNoise(p.x, p.y, 380, 0.9);
 }
 function runawayTick(dt){
   for (const car of panicCars){
@@ -22441,7 +22504,9 @@ function runawayTick(dt){
     r.t += dt;
     if (r.t < r.life && car.hp < car.maxhp * 0.4) car.hp = car.maxhp * 0.4;                // the override keeps it running through the crashes — it only goes when its time is up
     const f = car._facing || 0;
-    if (r.gang){
+    if (r.tanker){                                                                        // "set it up outside a bank and hack it so it loses control" — it leaks the whole time it's careening around, then the tank finally goes
+      r.fireT -= dt; if (r.fireT <= 0){ r.fireT = 0.3; addHazard('oil', car.x - Math.cos(f) * 40 + rand(-10, 10), car.y - Math.sin(f) * 40 + rand(-10, 10), { r: rand(22, 32), life: 50 }); }
+    } else if (r.gang){
       r.hornT -= dt; if (r.hornT <= 0){ r.hornT = 0.45; popText(car.x + rand(-8, 8), car.y - 26, pick(['♪', '♫', 'HONK!', 'HONK HONK']), '#ffd257', 0.8); makeNoise(car.x, car.y, 320, 0.6); }
     } else {
       r.fireT -= dt; if (r.fireT <= 0){ r.fireT = 0.4; addHazard('fire', car.x - Math.cos(f) * 34, car.y - Math.sin(f) * 34, { r: 30, life: 6 }); burst(car.x, car.y, 5, '#b070e8', 150); }
@@ -22449,13 +22514,14 @@ function runawayTick(dt){
     if (r.t >= r.life){                                                            // the engine can't take it
       r.life = 1e9; burst(car.x, car.y, 30, '#ff8a2a', 340);
       if (car._vk === 'cultarmour') explode(car.x, car.y, 150, 55);
+      else if (car._vk === 'oiltanker') spillBigOil(car.x, car.y);
       hurtProp(car, car.hp + 999, { x: car.x, y: car.y }); popText(car.x, car.y - 40, 'BOOM', '#ff9a4a', 1.4);
     }
   }
 }
 function factionVehicleTick(dt){
   runawayTick(dt);
-  if (zone === 'city') for (const p of props) if (p._facVeh && !p.dead && p._len) fitVehicleBox(p);       // keep every faction vehicle's collision box matched to how it's turned
+  if (zone === 'city') for (const p of props) if ((p._facVeh || p._vk === 'oiltanker') && !p.dead && p._len) fitVehicleBox(p);       // keep every faction vehicle's collision box matched to how it's turned
   if (zone !== 'city' || !player || !ambientCars.length) return;
   for (const car of ambientCars){
     if (car.dead || !car._fac || car === drivingCar) continue;
@@ -22480,11 +22546,16 @@ function factionVehicleWrecked(p){
 // casual walk) at random, which is exactly the "interference" the Crusade meter exists to cool
 // down; now no other mission is ever interrupted by one, and a cultraid job isn't gated by
 // cultSuppressed() at all — you went looking for this fight, the cooldown shouldn't block it.
+// later, user: "if they're still having a strong presence, add their vehicles and drive-bys to ALL
+// city events." One narrow, deliberate exception to the rule above — while the cult is basically
+// untouched, a rare passing convoy (a vehicle sighting only, no squad ambush) is allowed back onto
+// ordinary trips, specifically to prod the player into doing something about them.
 let _cultCityT = null;
 function cultCityTick(dt){
   if (zone !== 'city' || !cultOn() || !player || player.dead) return;
   const R = mission && mission.raid, onRaid = !!(mission && mission.urge && mission.urge.kind === 'cultraid');
-  if (!R && !onRaid){ _cultCityT = null; return; }
+  const ambient = !R && !onRaid && cultStrong();
+  if (!R && !onRaid && !ambient){ _cultCityT = null; return; }
   if (R && cultSuppressed()) return;
   // ambushers know where their prey is for their first half-minute — without this the ordinary
   // lose-sight rule (5s unseen = give up) lets a squad spawned off-screen wander away instead of closing in
@@ -22493,9 +22564,10 @@ function cultCityTick(dt){
     e._huntT = (e._huntT == null ? 30 : e._huntT) - dt;
     if (e._huntT > 0){ e.mad = true; e._loseSightT = 0; e._lastSeenX = player.x; e._lastSeenY = player.y; }
   }
-  if (_cultCityT == null) _cultCityT = rand(R ? 45 : 20, R ? 80 : 38);
+  if (_cultCityT == null) _cultCityT = ambient ? rand(90, 160) : rand(R ? 45 : 20, R ? 80 : 38);
   _cultCityT -= dt;
   if (_cultCityT > 0) return;
+  if (ambient){ _cultCityT = rand(160, 260); if (enemies.filter(e => e.cultist && !e.dead && !e._guard).length < 4) spawnCultVehicle(); return; }
   _cultCityT = (R ? rand(35, 60) : rand(35, 65)) * (wagerOn('hunted') ? 0.5 : 1);
   if (enemies.filter(e => e.cultist && !e.dead && !e._guard).length >= 4) return;
   if (onRaid && Math.random() < 0.7 && spawnCultVehicle()) return;                       // most of the time they turn up in a jeep or an armoured truck
@@ -22526,7 +22598,12 @@ function makeGangster(x, y, guard){
   return e;
 }
 function gangCityTick(dt){
-  if (zone !== 'city' || !player || player.dead || !(mission && mission.urge && mission.urge.kind === 'gangraid')){ _gangCityT = null; return; }
+  const onGangRaid = !!(mission && mission.urge && mission.urge.kind === 'gangraid');
+  // user: "if they're still having a strong presence, add their vehicles and drive-bys to ALL city events — to further prompt the
+  // player into doing something about them." An occasional drive-by sighting on ANY city trip while gang grip is still near full —
+  // much rarer than the real Gang Raid, and it's a vehicle sighting only, never a squad ambush (that stays reserved for the raid).
+  const ambient = !onGangRaid && gangStrong();
+  if (zone !== 'city' || !player || player.dead || !(onGangRaid || ambient)){ _gangCityT = null; return; }
   for (const e of enemies){
     if (!e.ganger || e.dead) continue;
     e._huntT = (e._huntT == null ? 30 : e._huntT) - dt;
@@ -22536,9 +22613,10 @@ function gangCityTick(dt){
   // lot more gang members." With ambient cops pulled out of a Gang Raid city entirely (see
   // cityDistrictExtras/genCityChunk's `noCops`), the gang itself now shows up harder and more often
   // to fill that space, not just as a like-for-like swap.
-  if (_gangCityT == null) _gangCityT = rand(12, 22) / gripFrac();
+  if (_gangCityT == null) _gangCityT = ambient ? rand(90, 150) : rand(12, 22) / gripFrac();
   _gangCityT -= dt;
   if (_gangCityT > 0) return;
+  if (ambient){ _gangCityT = rand(150, 240); if (enemies.filter(e => e.ganger && !e.dead && !e._guard).length < 8) spawnGangDriveby(); return; }
   _gangCityT = rand(20, 36) / Math.max(0.35, gripFrac()) * (wagerOn('hunted') ? 0.5 : 1);   // a crew you've beaten down turns up less often...
   if (enemies.filter(e => e.ganger && !e.dead && !e._guard).length >= 8) return;   // (a building's own staff doesn't count against the roaming-squad cap)
   if (Math.random() < 0.55 * gripFrac() + 0.1 && spawnGangDriveby()) return;         // ...and part of the time it's a drive-by instead of a squad on foot
@@ -22557,7 +22635,7 @@ const NIGHT_KINDS = [
   { id: 'prowler',  w: 4, ok: V => true },
   { id: 'feral',    w: 3, ok: V => V.day >= 3 },
   { id: 'thief',    w: 3, ok: V => V.day >= 4 && ((V.stores.food | 0) >= 10 || money >= 20) },
-  { id: 'bandit',   w: 3, ok: V => V.day >= 6 && V.villagers.length >= 5 },
+  { id: 'bandit',   w: 3, mul: () => gangNeutralized() ? 0.4 : 1, ok: V => V.day >= 6 && V.villagers.length >= 5 },   // the village's own "gang" threat — user: "reduce how often they appear... by 60%" once fully ground down
   { id: 'undead',   w: 2, ok: V => V.day >= 8 },
   { id: 'arsonist', w: 2, ok: V => V.day >= 10 && V.villagers.length >= 6 },
   { id: 'ogre',     w: 1, ok: V => V.day >= 14 && V.villagers.length >= 8 },
@@ -22597,8 +22675,9 @@ function nightAttackTick(dt){
   if (V._naDay !== V.day){ V._naDay = V.day; V._naCount = 0; V._naFirst = true; }
   _naT = V._naFirst ? rand(15, 40) : rand(110, 180); V._naFirst = false;                       // the first wave comes soon after dusk, then every minute or so while you stay up
   if (V._naCount >= 1 + Math.min(2, Math.floor(V.day / 8)) || threatCount() >= 6 || Math.random() > 0.5) return;   // quiet spells happen, and there's a cap on the night
-  const opts = NIGHT_KINDS.filter(k => k.ok(V)), tot = opts.reduce((n, k) => n + k.w, 0); let r = Math.random() * tot, kind = opts[0].id;
-  for (const k of opts){ if ((r -= k.w) <= 0){ kind = k.id; break; } }
+  const wgt = k => k.w * (k.mul ? k.mul() : 1);
+  const opts = NIGHT_KINDS.filter(k => k.ok(V)), tot = opts.reduce((n, k) => n + wgt(k), 0); let r = Math.random() * tot, kind = opts[0].id;
+  for (const k of opts){ if ((r -= wgt(k)) <= 0){ kind = k.id; break; } }
   V._naCount++; spawnNightAttack(kind);
 }
 function maybeSpawnVillageThreat(){
@@ -23192,6 +23271,7 @@ function hurtProp(p, dmg, from){
   }
   if (p._vk === 'cultarmour') dmg *= 0.35;                                          // armour plate
   if (p._vk === 'firetruck') dmg *= 0.12;                                           // a fire engine takes a beating
+  if (p._vk === 'oiltanker') dmg *= 0.45;                                           // a full steel tank shrugs off a lot, but it's not armoured
   p.hp -= dmg;
   p._hitAt = performance.now();
   if (dmg > 2){ const mt = p.mat || PROP_MAT[p.t]; A.play(mt === 'metal' ? 'prop_metal' : mt === 'glass' ? 'prop_glass' : mt === 'stone' ? 'prop_stone' : mt === 'soft' ? 'prop_soft' : 'prop_wood', p.x, p.y, 0.8); }
@@ -23369,6 +23449,11 @@ function hurtProp(p, dmg, from){
       for (const pr of props) if (!pr.dead && pr !== p && dist2(pr.x, pr.y, p.x, p.y) < R) hurtProp(pr, 20, { x: p.x, y: p.y });
       return;
     }
+    if (p._vk === 'oiltanker'){                                       // user: "great for ramming into buildings then making it explode" — the whole tank goes at once, not a thin trail
+      spillBigOil(p.x, p.y);
+      for (const pr of props) if (!pr.dead && pr !== p && (pr.t === 'car' || pr.t === 'trafficcar') && dist2(pr.x, pr.y, p.x, p.y) < 130 * 130) hurtProp(pr, 9999, { x: p.x, y: p.y });
+      return;
+    }
     if (p.t === 'car' || p.t === 'trafficcar'){                         // totalled — chain-detonates any other car close enough to catch the blast, and leaks a real oil trail away from the wreck (see the fire branch above for what happens when something eventually lights it)
       explode(p.x, p.y, 74, 34);
       const oa = rand(0, 6.283);
@@ -23412,6 +23497,10 @@ function hurtProp(p, dmg, from){
     }
     else if (p.t === 'freezer'){
       freezerBurst(p.x, p.y);
+    }
+    else if (p.t === 'oildrum'){                                       // black, not the red explosive barrel — this one doesn't go off, it just spreads
+      burst(p.x, p.y, 10, 'rgba(18,18,22,0.85)', 160);
+      spillOil(p.x, p.y, 4, 24, 34, 45);
     }
     else if (p.t === 'cementmixer'){
       // user: "if thrown at enemies (or broken) it'll break and splash concrete all over... if it
@@ -25837,7 +25926,7 @@ function carRam(car, speedFrac = 1){
   car._hit = touching;
   if (impact > 0){
     hurtProp(car, impact, { x: car.x, y: car.y });
-    car._speed *= Math.max(0.2, 1 - impact * (car._vk === 'firetruck' ? 0.012 : 0.035));   // the heavy engine barely slows
+    car._speed *= Math.max(0.2, 1 - impact * ((car._vk === 'firetruck' || car._vk === 'oiltanker') ? 0.012 : 0.035));   // the heavy engine barely slows
   }
 }
 // props that move/act on their own instead of just sitting there waiting to be broken — a
@@ -26092,7 +26181,7 @@ function updatePlayer(dt){
     if ((blockedX || blockedY) && car._smashCd <= 0){
       // high speed = real force: a fast head-on hit hammers walls and props with damage that scales steeply with speed, so a flat-out run bursts straight through
       // (and only bounces if the thing survived). Slow hits keep the gentler bump below.
-      const sf = clamp(Math.abs(car._speed) / MAXF, 0, 1) * (car._vk === 'firetruck' ? 1.4 : 1);
+      const sf = clamp(Math.abs(car._speed) / MAXF, 0, 1) * ((car._vk === 'firetruck' || car._vk === 'oiltanker') ? 1.4 : 1);
       if (sf > 0.5){
         car._smashCd = 0.1;
         const big = 700 * sf * sf * sf;
@@ -26102,7 +26191,7 @@ function updatePlayer(dt){
           if (pr.dead || pr === car || !pr.solid) continue;
           if (Math.abs(nx - pr.x) < (car.w / 2 + pr.w / 2) && Math.abs(ny - pr.y) < (car.h / 2 + pr.h / 2)) hurtProp(pr, big, { x: car.x, y: car.y });
         }
-        hurtProp(car, big * 0.06 * (car._vk === 'firetruck' ? 0.15 : 1), { x: car.x, y: car.y });
+        hurtProp(car, big * 0.06 * ((car._vk === 'firetruck' || car._vk === 'oiltanker') ? 0.15 : 1), { x: car.x, y: car.y });
         const bx = cellSolid(Math.floor(nx / CELL), Math.floor(car.y / CELL)) || carBlockedByProp(car, nx, car.y);
         const by = cellSolid(Math.floor(car.x / CELL), Math.floor(ny / CELL)) || carBlockedByProp(car, car.x, ny);
         shake(3 + sf * 7); A.play('thud_soft'); burst(nx + Math.cos(car._facing) * car.w * 0.4, ny + Math.sin(car._facing) * car.w * 0.4, 14, '#c9b48a', 300);
@@ -26144,7 +26233,7 @@ function updatePlayer(dt){
     // feel like it's beating your own car half to death, a crawl should just be a dent and a
     // shove. This used to be gated off entirely below 110 speed, which read as "half the things
     // in the city just don't react to being driven into" at anything but a hard ram.
-    if (Math.abs(car._speed) > 12) carRam(car, clamp(Math.abs(car._speed) / MAXF, 0.15, 1) * (car._vk === 'firetruck' ? 1.5 : 1));   // heavy: it hits harder
+    if (Math.abs(car._speed) > 12) carRam(car, clamp(Math.abs(car._speed) / MAXF, 0.15, 1) * ((car._vk === 'firetruck' || car._vk === 'oiltanker') ? 1.5 : 1));   // heavy: it hits harder
     p.x = car.x; p.y = car.y; p.dir = car._facing; p.vx = p.vy = 0;
     if (car._vk === 'firetruck'){                                        // hold attack: the hose blasts water ahead (and a burst behind with the rear cannon while reversing)
       car._hoseCd = (car._hoseCd || 0) - dt;
@@ -34447,6 +34536,7 @@ function drawVehicleDeco(vk, w, h){
 // vehicles' tops flickered white/black with the lighting. Everything here stays hex.
 const _tHex = (h, f) => { const c = _hex2(h), t = f < 0 ? 0 : 255, a = Math.abs(f), x = v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0'); return '#' + x(c[0] + (t - c[0]) * a) + x(c[1] + (t - c[1]) * a) + x(c[2] + (t - c[2]) * a); };
 function factionVehCols(vk){
+  if (vk === 'oiltanker') return { body: '#111114', accent: '#e8b820', trim: '#2a2a30', dark: '#08080a' };   // black tank, hazard-yellow trim
   if (vk.startsWith('gang')){ const th = gangThemeFor(); return { body: vk === 'gangmuscle' ? th.band : vk === 'gangdonk' ? '#15151b' : _tHex(th.shirt, 0.16), accent: th.band, trim: vk === 'gangdonk' ? '#e0b64a' : '#e8e8ee', dark: '#101014' }; }
   const th = cultThemeFor(); return { body: vk === 'cultjeep' ? _tHex(th.shirt, 0.18) : _tHex(th.shirt, -0.06), accent: '#c070e8', trim: '#8a7a98', dark: '#140e1a' };
 }
@@ -34541,6 +34631,32 @@ function drawFactionVehicle(w, h, facing, vk, dmg){
     for (let z = 9; z <= 13; z++) layer(z, () => { octx.fillStyle = 'rgba(190,170,220,0.22)'; octx.fillRect(w * 0.1, -hw * 0.92, 2.4, hw * 1.84); });                          // windscreen
     disc(-w * 0.57, 0, h * 0.22, 2, 9, '#16101c', '#1c1424', C.accent);                                                                              // spare wheel
     zTop = 9; topBox = () => box(w * 0.1, w * 0.5, hw * 0.95, 4);
+  } else if (vk === 'oiltanker'){
+    const hw = h * 0.44, tankHw = hw * 0.98, YEL = C.accent;
+    wheelsAt([-w * 0.36, -w * 0.1, w * 0.16, w * 0.36], hw, w * 0.09, 6, 6, '#0a0a0e', '#201f24');                                                    // four axles down the length of the rig
+    stack(w * 0.22, w * 0.5, hw * 0.92, 3, 3, 11, side, C.body);                                                                                       // the cab
+    stack(w * 0.5, w * 0.56, hw * 0.86, 1, 3, 8, '#1a1a1e', '#2c2c32');                                                                                // bumper/grille
+    stack(w * 0.34, w * 0.46, hw * 0.7, 2, 11, 16, '#0a0a0d', '#141418');                                                                              // cab roof / windscreen frame
+    layer(14, () => { octx.fillStyle = 'rgba(140,190,225,0.4)'; octx.fillRect(w * 0.36, -hw * 0.5, w * 0.08, hw); });                                  // glass
+    lamps(11, w * 0.5, w * 0.34, hw);
+    // the tank itself: a long extruded drum (a tall rounded-rect reads as a cylinder in this oblique view, same trick the barrels use)
+    stack(-w * 0.5, w * 0.2, tankHw, tankHw * 0.9, 4, 17, _tHex(side, 0.05), C.body);
+    layer(17, () => {                                                                                                                                  // the hazard stripe running the tank's length, and its rivet seams
+      octx.fillStyle = YEL; octx.fillRect(-w * 0.5, -tankHw * 0.22, w * 0.7, tankHw * 0.3);
+      octx.strokeStyle = 'rgba(0,0,0,0.35)'; octx.lineWidth = 1; for (let k = 1; k < 5; k++){ const x = -w * 0.5 + k * w * 0.14; octx.beginPath(); octx.moveTo(x, -tankHw); octx.lineTo(x, tankHw); octx.stroke(); }
+      octx.fillStyle = 'rgba(255,255,255,0.1)'; octx.fillRect(-w * 0.48, -tankHw * 0.75, w * 0.66, tankHw * 0.22);                                     // a highlight along the top — reads round, not boxy
+    });
+    layer(18, () => {                                                                                                                                  // a walkway rail + the filler hatch on top
+      octx.strokeStyle = '#3a3a40'; octx.lineWidth = 1; octx.beginPath(); octx.moveTo(-w * 0.46, -tankHw * 0.95); octx.lineTo(w * 0.14, -tankHw * 0.95); octx.stroke();
+      octx.fillStyle = '#2a2a30'; octx.beginPath(); octx.arc(-w * 0.1, -tankHw * 0.95, 3.6, 0, 7); octx.fill(); octx.strokeStyle = YEL; octx.lineWidth = 0.8; octx.stroke();
+    });
+    layer(6, () => { octx.fillStyle = 'rgba(0,0,0,0.5)'; octx.beginPath(); octx.moveTo(w * 0.16, -hw * 0.5); octx.lineTo(w * 0.24, 0); octx.lineTo(w * 0.16, hw * 0.5); octx.closePath(); octx.fill(); });   // the coupling shadow between cab and tank
+    layer(4, () => {                                                                                                                                    // a black-and-yellow hazard placard on the back
+      octx.fillStyle = YEL; octx.fillRect(-w * 0.52, -hw * 0.4, 8, 8);
+      octx.strokeStyle = '#000'; octx.lineWidth = 1; octx.strokeRect(-w * 0.52, -hw * 0.4, 8, 8);
+      octx.fillStyle = '#000'; octx.font = 'bold 6px monospace'; octx.textAlign = 'center'; octx.fillText('⚠', -w * 0.48, -hw * 0.4 + 6.5);
+    });
+    zTop = 18; topBox = () => box(-w * 0.5, w * 0.2, tankHw, tankHw * 0.9);
   } else {                                                                                                                                           // cultarmour
     const hw = h * 0.44;
     wheelsAt([-w * 0.32, w * 0.28], hw, w * 0.2, 7, 7, '#0a080e', '#231a2c');
@@ -35142,7 +35258,7 @@ function drawProp(p){
       octx.fillStyle = 'rgba(160,80,220,' + gl.toFixed(2) + ')'; octx.beginPath(); octx.ellipse(0, h * 0.34, w * 0.62, h * 0.55, 0, 0, 7); octx.fill(); }
     octx.save();
     if (p._ganger) octx.translate(0, Math.sin(performance.now() / 140 + p.x) * 1.8);
-    if (p._moto) drawMotoShape(w, h, p._facing || 0, dmg); else if (FACTION_VK.has(p._vk)) drawFactionVehicle(p._len || w, p._wid || h, p._facing || 0, p._vk, dmg); else drawCarShape(w, h, p._facing || 0, col, dmg, p._vk);
+    if (p._moto) drawMotoShape(w, h, p._facing || 0, dmg); else if (FACTION_VK.has(p._vk) || p._vk === 'oiltanker') drawFactionVehicle(p._len || w, p._wid || h, p._facing || 0, p._vk, dmg); else drawCarShape(w, h, p._facing || 0, col, dmg, p._vk);
     octx.restore();
     if (p._ganger && Math.sin(performance.now() / 260 + p.x) > 0.965){
       octx.fillStyle = '#ffd257'; octx.font = 'bold 11px monospace'; octx.textAlign = 'center';
@@ -35251,6 +35367,17 @@ function drawProp(p){
     octx.fillStyle = '#b5432a'; octx.beginPath(); octx.ellipse(0, -z, w/2, ry, 0, 0, 7); octx.fill();  // lid
     octx.fillStyle = 'rgba(255,255,255,0.14)'; octx.beginPath(); octx.ellipse(-w*0.13, -z - ry*0.15, w*0.26, ry*0.5, 0, 0, 7); octx.fill();
     octx.fillStyle = '#eecb50'; octx.font = 'bold 8px monospace'; octx.textAlign = 'center'; octx.fillText('!', 0, h*0.14);
+  }
+  else if (T === 'oildrum'){
+    const z = 13, ry = h * 0.34;
+    octx.fillStyle = '#141418'; octx.fillRect(-w/2, -z, w, z + h/2);                  // black drum body
+    octx.fillStyle = '#0c0c0f'; octx.beginPath(); octx.ellipse(0, h/2 - 1, w/2, ry, 0, 0, 7); octx.fill();
+    octx.fillStyle = '#c8281c'; octx.fillRect(-w/2, -z*0.25, w, h*0.13);              // hazard stripe
+    octx.strokeStyle = '#050506'; octx.lineWidth = 1.4;
+    octx.beginPath(); octx.moveTo(-w/2, -z*0.55); octx.lineTo(w/2, -z*0.55); octx.moveTo(-w/2, h*0.24); octx.lineTo(w/2, h*0.24); octx.stroke();
+    octx.fillStyle = '#222226'; octx.beginPath(); octx.ellipse(0, -z, w/2, ry, 0, 0, 7); octx.fill();  // lid
+    octx.fillStyle = 'rgba(255,255,255,0.10)'; octx.beginPath(); octx.ellipse(-w*0.13, -z - ry*0.15, w*0.26, ry*0.5, 0, 0, 7); octx.fill();
+    octx.fillStyle = '#d8b840'; octx.font = 'bold 6.5px monospace'; octx.textAlign = 'center'; octx.fillText('OIL', 0, h*0.1);
   }
   else if (T === 'firebarrel'){
     const z = 15, ry = h * 0.33;
@@ -36795,11 +36922,12 @@ function syncHUDNow(){
           const left = c.suppressUntil - village.day;
           $('crusade-fill').style.width = '100%';
           $('crusade-label').textContent = '☠ Cult reeling — ' + left + 'd';
-          crEl.title = 'The cult is in disarray — licking its wounds. Back to full strength in ' + left + ' day' + (left === 1 ? '' : 's') + '.';
+          crEl.title = 'The cult is in disarray — licking its wounds. New shrines stop entirely; village raids and ordinary street sightings are cut by 60%. Back to full strength in ' + left + ' day' + (left === 1 ? '' : 's') + '.';
         } else {
           $('crusade-fill').style.width = Math.round(100 * c.progress / CRUSADE_GOAL) + '%';
           $('crusade-label').textContent = '☠ Crusade ' + c.progress + '/' + CRUSADE_GOAL;
-          crEl.title = 'Crusade against the cult: ' + c.progress + ' / ' + CRUSADE_GOAL + '. Cull cultists and raze dark shrines to set them back — no raids, ambushes or new shrines while they reel.';
+          crEl.title = 'Crusade against the cult: ' + c.progress + ' / ' + CRUSADE_GOAL + '. Cull cultists and raze dark shrines to set them back — while they reel, no new shrines, and village raids / ordinary street sightings drop by 60%. '
+            + 'A cult that hasn\'t been touched shows up more on ordinary city trips too, and turns up armoured convoys as a warning — the more you chip away at them, the quieter the streets get everywhere, not just on a Cult Raid.';
         }
       }
     }
@@ -36813,8 +36941,13 @@ function syncHUDNow(){
         const g = Math.round(gangGrip()), gw = gangWar();
         $('gangwar-fill').style.width = g + '%';
         $('gangwar-label').textContent = '⚔ Gang grip ' + g + '%';
-        gwEl.title = 'How firmly the gangs hold the cities: ' + g + '%. Every ganger, hideout, building and vehicle you take out chips it down; they win back ' + GRIP_REGEN + '% a day. '
-          + 'The lower it is, the fewer landmark buildings, street gangers, squads and drive-bys your next Gang Raid faces.  Lifetime: ' + gw.kills + ' gangers down, ' + gw.hideouts + ' hideouts smashed, ' + gw.buildings + ' buildings gutted, ' + gw.vehicles + ' vehicles wrecked.';
+        // user: "the hover over description for gang grip confuses me" — "how firmly the gangs hold the cities" read as a general,
+        // always-on gang-presence meter, when at the time it only ever touched Gang Raids. Since then it was extended (user: "make
+        // gang raids reduce how many gangs are present in other city raids/events... it was almost impossible to sneak and hack my
+        // way into banks") to also thin out the ordinary street population on every other city trip — see populateCityStreets — so
+        // the tooltip's claim that other trips are unaffected is gone; it really is a general gang-strength meter again now.
+        gwEl.title = 'Gang Grip — how strong the gangs are, everywhere: ' + g + '%. Every ganger, hideout, building and vehicle you take out chips it down; they build back up ' + GRIP_REGEN + '% a day. '
+          + 'The lower it is, the fewer street gangers you run into on ANY city trip, and the fewer landmark buildings, squads and drive-bys your next Gang Raid faces.  Lifetime: ' + gw.kills + ' gangers down, ' + gw.hideouts + ' hideouts smashed, ' + gw.buildings + ' buildings gutted, ' + gw.vehicles + ' vehicles wrecked.';
       }
     }
   }
@@ -37319,7 +37452,9 @@ window.__G = () => ({ get doorLocks(){ return doorLocks; }, get cityCams(){ retu
   wanted, chunks, chunkCount: chunks.size, blocks, worldSeed, CELL, CHUNK, ROSTER, MIX_RATIO,
   cam, VUW, VUH, zone, village, buildMode, mouse, ZOOM, titleOpen, charCreateOpen, get charDraft(){ return charDraft; },
   setBuildSel: (i) => { buildSel = i; }, setMouseWorld: (wx, wy) => { mouse.x = (wx - cam.x) * ZOOM; mouse.y = (wy - cam.y) * ZOOM; },
-  _fn: { A, popText, get craftGroundRef(){ return craftGround; }, get craftSpotRef(){ return craftSpot; }, buildRowsList, doResearch, RECIPES, WINDOW_MATS, lineBlocked, turretTick, get missionNow(){ return mission; }, randPersonRaced, tryCage, openCage, urgeMet, grantTempTrait, grantRandomTempTrait, BUILD_ITEMS, TOWN_BUILD_IDS, refundBuilt, weddingBuntingPairs, villageEventItems, decorBases, buildSquadUI, buildRosterUI, CITY_ALARM, CAL, setWagers: (ids) => { runWagers = ids.slice(); resetCalamities(); _reinfT = null; }, villageBanners, placeDecor, decorSpot, mkProp, sweepWildFromBuilt, mkRock, builtGroundAt, get researchOpenNow(){ return researchOpen; }, setKey: (k, v) => { keys[k] = v; }, openMutLab, hackRange, hackTimeMul, doResearch, openResearch, startNewGamePlus, mkVehicle, mkLandmark, get hazardsNow(){ return hazards; }, commitWanted, get wantedNow(){ return wanted; }, openGov: null, HACKS, CONTAINER_LOOT, hackOf, tryGrate, wearDisguise, freeSpotNear, get texFillCacheSize(){ return _texFillCache.size; }, get texFillCacheKeys(){ return [..._texFillCache.keys()]; }, drawWallBlock, drawTexturedFill, get fastGlow(){ return FAST_GLOW; }, set fastGlow(v){ FAST_GLOW = !!v; },
+  _fn: { A, popText, builtGroundAt, sweepWildFromBuilt, regenForage, bushBlockedAt, get WILD_JUNK(){ return WILD_JUNK; }, get PROP_DIM(){ return PROP_DIM; },
+    populateCityStreets, gangCityTick, cultCityTick, gripFrac, cultStrengthFrac, gangStrong, cultStrong, gangNeutralized, cultSuppressed, gangGrip, crusade, spawnGangDriveby, spawnCultVehicle, get NIGHT_KINDS(){ return NIGHT_KINDS; }, maybeCultRaid, cultOn,
+    hurtProp, hackFactionVehicle, runawayTick, mkProp, enterCar, get VEH_DIM(){ return VEH_DIM; }, spillOil: typeof spillOil !== 'undefined' ? spillOil : null, spillBigOil: typeof spillBigOil !== 'undefined' ? spillBigOil : null, countryNumber, get drivingCar(){ return drivingCar; }, get craftGroundRef(){ return craftGround; }, get craftSpotRef(){ return craftSpot; }, buildRowsList, doResearch, RECIPES, WINDOW_MATS, lineBlocked, turretTick, get missionNow(){ return mission; }, randPersonRaced, tryCage, openCage, urgeMet, grantTempTrait, grantRandomTempTrait, BUILD_ITEMS, TOWN_BUILD_IDS, refundBuilt, weddingBuntingPairs, villageEventItems, decorBases, buildSquadUI, buildRosterUI, CITY_ALARM, CAL, setWagers: (ids) => { runWagers = ids.slice(); resetCalamities(); _reinfT = null; }, villageBanners, placeDecor, decorSpot, mkProp, sweepWildFromBuilt, mkRock, builtGroundAt, get researchOpenNow(){ return researchOpen; }, setKey: (k, v) => { keys[k] = v; }, openMutLab, hackRange, hackTimeMul, doResearch, openResearch, startNewGamePlus, mkVehicle, mkLandmark, get hazardsNow(){ return hazards; }, commitWanted, get wantedNow(){ return wanted; }, openGov: null, HACKS, CONTAINER_LOOT, hackOf, tryGrate, wearDisguise, freeSpotNear, get texFillCacheSize(){ return _texFillCache.size; }, get texFillCacheKeys(){ return [..._texFillCache.keys()]; }, drawWallBlock, drawTexturedFill, get fastGlow(){ return FAST_GLOW; }, set fastGlow(v){ FAST_GLOW = !!v; },
     damageCell, explode, attack, damage, cellSolid, cellMat, spawnEnemy, populateCityStreets, spawnFromSpec,
          killActor, hurtProp, freezeActor, petrifyActor, spawnPuddle, spawnIceStatue, addHazard, weaponFx, breakNearbyErrandItem, explode, get hazards(){ return hazards; },
          get specialProps(){ return specialProps; }, get warningCars(){ return warningCars; }, get panicCars(){ return panicCars; }, get kennelPets(){ return kennelPets; }, get ambientCars(){ return ambientCars; }, get rollingBarrels(){ return rollingBarrels; }, get weatherObj(){ return weather; }, updatePanicCars, updateKennelPets, hurtKennelPet, forceScenePal(n){ _scenePalForce = n; }, setCell, noteEdit, recomputeRoofs, MAT, openShrinePick, confirmGrandShrine, BUILD_ITEMS, ICONS, promoteGuard, updateSoldier, openEventCard, rollVillageEvent, showVillageEvent, updateFurnishRequests, openMerchantShop, tryInteract, openChat, chatAct, chatWorldFacts, updateAmbientTraffic, updateRollingBarrels, updateHazards, findPath, get thrownItems(){ return thrownItems; }, updateThrown, LIFTABLE_PROPS, grantTempTrait, grantRandomTempTrait, clearTempTraits, get quests(){ return quests; }, completeQuest, updateQuestHUD, questTargetPos, questLabel, PLAYER_TRAITS,
